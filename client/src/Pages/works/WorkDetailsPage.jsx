@@ -257,7 +257,7 @@
 //           className="flex items-center gap-2 text-slate-600 hover:text-blue-600 mb-3 sm:mb-4 transition-all text-sm sm:text-base"
 //         >
 //           <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
-//           <span>Back to Works</span>
+//           <span>Back</span>
 //         </button>
 
 //         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1125,7 +1125,7 @@ export default function WorkDetailsPage() {
           className="flex items-center gap-2 text-slate-600 hover:text-blue-600 mb-3 sm:mb-4 transition-all text-sm sm:text-base"
         >
           <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
-          <span>Back to Works</span>
+          <span>Back</span>
         </button>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

@@ -1876,8 +1876,8 @@ const displayPerformers = (isAdmin || isStoreKeeper)
                 </div>
               </div>
               
-              <Link to={`${basePath}/works`} className="text-purple-600 text-xs sm:text-sm hover:underline flex items-center gap-1">
-                View All Works <ArrowRight size={12} className="sm:w-4 sm:h-4" />
+              <Link to={`${basePath}/tasks`} className="text-purple-600 text-xs sm:text-sm hover:underline flex items-center gap-1">
+                View all tasks <ArrowRight size={12} className="sm:w-4 sm:h-4" />
               </Link>
             </div>
 

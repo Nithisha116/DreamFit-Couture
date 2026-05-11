@@ -1291,7 +1291,7 @@ export default function BankingOverview() {
   }, [navigate, basePath]);
 
   const handleNavigateToWorks = useCallback(() => {
-    navigate(`${basePath}/works`);
+    navigate(`${basePath}/tasks`);
     setMobileMenuOpen(false);
   }, [navigate, basePath]);
 

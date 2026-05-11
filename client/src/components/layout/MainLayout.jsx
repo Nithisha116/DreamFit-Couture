@@ -549,7 +549,7 @@ import {
   Flag, Target, TrendingUp, UserPlus, UserCheck, UserX,
   HardHat, ClipboardList, Wallet, IndianRupee, Download, Filter,
   PieChart, Activity, DollarSign, Receipt, Banknote, PiggyBank,
-  Menu, ChevronLeft
+  Menu, ChevronLeft, Gauge, CalendarRange, PackageSearch, Handshake
 } from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../../features/auth/authSlice";
@@ -668,11 +668,25 @@ export default function MainLayout() {
   ];
 
   const getNavigationItems = () => {
+    const tasksOrWorks = isCuttingMaster
+      ? { id: 'works', icon: Briefcase, label: 'Works', path: `/${rolePath}/works`, show: canViewWorks }
+      : { id: 'tasks', icon: ClipboardList, label: 'Tasks', path: `/${rolePath}/tasks`, show: canViewWorks };
+
+    const boutiqueModules = !isCuttingMaster
+      ? [
+          { id: 'check-availability', icon: Gauge, label: 'Check availability', path: `/${rolePath}/check-availability`, show: canViewOrders },
+          { id: 'appointments', icon: CalendarRange, label: 'Appointments', path: `/${rolePath}/appointments`, show: canViewOrders },
+          { id: 'crm', icon: Handshake, label: 'CRM', path: `/${rolePath}/crm`, show: canViewCustomers },
+          { id: 'sourcing', icon: PackageSearch, label: 'Sourcing', path: `/${rolePath}/sourcing`, show: canViewOrders },
+        ]
+      : [];
+
     const items = [
       { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: `/${rolePath}/dashboard`, show: true },
       { id: 'customers', icon: Users, label: 'Customers', path: `/${rolePath}/customers`, show: canViewCustomers },
       { id: 'orders', icon: ShoppingCart, label: 'Orders', path: `/${rolePath}/orders`, show: canViewOrders },
-      { id: 'works', icon: Briefcase, label: 'Works', path: `/${rolePath}/works`, show: canViewWorks },
+      tasksOrWorks,
+      ...boutiqueModules,
       { id: 'tailors', icon: Scissors, label: 'Tailors', path: `/${rolePath}/tailors`, show: canViewTailors },
       { id: 'cutting-masters', icon: HardHat, label: 'Cutting Masters', path: `/${rolePath}/cutting-masters`, show: canViewCuttingMasters },
       { id: 'store-keepers', icon: Store, label: 'Store Keepers', path: `/${rolePath}/store-keepers`, show: canViewStoreKeepers },

@@ -747,7 +747,7 @@ export default function NewTemplate() {
 
   const handleNavigateToWorks = () => {
     console.log("🔨 Navigating to works with basePath:", basePath);
-    navigate(`${basePath}/works`);
+    navigate(`${basePath}/tasks`);
     setMobileMenuOpen(false);
   };
 
@@ -938,7 +938,7 @@ export default function NewTemplate() {
                 Templates
               </button>
 
-              {/* Works Link */}
+              {/* Tasks link */}
               <button
                 onClick={handleNavigateToWorks}
                 className="w-full text-left px-4 py-3 hover:bg-slate-100 rounded-xl font-medium flex items-center gap-3"
@@ -946,7 +946,7 @@ export default function NewTemplate() {
                 <span className="w-6 h-6 bg-green-100 rounded-lg flex items-center justify-center">
                   <span className="text-green-600 text-xs">🔨</span>
                 </span>
-                Works
+                Tasks
               </button>
 
               {/* Orders Link */}

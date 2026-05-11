@@ -444,10 +444,18 @@ const GarmentDetails = lazy(() => import("../Pages/admin/garment/GarmentDetails"
 const EditOrder = lazy(() => import("../Pages/admin/order/EditOrder"));
 const EditGarment = lazy(() => import("../Pages/admin/garment/EditGarment")); 
 
-// 🚀 LAZY LOADING - WORK MANAGEMENT COMPONENTS
-const WorksPage = lazy(() => import("../Pages/works/WorksPage"));
+// 🚀 LAZY LOADING - TASKS & WORK DETAILS
+const TasksPage = lazy(() => import("../Pages/tasks/TasksPage"));
 const WorkDetailsPage = lazy(() => import("../Pages/works/WorkDetailsPage"));
 const CuttingMasterWorks = lazy(() => import("../Pages/works/CuttingMasterWorks"));
+const CheckAvailabilityPage = lazy(() =>
+  import("../Pages/admin/availability/CheckAvailabilityPage"),
+);
+const AppointmentsPage = lazy(() =>
+  import("../Pages/admin/appointments/AppointmentsPage"),
+);
+const CrmPage = lazy(() => import("../Pages/admin/crm/CrmPage"));
+const SourcingPage = lazy(() => import("../Pages/admin/sourcing/SourcingPage"));
 
 // 🚀 LAZY LOADING - TAILOR MANAGEMENT COMPONENTS
 const Tailors = lazy(() => import("../Pages/admin/tailor/Tailors"));
@@ -513,6 +521,13 @@ const Settings = () => (
     Settings - Coming Soon
   </div>
 );
+
+function RedirectWorksListToTasks() {
+  const { user } = useSelector((state) => state.auth);
+  const target =
+    user?.role === "STORE_KEEPER" ? "/storekeeper/tasks" : "/admin/tasks";
+  return <Navigate to={target} replace />;
+}
 
 // ✅ ADDED: Loading component for Suspense fallback
 const PageLoader = () => (
@@ -602,9 +617,14 @@ export default function AppRouter() {
             <Route path="garments/:id" element={<GarmentDetails />} />
             <Route path="garments/edit/:id" element={<EditGarment />} />
             
-            {/* ✅ WORK MANAGEMENT - FULL ACCESS */}
-            <Route path="works" element={<WorksPage />} />
+            {/* ✅ TASKS (boutique floor) + legacy /works list redirect */}
+            <Route path="tasks" element={<TasksPage />} />
+            <Route path="works" element={<RedirectWorksListToTasks />} />
             <Route path="works/:id" element={<WorkDetailsPage />} />
+            <Route path="check-availability" element={<CheckAvailabilityPage />} />
+            <Route path="appointments" element={<AppointmentsPage />} />
+            <Route path="crm" element={<CrmPage />} />
+            <Route path="sourcing" element={<SourcingPage />} />
             
             {/* Tailors Management */}
             <Route path="tailors" element={<Tailors />} />
@@ -698,9 +718,14 @@ export default function AppRouter() {
             <Route path="garments/:id" element={<GarmentDetails />} />
             <Route path="garments/edit/:id" element={<EditGarment />} />
             
-            {/* ✅ WORK MANAGEMENT - FULL ACCESS (VIEW ONLY) */}
-            <Route path="works" element={<WorksPage />} />
+            {/* ✅ TASKS + legacy /works list redirect */}
+            <Route path="tasks" element={<TasksPage />} />
+            <Route path="works" element={<RedirectWorksListToTasks />} />
             <Route path="works/:id" element={<WorkDetailsPage />} />
+            <Route path="check-availability" element={<CheckAvailabilityPage />} />
+            <Route path="appointments" element={<AppointmentsPage />} />
+            <Route path="crm" element={<CrmPage />} />
+            <Route path="sourcing" element={<SourcingPage />} />
             
             {/* Tailors Management */}
             <Route path="tailors" element={<Tailors />} />

@@ -2090,7 +2090,7 @@ export default function Products() {
 
   const handleNavigateToWorks = () => {
     console.log("🔨 Navigating to works with basePath:", basePath);
-    navigate(`${basePath}/works`);
+    navigate(`${basePath}/tasks`);
     setMobileMenuOpen(false);
   };
 
