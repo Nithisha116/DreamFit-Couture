@@ -539,11 +539,12 @@ connectDB();
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
+  "http://localhost:5174",
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
   "http://localhost:5000",
- "https://dream-fitcouture-bnuc.vercel.app",
- "https://dream-fitcouture.vercel.app"
-
+  "https://dream-fitcouture-bnuc.vercel.app",
+  "https://dream-fitcouture.vercel.app"
 ];
 
 app.use(
