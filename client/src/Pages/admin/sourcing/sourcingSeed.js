@@ -17,6 +17,7 @@ export const INITIAL_SOURCING = [
     status: "To Start",
     priority: "High",
     supplier: "Sri Kumaran Textiles",
+    deliveryDate: "2026-05-15",
   },
   {
     id: "src-2",
@@ -28,6 +29,7 @@ export const INITIAL_SOURCING = [
     status: "In Progress",
     priority: "Medium",
     supplier: "Zari World",
+    deliveryDate: "2026-05-14",
   },
   {
     id: "src-3",
@@ -39,5 +41,6 @@ export const INITIAL_SOURCING = [
     status: "Ordered",
     priority: "Low",
     supplier: "Metro Traders",
+    deliveryDate: "2026-05-20",
   },
 ];

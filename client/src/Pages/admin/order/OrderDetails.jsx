@@ -2833,6 +2833,8 @@ const handleSavePayment = async (paymentData) => {
           onSave={handleSavePayment}
           orderTotalMin={priceSummary.totalMin}
           orderTotalMax={priceSummary.totalMax}
+          existingPayments={displayPayments}
+          balanceAmount={balanceAmount}
           orderId={id}
           customerId={currentOrder?.customer?._id}
           initialData={editingPayment}

@@ -2075,6 +2075,40 @@ export default function Products() {
     }
   });
 
+  // Lightweight inventory (UI-only for now; prepares for future sourcing integration)
+  const [inventoryRows, setInventoryRows] = useState(() => ([
+    {
+      id: "inv-1",
+      itemName: "Cotton lining (white)",
+      category: "Fabrics",
+      stock: 18,
+      unit: "m",
+      lowStockAt: 10,
+      criticalAt: 5,
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: "inv-2",
+      itemName: "Zari thread (gold)",
+      category: "Trims",
+      stock: 6,
+      unit: "spool",
+      lowStockAt: 8,
+      criticalAt: 4,
+      updatedAt: new Date(Date.now() - 86400000).toISOString(),
+    },
+    {
+      id: "inv-3",
+      itemName: "Hook & eye set",
+      category: "Accessories",
+      stock: 3,
+      unit: "pack",
+      lowStockAt: 6,
+      criticalAt: 3,
+      updatedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+    },
+  ]));
+
   // Navigation handlers for mobile menu
   const handleNavigateToDashboard = () => {
     console.log("🏠 Navigating to dashboard with basePath:", basePath);
@@ -2416,7 +2450,7 @@ export default function Products() {
 
         {/* Mobile Tabs */}
         <div className="flex gap-1 px-4 pb-3 overflow-x-auto hide-scrollbar">
-          {["fabric", "category", "item"].map((tab) => (
+          {["fabric", "category", "item", "inventory"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -2436,10 +2470,15 @@ export default function Products() {
                   <span className="text-base">📁</span>
                   <span className="hidden xs:inline ml-1">Categories</span>
                 </>
-              ) : (
+              ) : tab === "item" ? (
                 <>
                   <span className="text-base">🧵</span>
                   <span className="hidden xs:inline ml-1">Items</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-base">📦</span>
+                  <span className="hidden xs:inline ml-1">Inventory</span>
                 </>
               )}
               <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${
@@ -2449,7 +2488,9 @@ export default function Products() {
                   ? fabrics?.length || 0
                   : tab === "category"
                     ? categories?.length || 0
-                    : items?.length || 0}
+                    : tab === "item"
+                      ? items?.length || 0
+                      : inventoryRows?.length || 0}
               </span>
             </button>
           ))}
@@ -2568,7 +2609,7 @@ export default function Products() {
 
         {/* Desktop Tabs with Counts - Hidden on Mobile */}
         <div className="hidden lg:flex gap-2 border-b border-slate-200 bg-white p-4 rounded-t-2xl mb-6">
-          {["fabric", "category", "item"].map((tab) => (
+          {["fabric", "category", "item", "inventory"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -2583,7 +2624,9 @@ export default function Products() {
                   ? "👕 Fabrics"
                   : tab === "category"
                     ? "📁 Categories"
-                    : "🧵 Items"}
+                    : tab === "item"
+                      ? "🧵 Items"
+                      : "📦 Inventory"}
                 <span
                   className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
                     activeTab === tab
@@ -2595,7 +2638,9 @@ export default function Products() {
                     ? fabrics?.length || 0
                     : tab === "category"
                       ? categories?.length || 0
-                      : items?.length || 0}
+                      : tab === "item"
+                        ? items?.length || 0
+                        : inventoryRows?.length || 0}
                 </span>
               </span>
             </button>
@@ -2611,12 +2656,15 @@ export default function Products() {
                 {activeTab === "fabric" && <Tag size={18} className="text-blue-600 lg:w-6 lg:h-6" />}
                 {activeTab === "category" && <Layers size={18} className="text-blue-600 lg:w-6 lg:h-6" />}
                 {activeTab === "item" && <Package size={18} className="text-blue-600 lg:w-6 lg:h-6" />}
+                {activeTab === "inventory" && <LayoutGrid size={18} className="text-blue-600 lg:w-6 lg:h-6" />}
                 <h2 className="text-base lg:text-xl font-black text-slate-800 uppercase tracking-tight">
                   {activeTab === "fabric"
                     ? "Fabrics"
                     : activeTab === "category"
                       ? "Categories"
-                      : "Items"}
+                      : activeTab === "item"
+                        ? "Items"
+                        : "Inventory"}
                 </h2>
               </div>
 
@@ -2654,7 +2702,7 @@ export default function Products() {
                 )}
 
                 {/* Add Button - Desktop */}
-                {canEdit && (
+                {canEdit && activeTab !== "inventory" && (
                   <button
                     onClick={() => {
                       resetForms();
@@ -2663,7 +2711,9 @@ export default function Products() {
                     className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 text-sm"
                   >
                     <Plus size={18} />
-                    <span className="hidden sm:inline">Add {activeTab === "fabric" ? "Fabric" : activeTab === "category" ? "Category" : "Item"}</span>
+                    <span className="hidden sm:inline">
+                      Add {activeTab === "fabric" ? "Fabric" : activeTab === "category" ? "Category" : "Item"}
+                    </span>
                   </button>
                 )}
               </div>
@@ -2690,6 +2740,143 @@ export default function Products() {
 
           {/* Lists */}
           <div className="p-4 lg:p-6">
+              {/* Inventory - Lightweight boutique stock table */}
+              {activeTab === "inventory" && (
+                <div className="rounded-2xl border border-slate-100 overflow-hidden">
+                  <div className="p-4 bg-slate-50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-slate-800">Inventory</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Lightweight stock view (safe UI-only). Low stock signals help plan sourcing.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setInventoryRows((rs) => [
+                          {
+                            id: `inv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                            itemName: "New item",
+                            category: "Fabrics",
+                            stock: 0,
+                            unit: "pcs",
+                            lowStockAt: 10,
+                            criticalAt: 5,
+                            updatedAt: new Date().toISOString(),
+                          },
+                          ...rs,
+                        ])
+                      }
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-all"
+                    >
+                      <Plus size={16} />
+                      Add inventory row
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[860px] w-full text-sm text-left">
+                      <thead className="bg-white text-[10px] uppercase font-black text-slate-500 tracking-wider border-b border-slate-100">
+                        <tr>
+                          <th className="px-4 py-3">Item name</th>
+                          <th className="px-4 py-3">Category</th>
+                          <th className="px-4 py-3">Available stock</th>
+                          <th className="px-4 py-3">Unit</th>
+                          <th className="px-4 py-3">Low stock</th>
+                          <th className="px-4 py-3">Last updated</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {inventoryRows.map((r) => {
+                          const critical = r.stock <= r.criticalAt;
+                          const low = !critical && r.stock <= r.lowStockAt;
+                          const badge = critical
+                            ? "Critical"
+                            : low
+                              ? "Low stock"
+                              : "Healthy";
+                          const badgeCls = critical
+                            ? "bg-rose-50 text-rose-800 border-rose-100"
+                            : low
+                              ? "bg-amber-50 text-amber-900 border-amber-100"
+                              : "bg-emerald-50 text-emerald-800 border-emerald-100";
+
+                          return (
+                            <tr key={r.id} className="hover:bg-blue-50/30 transition-colors">
+                              <td className="px-4 py-3 font-medium text-slate-800">
+                                <input
+                                  value={r.itemName}
+                                  onChange={(e) =>
+                                    setInventoryRows((rs) =>
+                                      rs.map((x) =>
+                                        x.id === r.id ? { ...x, itemName: e.target.value, updatedAt: new Date().toISOString() } : x,
+                                      ),
+                                    )
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 px-2 py-1.5"
+                                />
+                              </td>
+                              <td className="px-4 py-3 text-slate-700">
+                                <input
+                                  value={r.category}
+                                  onChange={(e) =>
+                                    setInventoryRows((rs) =>
+                                      rs.map((x) =>
+                                        x.id === r.id ? { ...x, category: e.target.value, updatedAt: new Date().toISOString() } : x,
+                                      ),
+                                    )
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 px-2 py-1.5"
+                                />
+                              </td>
+                              <td className="px-4 py-3">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={r.stock}
+                                  onChange={(e) =>
+                                    setInventoryRows((rs) =>
+                                      rs.map((x) =>
+                                        x.id === r.id ? { ...x, stock: Number(e.target.value), updatedAt: new Date().toISOString() } : x,
+                                      ),
+                                    )
+                                  }
+                                  className="w-28 rounded-lg border border-slate-200 px-2 py-1.5"
+                                />
+                              </td>
+                              <td className="px-4 py-3">
+                                <input
+                                  value={r.unit}
+                                  onChange={(e) =>
+                                    setInventoryRows((rs) =>
+                                      rs.map((x) =>
+                                        x.id === r.id ? { ...x, unit: e.target.value, updatedAt: new Date().toISOString() } : x,
+                                      ),
+                                    )
+                                  }
+                                  className="w-24 rounded-lg border border-slate-200 px-2 py-1.5"
+                                />
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border ${badgeCls}`}>
+                                  {badge}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-slate-600 font-mono">
+                                {new Date(r.updatedAt).toLocaleDateString("en-GB", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
             {/* Fabrics List - Responsive Grid */}
             {activeTab === "fabric" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">

@@ -5438,6 +5438,8 @@ const renderDayContents = useCallback((day, date) => {
         onSave={handleSavePayment}
         orderTotalMin={priceSummary.totalMin}
         orderTotalMax={priceSummary.totalMax}
+        existingPayments={payments}
+        balanceAmount={balanceAmount}
         orderId={currentOrderId}
         customerId={formData.customer}
         initialData={editingPayment}

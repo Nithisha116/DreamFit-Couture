@@ -1913,6 +1913,8 @@ export default function EditOrder() {
         }}
         onSave={handleSavePayment}
         orderTotal={totalAmount}
+        existingPayments={payments}
+        balanceAmount={balanceAmount}
         orderId={id}
         customerId={currentOrder?.customer?._id}
         initialData={editingPayment}

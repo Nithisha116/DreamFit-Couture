@@ -1200,6 +1200,9 @@ export default function AddPaymentModal({
   onSave, 
   orderTotalMin = 0,    // ✅ Changed from orderTotal
   orderTotalMax = 0,    // ✅ Added max price
+  orderTotal = 0,       // ✅ Backward compatibility (older pages)
+  existingPayments = [],// ✅ Used for payment-type workflow
+  balanceAmount = null, // ✅ number OR {min,max} from pages
   orderId,
   customerId,
   initialData = null,
@@ -1269,6 +1272,49 @@ export default function AddPaymentModal({
       setErrors({});
     }
   }, [isOpen]);
+
+  const totalPaid = (existingPayments || []).reduce(
+    (sum, p) => sum + (Number(p?.amount) || 0),
+    0,
+  );
+
+  const balance = (() => {
+    if (typeof balanceAmount === "number") return { min: balanceAmount, max: balanceAmount };
+    if (balanceAmount && typeof balanceAmount === "object") {
+      const min = Number(balanceAmount.min ?? 0);
+      const max = Number(balanceAmount.max ?? balanceAmount.min ?? 0);
+      return { min, max };
+    }
+    const min = (Number(orderTotalMin) || Number(orderTotal) || 0) - totalPaid;
+    const max = (Number(orderTotalMax) || Number(orderTotal) || 0) - totalPaid;
+    return { min, max };
+  })();
+
+  const hasAnyPayment = (existingPayments || []).length > 0 || totalPaid > 0;
+  const hasAdvance = (existingPayments || []).some((p) => p?.type === "advance");
+  const fullyPaid = balance.min <= 0 && balance.max <= 0;
+  const canShowAdvanceOrFull = !hasAnyPayment && !fullyPaid;
+  const shouldShowFinalOnly = hasAdvance && (balance.min > 0 || balance.max > 0);
+
+  const allowedTypes = (() => {
+    if (initialData) return ["advance", "full"]; // editing: preserve access
+    if (fullyPaid) return [];
+    if (canShowAdvanceOrFull) return ["advance", "full"];
+    if (shouldShowFinalOnly) return ["full"];
+    // fallback: allow full if payments exist but balance remains
+    if (hasAnyPayment && (balance.min > 0 || balance.max > 0)) return ["full"];
+    return ["advance", "full"];
+  })();
+
+  // Ensure type stays valid when opening / when workflow changes
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialData) return;
+    if (allowedTypes.length === 0) return;
+    if (!allowedTypes.includes(formData.type)) {
+      setFormData((prev) => ({ ...prev, type: allowedTypes[0] }));
+    }
+  }, [isOpen, allowedTypes.join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const validateForm = () => {
     console.log("%c🔍🔍🔍 VALIDATING FORM 🔍🔍🔍", "background: yellow; color: black; font-size: 14px");
@@ -1539,41 +1585,44 @@ export default function AddPaymentModal({
             <label className="block text-xs font-black uppercase text-slate-500 mb-2">
               Payment Type <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setFormData({...formData, type: "advance"})}
-                className={`py-3 rounded-xl font-bold transition-all ${
-                  formData.type === "advance"
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            {allowedTypes.length === 0 ? (
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 text-emerald-800 font-bold text-sm">
+                Paid Completely ✅
+              </div>
+            ) : (
+              <div
+                className={`grid gap-2 ${
+                  allowedTypes.length === 1 ? "grid-cols-1" : "grid-cols-2"
                 }`}
               >
-                Advance
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({...formData, type: "full"})}
-                className={`py-3 rounded-xl font-bold transition-all ${
-                  formData.type === "full"
-                    ? "bg-green-600 text-white shadow-lg shadow-green-500/30"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Full
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({...formData, type: "extra"})}
-                className={`py-3 rounded-xl font-bold transition-all ${
-                  formData.type === "extra"
-                    ? "bg-purple-600 text-white shadow-lg shadow-purple-500/30"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Extra
-              </button>
-            </div>
+                {allowedTypes.includes("advance") && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, type: "advance" })}
+                    className={`py-3 rounded-xl font-bold transition-all ${
+                      formData.type === "advance"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Advance
+                  </button>
+                )}
+                {allowedTypes.includes("full") && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, type: "full" })}
+                    className={`py-3 rounded-xl font-bold transition-all ${
+                      formData.type === "full"
+                        ? "bg-green-600 text-white shadow-lg shadow-green-500/30"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {shouldShowFinalOnly ? "Final" : "Full"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Payment Method */}

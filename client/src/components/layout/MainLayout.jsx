@@ -566,6 +566,7 @@ export default function MainLayout() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+  const [branchOpen, setBranchOpen] = useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -1055,6 +1056,41 @@ export default function MainLayout() {
           <div className="flex items-center gap-4">
             {/* Notification Bell */}
             <NotificationBell />
+
+            {/* Boutique / Branch selector */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setBranchOpen((v) => !v)}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all"
+                aria-haspopup="menu"
+                aria-expanded={branchOpen}
+              >
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  Branch
+                </span>
+                <span className="text-sm font-black text-slate-800">
+                  Urapakkam
+                </span>
+                <ChevronDown size={16} className="text-slate-400" />
+              </button>
+              {branchOpen && (
+                <div
+                  className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-20"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setBranchOpen(false)}
+                    className="w-full text-left px-3 py-2 rounded-xl bg-blue-50 text-blue-700 font-bold text-sm flex items-center justify-between"
+                    role="menuitem"
+                  >
+                    Urapakkam
+                    <span className="text-xs font-black">✓</span>
+                  </button>
+                </div>
+              )}
+            </div>
             
             {/* Help Button */}
             <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-600">
