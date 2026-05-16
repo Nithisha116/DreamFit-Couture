@@ -90,7 +90,7 @@ export default function CrmPage() {
           CRM
         </h1>
         <p className="text-slate-500 mt-1 text-sm sm:text-base">
-          Segments update automatically from orders, visits, and spend — loyalty
+          Segments update automatically from orders, visits, and spend, loyalty points
           stays visible on every profile.
         </p>
       </div>
