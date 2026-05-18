@@ -31,6 +31,29 @@ export function availabilityLabel(hours, capacity = DEFAULT_CAPACITY_HOURS) {
   return { label: "Overloaded", tone: "danger" };
 }
 
+/** Normalize order id for partial matching (#2026051215 → 2026051215) */
+export function normalizeOrderId(value) {
+  return String(value || "")
+    .replace(/^#/, "")
+    .replace(/\s/g, "")
+    .toLowerCase();
+}
+
+/** Completed-task search: existing fields + full/partial order id */
+export function matchesCompletedTaskSearch(task, rawQuery) {
+  const q = rawQuery.trim().toLowerCase();
+  if (!q) return true;
+
+  const baseHay = `${task.title} ${task.customerName} ${task.outfitType}`.toLowerCase();
+  if (baseHay.includes(q)) return true;
+
+  const orderNorm = normalizeOrderId(task.orderId);
+  const qOrder = normalizeOrderId(q);
+  if (orderNorm && qOrder && orderNorm.includes(qOrder)) return true;
+
+  return false;
+}
+
 export function suggestAlternate(departmentKey, overloadedName, tasks) {
   const peers = (EMPLOYEES_BY_DEPARTMENT[departmentKey] || []).filter(
     (n) => n !== overloadedName,

@@ -23,7 +23,7 @@ export default function CompletedTaskFilters({
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search task or customer…"
+            placeholder="Search task, customer, or order ID…"
             className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all"
           />
         </div>

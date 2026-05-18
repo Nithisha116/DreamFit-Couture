@@ -12,21 +12,49 @@ import {
   EMPLOYEES_BY_DEPARTMENT,
 } from "../../components/tasks/taskConstants";
 import { buildInitialTasks } from "../../components/tasks/taskSeedData";
+import { matchesCompletedTaskSearch } from "../../components/tasks/taskUtils";
 import showToast from "../../utils/toast";
 
 const LS_KEY = "dreamfit_boutique_tasks_v1";
+
+const SEED_ORDER_IDS = {
+  "seed-done-1": "#2026051210",
+  "seed-done-2": "#2026051214",
+  "seed-done-3": "#2026051215",
+};
+
+function hydrateTaskOrderIds(tasks) {
+  return tasks.map((t, idx) => {
+    if (t.orderId) return t;
+    if (SEED_ORDER_IDS[t.id]) return { ...t, orderId: SEED_ORDER_IDS[t.id] };
+    if (t.completed) {
+      const d = t.completedAt ? new Date(t.completedAt) : new Date();
+      const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+      return { ...t, orderId: `#${ymd}${String(idx + 1).padStart(2, "0")}` };
+    }
+    return { ...t, orderId: "" };
+  });
+}
+
+function mergeMissingSeedTasks(tasks) {
+  const seed = buildInitialTasks();
+  const ids = new Set(tasks.map((t) => t.id));
+  const missing = seed.filter((t) => !ids.has(t.id));
+  if (!missing.length) return tasks;
+  return [...tasks, ...missing];
+}
 
 function loadTasks() {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) return hydrateTaskOrderIds(mergeMissingSeedTasks(parsed));
     }
   } catch {
     /* ignore */
   }
-  const seed = buildInitialTasks();
+  const seed = hydrateTaskOrderIds(buildInitialTasks());
   localStorage.setItem(LS_KEY, JSON.stringify(seed));
   return seed;
 }
@@ -127,6 +155,7 @@ export default function TasksPage() {
         completed: false,
         completedAt: null,
         deadline: payload.deadline,
+        orderId: payload.orderId || "",
         notes: payload.notes || "",
       },
       ...prev,
@@ -166,11 +195,7 @@ export default function TasksPage() {
       if (employeeFilter && t.assignedTo !== employeeFilter) return false;
       if (outfitFilter && t.outfitType !== outfitFilter) return false;
       if (!matchesDate(t.completedAt)) return false;
-      const q = searchCompleted.trim().toLowerCase();
-      if (!q) return true;
-      return `${t.title} ${t.customerName} ${t.outfitType}`
-        .toLowerCase()
-        .includes(q);
+      return matchesCompletedTaskSearch(t, searchCompleted);
     });
   }, [
     tasks,

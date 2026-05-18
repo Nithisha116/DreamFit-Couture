@@ -315,11 +315,11 @@
 //                   </button>
                   
 //                   {/* Submenus */}
-//                   {item.id === 'banking' && bankingOpen && (
+//                   {item.id === 'banking' && (bankingOpen || sidebarSearchNorm) && (
 //                     <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
 //                       !desktopSidebarOpen && window.innerWidth >= 1024 ? 'ml-0 pl-0 border-l-0' : ''
 //                     }`}>
-//                       {bankingItems.map(sub => {
+//                       {getVisibleSubItems('Banking', 'banking', bankingItems).map(sub => {
 //                         const isSubActive = isActive(sub.path);
 //                         return (
 //                           <Link 
@@ -566,6 +566,7 @@ export default function MainLayout() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const [branchOpen, setBranchOpen] = useState(false);
   
   const navigate = useNavigate();
@@ -595,6 +596,7 @@ export default function MainLayout() {
 
   useEffect(() => {
     const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 1024);
       if (window.innerWidth >= 1024) {
         setSidebarOpen(false);
         setDesktopSidebarOpen(true);
@@ -699,12 +701,36 @@ export default function MainLayout() {
     return items.filter(item => item.show);
   };
 
-  const filteredNavItems = getNavigationItems().filter(item => 
-    item.label.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const sidebarSearchNorm = searchQuery.trim().toLowerCase();
+
+  const navLabelMatches = (label, id) => {
+    if (!sidebarSearchNorm) return true;
+    const slug = (id || "").replace(/-/g, " ");
+    return `${label} ${slug}`.toLowerCase().includes(sidebarSearchNorm);
+  };
+
+  const navItemMatchesSearch = (item) => {
+    if (!sidebarSearchNorm) return true;
+    if (navLabelMatches(item.label, item.id)) return true;
+    if (item.id === "banking") {
+      return bankingItems.some((sub) => navLabelMatches(sub.label, sub.id));
+    }
+    if (item.id === "reports") {
+      return reportsItems.some((sub) => navLabelMatches(sub.label, sub.id));
+    }
+    return false;
+  };
+
+  const getVisibleSubItems = (parentLabel, parentId, items) => {
+    if (!sidebarSearchNorm) return items;
+    if (navLabelMatches(parentLabel, parentId)) return items;
+    return items.filter((sub) => navLabelMatches(sub.label, sub.id));
+  };
+
+  const filteredNavItems = getNavigationItems().filter(navItemMatchesSearch);
 
   const toggleSidebar = () => {
-    if (window.innerWidth >= 1024) {
+    if (isDesktop) {
       setDesktopSidebarOpen(!desktopSidebarOpen);
     } else {
       setSidebarOpen(!sidebarOpen);
@@ -712,7 +738,7 @@ export default function MainLayout() {
   };
 
   const closeSidebar = () => {
-    if (window.innerWidth < 1024) {
+    if (!isDesktop) {
       setSidebarOpen(false);
     }
   };
@@ -734,262 +760,15 @@ export default function MainLayout() {
     }
   }, [location.pathname]);
 
-  // Sidebar content component
-  const SidebarContent = () => (
-    <>
-      {/* Sidebar Header */}
-      <div className={`border-b border-slate-800 bg-[#0F172A] flex items-center transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center px-0 py-4' : 'justify-between px-6 py-5'
-      }`}>
-        <div className={`flex items-center gap-4 transition-all duration-200 ${
-          !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'flex'
-        }`}>
-          <img 
-            src={logo} 
-            alt="Dreamfit Couture Logo" 
-            className="w-12 h-12 object-contain rounded-lg"
-          />
-          <div className="flex flex-col">
-            <h2 className="text-xl font-black text-white tracking-wide uppercase leading-tight">
-              Dreamfit
-            </h2>
-            <h2 className="text-lg font-black text-blue-500 tracking-wide uppercase italic leading-tight -mt-1">
-              Couture
-            </h2>
-          </div>
-        </div>
-
-        {/* Mobile: Toggle button */}
-        <button
-          onClick={toggleSidebar}
-          className="lg:hidden text-slate-400 hover:text-white p-2 rounded-lg transition-all"
-        >
-          {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
-
-        {/* Desktop: When sidebar is collapsed, show Menu button */}
-        {!desktopSidebarOpen && window.innerWidth >= 1024 && (
-          <button 
-            onClick={toggleSidebar}
-            className="p-2 text-blue-500 hover:bg-slate-800 rounded-xl transition-all"
-          >
-            <Menu size={24} />
-          </button>
-        )}
-      </div>
-
-      {/* User Profile Section */}
-      <div className={`py-5 flex items-center border-b border-slate-800 bg-[#1e293b]/30 transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center px-0' : 'justify-between px-6'
-      }`}>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg border border-blue-400/20 flex-shrink-0">
-            <UserCircle size={24} />
-          </div>
-          {(desktopSidebarOpen || window.innerWidth < 1024) && (
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-bold text-white truncate w-24 leading-none mb-1">
-                {user?.name || "User"}
-              </span>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">
-                  {user?.role?.replace('_', ' ')}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className={`px-4 py-5 transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'block'
-      }`}>
-        <div className="relative group">
-          <Search className="absolute left-3 top-3 text-slate-500 group-focus-within:text-blue-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search menu..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#1e293b]/50 border border-slate-700 rounded-xl py-2.5 pl-10 pr-10 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all text-white placeholder:text-slate-500"
-          />
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <nav className={`flex-1 px-3 space-y-1 overflow-y-auto mt-2 transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'px-2' : 'px-3'
-      }`}
-      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        <style>{`
-          nav::-webkit-scrollbar {
-            display: none;
-          }
-        `}</style>
-        
-        {filteredNavItems.map((item) => {
-          const isItemActive = item.isDropdown 
-            ? (item.id === 'banking' && isBankingActive()) || (item.id === 'reports' && isReportsActive())
-            : isActive(item.path);
-          
-          return (
-            <div key={item.id} ref={isItemActive ? activeLinkRef : null}>
-              {item.isDropdown ? (
-                <div>
-                  <button 
-                    onClick={() => {
-                      if (item.id === 'banking') setBankingOpen(!bankingOpen);
-                      if (item.id === 'reports') setReportsOpen(!reportsOpen);
-                    }}
-                    className={`w-full flex justify-between items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm cursor-pointer ${
-                      isItemActive 
-                        ? 'bg-blue-600 text-white shadow-lg' 
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                    } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center px-2' : ''}`}
-                    title={!desktopSidebarOpen && window.innerWidth >= 1024 ? item.label : ""}
-                  >
-                    <div className={`flex items-center gap-3 ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center w-full' : ''}`}>
-                      <item.icon size={19} /> 
-                      <span className={`transition-all duration-300 ${
-                        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-                      }`}>
-                        {item.label}
-                      </span>
-                    </div>
-                    {(item.id === 'banking' && bankingOpen) || (item.id === 'reports' && reportsOpen) ? (
-                      <ChevronDown size={14} className={`transition-all duration-300 ${
-                        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'block'
-                      }`} />
-                    ) : (
-                      <ChevronRight size={14} className={`transition-all duration-300 ${
-                        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'block'
-                      }`} />
-                    )}
-                  </button>
-                  
-                  {/* Submenus */}
-                  {item.id === 'banking' && bankingOpen && (
-                    <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
-                      !desktopSidebarOpen && window.innerWidth >= 1024 ? 'ml-0 pl-0 border-l-0' : ''
-                    }`}>
-                      {bankingItems.map(sub => {
-                        const isSubActive = isActive(sub.path);
-                        return (
-                          <Link 
-                            key={sub.id} 
-                            to={sub.path} 
-                            className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
-                              isSubActive 
-                                ? 'text-blue-400 font-medium' 
-                                : 'text-slate-500 hover:text-blue-400'
-                            } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center' : ''}`}
-                            onClick={closeSidebar}
-                            title={!desktopSidebarOpen && window.innerWidth >= 1024 ? sub.label : ""}
-                          >
-                            <sub.icon size={14} className="flex-shrink-0" />
-                            <span className={`transition-all duration-300 ${
-                              !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-                            }`}>
-                              {sub.label}
-                            </span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {item.id === 'reports' && reportsOpen && (
-                    <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
-                      !desktopSidebarOpen && window.innerWidth >= 1024 ? 'ml-0 pl-0 border-l-0' : ''
-                    }`}>
-                      {reportsItems.map(sub => {
-                        const isSubActive = isActive(sub.path);
-                        return (
-                          <Link 
-                            key={sub.id} 
-                            to={sub.path} 
-                            className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
-                              isSubActive 
-                                ? 'text-blue-400 font-medium' 
-                                : 'text-slate-500 hover:text-blue-400'
-                            } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center' : ''}`}
-                            onClick={closeSidebar}
-                            title={!desktopSidebarOpen && window.innerWidth >= 1024 ? sub.label : ""}
-                          >
-                            <sub.icon size={14} className="flex-shrink-0" />
-                            <span className={`transition-all duration-300 ${
-                              !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-                            }`}>
-                              {sub.label}
-                            </span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Link 
-                  to={item.path} 
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm ${
-                    isActive(item.path) 
-                      ? 'bg-blue-600 text-white shadow-lg' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                  } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center px-2' : ''}`}
-                  onClick={closeSidebar}
-                  title={!desktopSidebarOpen && window.innerWidth >= 1024 ? item.label : ""}
-                >
-                  <item.icon size={19} /> 
-                  <span className={`transition-all duration-300 ${
-                    !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-                  }`}>
-                    {item.label}
-                  </span>
-                  {isActive(item.path) && (
-                    <span className={`ml-auto w-1.5 h-1.5 bg-white rounded-full transition-all duration-300 ${
-                      !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'block'
-                    }`}></span>
-                  )}
-                </Link>
-              )}
-            </div>
-          );
-        })}
-      </nav>
-
-      {/* Footer */}
-      <div className={`px-4 py-3 border-t border-slate-800 bg-[#0F172A] transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'block'
-      }`}>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-slate-500 gap-2">
-          <div className="flex items-center gap-1"><Clock size={12} /><span>{new Date().toLocaleTimeString()}</span></div>
-          <div className="flex items-center gap-1"><Calendar size={12} /><span>{new Date().toLocaleDateString()}</span></div>
-        </div>
-      </div>
-
-      {/* Logout Button */}
-      <div className={`p-4 border-t border-slate-800 bg-[#0F172A] transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'px-2' : 'p-4'
-      }`}>
-        <button 
-          onClick={handleLogout} 
-          className={`flex items-center gap-3 text-slate-500 hover:text-red-400 w-full p-3 rounded-xl transition-all hover:bg-red-400/10 font-bold ${
-            !desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center' : ''
-          }`}
-          title={!desktopSidebarOpen && window.innerWidth >= 1024 ? "Log Out" : ""}
-        >
-          <LogOut size={19} /> 
-          <span className={`transition-all duration-300 ${
-            !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-          }`}>
-            Log Out System
-          </span>
-        </button>
-      </div>
-    </>
-  );
+  useEffect(() => {
+    if (!sidebarSearchNorm) return;
+    if (bankingItems.some((sub) => navLabelMatches(sub.label, sub.id))) {
+      setBankingOpen(true);
+    }
+    if (reportsItems.some((sub) => navLabelMatches(sub.label, sub.id))) {
+      setReportsOpen(true);
+    }
+  }, [sidebarSearchNorm]);
 
   return (
     <div className="flex h-screen bg-[#F1F5F9] overflow-hidden font-sans relative">
@@ -1031,16 +810,289 @@ export default function MainLayout() {
       )}
 
       {/* Sidebar */}
-      <aside className={`
-        fixed lg:relative top-0 bottom-0 z-40
-        ${desktopSidebarOpen ? 'w-72' : 'lg:w-20'} 
-        bg-[#0F172A] text-slate-300 flex flex-col shadow-2xl
-        transition-all duration-300 ease-in-out
-        ${sidebarOpen ? 'translate-x-0' : (window.innerWidth < 1024 ? '-translate-x-full' : 'translate-x-0')}
-      `}>
-        <SidebarContent />
-      </aside>
+      <aside
+        className={`
+         fixed lg:relative top-0 bottom-0 z-40
+         ${desktopSidebarOpen ? "w-72" : "lg:w-20"}
+         bg-[#0F172A] text-slate-300 flex flex-col shadow-2xl
+         transition-all duration-300 ease-in-out
+         ${
+          sidebarOpen
+          ? "translate-x-0"
+          : !isDesktop
+          ? "-translate-x-full"
+          : "translate-x-0"
+         }
+        `}
+      >
+        {/* Sidebar Header */}
+        <div className={`border-b border-slate-800 bg-[#0F172A] flex items-center transition-all duration-300 ${
+          !desktopSidebarOpen && isDesktop ? 'justify-center px-0 py-4' : 'justify-between px-6 py-5'
+        }`}>
+          <div className={`flex items-center gap-4 transition-all duration-200 ${
+            !desktopSidebarOpen && isDesktop ? 'hidden' : 'flex'
+          }`}>
+            <img 
+              src={logo} 
+              alt="Dreamfit Couture Logo" 
+              className="w-12 h-12 object-contain rounded-lg"
+            />
+            <div className="flex flex-col">
+              <h2 className="text-xl font-black text-white tracking-wide uppercase leading-tight">
+                Dreamfit
+              </h2>
+              <h2 className="text-lg font-black text-blue-500 tracking-wide uppercase italic leading-tight -mt-1">
+                Couture
+              </h2>
+            </div>
+          </div>
 
+          {/* Mobile: Toggle button */}
+          <button
+            onClick={toggleSidebar}
+            className="lg:hidden text-slate-400 hover:text-white p-2 rounded-lg transition-all"
+          >
+            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+
+          {/* Desktop: When sidebar is collapsed, show Menu button */}
+          {!desktopSidebarOpen && isDesktop && (
+            <button 
+              onClick={toggleSidebar}
+              className="p-2 text-blue-500 hover:bg-slate-800 rounded-xl transition-all"
+            >
+              <Menu size={24} />
+            </button>
+          )}
+        </div>
+
+        {/* User Profile Section */}
+        <div className={`py-5 flex items-center border-b border-slate-800 bg-[#1e293b]/30 transition-all duration-300 ${
+          !desktopSidebarOpen && isDesktop ? 'justify-center px-0' : 'justify-between px-6'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg border border-blue-400/20 flex-shrink-0">
+              <UserCircle size={24} />
+            </div>
+            {(desktopSidebarOpen || !isDesktop) && (
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-bold text-white truncate w-24 leading-none mb-1">
+                  {user?.name || "User"}
+                </span>
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">
+                    {user?.role?.replace('_', ' ')}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className={`px-4 py-5 transition-all duration-300 ${
+          !desktopSidebarOpen && isDesktop ? 'hidden' : 'block'
+        }`}>
+          <div className="relative group">
+            <Search className="absolute left-3 top-3 text-slate-500 group-focus-within:text-blue-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search menu..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoComplete="off"
+              className="w-full bg-[#1e293b]/50 border border-slate-700 rounded-xl py-2.5 pl-10 pr-10 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all text-white placeholder:text-slate-500"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-3 text-slate-500 hover:text-white transition-colors"
+                aria-label="Clear menu search"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className={`flex-1 px-3 space-y-1 overflow-y-auto mt-2 transition-all duration-300 ${
+          !desktopSidebarOpen && isDesktop ? 'px-2' : 'px-3'
+        }`}
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <style>{`
+            nav::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
+
+          {filteredNavItems.length === 0 && sidebarSearchNorm && (
+            <p className="px-4 py-3 text-sm text-slate-500">No menu items match your search.</p>
+          )}
+
+          {filteredNavItems.map((item) => {
+            const isItemActive = item.isDropdown
+              ? (item.id === 'banking' && isBankingActive()) || (item.id === 'reports' && isReportsActive())
+              : isActive(item.path);
+
+            return (
+              <div key={item.id} ref={isItemActive ? activeLinkRef : null}>
+                {item.isDropdown ? (
+                  <div>
+                    <button
+                      onClick={() => {
+                        if (item.id === 'banking') setBankingOpen(!bankingOpen);
+                        if (item.id === 'reports') setReportsOpen(!reportsOpen);
+                      }}
+                      className={`w-full flex justify-between items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm cursor-pointer ${
+                        isItemActive
+                          ? 'bg-blue-600 text-white shadow-lg'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                      } ${!desktopSidebarOpen && isDesktop ? 'justify-center px-2' : ''}`}
+                      title={!desktopSidebarOpen && isDesktop ? item.label : ""}
+                    >
+                      <div className={`flex items-center gap-3 ${!desktopSidebarOpen && isDesktop ? 'justify-center w-full' : ''}`}>
+                        <item.icon size={19} /> 
+                        <span className={`transition-all duration-300 ${
+                          !desktopSidebarOpen && isDesktop ? 'hidden' : 'inline'
+                        }`}>
+                          {item.label}
+                        </span>
+                      </div>
+                      {(item.id === 'banking' && bankingOpen) || (item.id === 'reports' && reportsOpen) ? (
+                        <ChevronDown size={14} className={`transition-all duration-300 ${
+                          !desktopSidebarOpen && isDesktop ? 'hidden' : 'block'
+                        }`} />
+                      ) : (
+                        <ChevronRight size={14} className={`transition-all duration-300 ${
+                          !desktopSidebarOpen && isDesktop ? 'hidden' : 'block'
+                        }`} />
+                      )}
+                    </button>
+                    
+                    {/* Submenus */}
+                    {item.id === 'banking' && (bankingOpen || sidebarSearchNorm) && (
+                      <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
+                        !desktopSidebarOpen && isDesktop ? 'ml-0 pl-0 border-l-0' : ''
+                      }`}>
+                        {getVisibleSubItems('Banking', 'banking', bankingItems).map(sub => {
+                          const isSubActive = isActive(sub.path);
+                          return (
+                            <Link 
+                              key={sub.id} 
+                              to={sub.path} 
+                              className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
+                                isSubActive 
+                                  ? 'text-blue-400 font-medium' 
+                                  : 'text-slate-500 hover:text-blue-400'
+                              } ${!desktopSidebarOpen && isDesktop ? 'justify-center' : ''}`}
+                              onClick={closeSidebar}
+                              title={!desktopSidebarOpen && isDesktop ? sub.label : ""}
+                            >
+                              <sub.icon size={14} className="flex-shrink-0" />
+                              <span className={`transition-all duration-300 ${
+                                !desktopSidebarOpen && isDesktop ? 'hidden' : 'inline'
+                              }`}>
+                                {sub.label}
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {item.id === 'reports' && reportsOpen && (
+                      <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
+                        !desktopSidebarOpen && isDesktop ? 'ml-0 pl-0 border-l-0' : ''
+                      }`}>
+                        {reportsItems.map(sub => {
+                          const isSubActive = isActive(sub.path);
+                          return (
+                            <Link 
+                              key={sub.id} 
+                              to={sub.path} 
+                              className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
+                                isSubActive 
+                                  ? 'text-blue-400 font-medium' 
+                                  : 'text-slate-500 hover:text-blue-400'
+                              } ${!desktopSidebarOpen && isDesktop ? 'justify-center' : ''}`}
+                              onClick={closeSidebar}
+                              title={!desktopSidebarOpen && isDesktop ? sub.label : ""}
+                            >
+                              <sub.icon size={14} className="flex-shrink-0" />
+                              <span className={`transition-all duration-300 ${
+                                !desktopSidebarOpen && isDesktop ? 'hidden' : 'inline'
+                              }`}>
+                                {sub.label}
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Link 
+                    to={item.path} 
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm ${
+                      isActive(item.path) 
+                        ? 'bg-blue-600 text-white shadow-lg' 
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                    } ${!desktopSidebarOpen && isDesktop ? 'justify-center px-2' : ''}`}
+                    onClick={closeSidebar}
+                    title={!desktopSidebarOpen && isDesktop ? item.label : ""}
+                  >
+                    <item.icon size={19} /> 
+                    <span className={`transition-all duration-300 ${
+                      !desktopSidebarOpen && isDesktop ? 'hidden' : 'inline'
+                    }`}>
+                      {item.label}
+                    </span>
+                    {isActive(item.path) && (
+                      <span className={`ml-auto w-1.5 h-1.5 bg-white rounded-full transition-all duration-300 ${
+                        !desktopSidebarOpen && isDesktop ? 'hidden' : 'block'
+                      }`}></span>
+                    )}
+                  </Link>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        {/* Footer */}
+        <div className={`px-4 py-3 border-t border-slate-800 bg-[#0F172A] transition-all duration-300 ${
+          !desktopSidebarOpen && isDesktop ? 'hidden' : 'block'
+        }`}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-slate-500 gap-2">
+            <div className="flex items-center gap-1"><Clock size={12} /><span>{new Date().toLocaleTimeString()}</span></div>
+            <div className="flex items-center gap-1"><Calendar size={12} /><span>{new Date().toLocaleDateString()}</span></div>
+          </div>
+        </div>
+
+        {/* Logout Button */}
+        <div className={`p-4 border-t border-slate-800 bg-[#0F172A] transition-all duration-300 ${
+          !desktopSidebarOpen && isDesktop ? 'px-2' : 'p-4'
+        }`}>
+          <button 
+            onClick={handleLogout} 
+            className={`flex items-center gap-3 text-slate-500 hover:text-red-400 w-full p-3 rounded-xl transition-all hover:bg-red-400/10 font-bold ${
+              !desktopSidebarOpen && isDesktop ? 'justify-center' : ''
+            }`}
+            title={!desktopSidebarOpen && isDesktop ? "Log Out" : ""}
+          >
+            <LogOut size={19} /> 
+            <span className={`transition-all duration-300 ${
+              !desktopSidebarOpen && isDesktop ? 'hidden' : 'inline'
+            }`}>
+              Log Out System
+            </span>
+          </button>
+        </div>
+      </aside>
+      
       {/* Main Content */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
         {/* ✅ Desktop Header - Bell Icon on RIGHT side */}
