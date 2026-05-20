@@ -523,21 +523,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { useState, useEffect, useRef } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { 
@@ -788,6 +773,7 @@ export default function MainLayout() {
       setEmployeeManagementOpen(true);
     }
   }, [location.pathname]);
+
   useEffect(() => {
     if (!sidebarSearchNorm) return;
     if (bankingItems.some((sub) => navLabelMatches(sub.label, sub.id))) {
@@ -797,324 +783,6 @@ export default function MainLayout() {
       setReportsOpen(true);
     }
   }, [sidebarSearchNorm]);
-  // Sidebar content component
-  const SidebarContent = () => (
-    <>
-      {/* Sidebar Header */}
-      <div className={`border-b border-slate-800 bg-[#0F172A] flex items-center transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center px-0 py-4' : 'justify-between px-6 py-5'
-      }`}>
-        <div className={`flex items-center gap-4 transition-all duration-200 ${
-          !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'flex'
-        }`}>
-          <img 
-            src={logo} 
-            alt="Dreamfit Couture Logo" 
-            className="w-12 h-12 object-contain rounded-lg"
-          />
-          <div className="flex flex-col">
-            <h2 className="text-xl font-black text-white tracking-wide uppercase leading-tight">
-              Dreamfit
-            </h2>
-            <h2 className="text-lg font-black text-blue-500 tracking-wide uppercase italic leading-tight -mt-1">
-              Couture
-            </h2>
-          </div>
-        </div>
-
-        {/* Mobile: Toggle button */}
-        <button
-          onClick={toggleSidebar}
-          className="lg:hidden text-slate-400 hover:text-white p-2 rounded-lg transition-all"
-        >
-          {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
-
-        {/* Desktop: When sidebar is collapsed, show Menu button */}
-        {!desktopSidebarOpen && window.innerWidth >= 1024 && (
-          <button 
-            onClick={toggleSidebar}
-            className="p-2 text-blue-500 hover:bg-slate-800 rounded-xl transition-all"
-          >
-            <Menu size={24} />
-          </button>
-        )}
-      </div>
-
-      {/* User Profile Section */}
-      <div className={`py-5 flex items-center border-b border-slate-800 bg-[#1e293b]/30 transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center px-0' : 'justify-between px-6'
-      }`}>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg border border-blue-400/20 flex-shrink-0">
-            <UserCircle size={24} />
-          </div>
-          {(desktopSidebarOpen || window.innerWidth < 1024) && (
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-bold text-white truncate w-24 leading-none mb-1">
-                {user?.name || "User"}
-              </span>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">
-                  {user?.role?.replace('_', ' ')}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className={`px-4 py-5 transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'block'
-      }`}>
-        <div className="relative group">
-          <Search className="absolute left-3 top-3 text-slate-500 group-focus-within:text-blue-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search menu..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#1e293b]/50 border border-slate-700 rounded-xl py-2.5 pl-10 pr-10 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all text-white placeholder:text-slate-500"
-          />
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <nav className={`flex-1 px-3 space-y-1 overflow-y-auto mt-2 transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'px-2' : 'px-3'
-      }`}
-      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        <style>{`
-          nav::-webkit-scrollbar {
-            display: none;
-          }
-        `}</style>
-        
-        {filteredNavItems.map((item) => {
-          const isItemActive = item.isDropdown 
-            ? (item.id === 'banking' && isBankingActive()) || (item.id === 'reports' && isReportsActive()) || (item.id === 'ordersOutsourcing' && isOrdersOutsourcingActive()) || (item.id === 'employeeManagement' && isEmployeeManagementActive())
-            : isActive(item.path);
-          
-          return (
-            <div key={item.id} ref={isItemActive ? activeLinkRef : null}>
-              {item.isDropdown ? (
-                <div>
-                  <button 
-                    onClick={() => {
-                      if (item.id === 'banking') setBankingOpen(!bankingOpen);
-                      if (item.id === 'reports') setReportsOpen(!reportsOpen);
-                      if (item.id === 'ordersOutsourcing') setOrdersOutsourcingOpen(!ordersOutsourcingOpen);
-                      if (item.id === 'employeeManagement') setEmployeeManagementOpen(!employeeManagementOpen);
-                    }}
-                    className={`w-full flex justify-between items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm cursor-pointer ${
-                      isItemActive 
-                        ? 'bg-blue-600 text-white shadow-lg' 
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                    } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center px-2' : ''}`}
-                    title={!desktopSidebarOpen && window.innerWidth >= 1024 ? item.label : ""}
-                  >
-                    <div className={`flex items-center gap-3 ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center w-full' : ''}`}>
-                      <item.icon size={19} /> 
-                      <span className={`transition-all duration-300 ${
-                        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-                      }`}>
-                        {item.label}
-                      </span>
-                    </div>
-                    {(item.id === 'banking' && bankingOpen) || (item.id === 'reports' && reportsOpen) || (item.id === 'ordersOutsourcing' && ordersOutsourcingOpen) || (item.id === 'employeeManagement' && employeeManagementOpen) ? (
-                      <ChevronDown size={14} className={`transition-all duration-300 ${
-                        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'block'
-                      }`} />
-                    ) : (
-                      <ChevronRight size={14} className={`transition-all duration-300 ${
-                        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'block'
-                      }`} />
-                    )}
-                  </button>
-                  
-                  {/* Submenus */}
-                  {item.id === 'banking' && bankingOpen && (
-                    <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
-                      !desktopSidebarOpen && window.innerWidth >= 1024 ? 'ml-0 pl-0 border-l-0' : ''
-                    }`}>
-                      {bankingItems.map(sub => {
-                        const isSubActive = isActive(sub.path);
-                        return (
-                          <Link 
-                            key={sub.id} 
-                            to={sub.path} 
-                            className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
-                              isSubActive 
-                                ? 'text-blue-400 font-medium' 
-                                : 'text-slate-500 hover:text-blue-400'
-                            } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center' : ''}`}
-                            onClick={closeSidebar}
-                            title={!desktopSidebarOpen && window.innerWidth >= 1024 ? sub.label : ""}
-                          >
-                            <sub.icon size={14} className="flex-shrink-0" />
-                            <span className={`transition-all duration-300 ${
-                              !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-                            }`}>
-                              {sub.label}
-                            </span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {item.id === 'ordersOutsourcing' && ordersOutsourcingOpen && (
-                    <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
-                      !desktopSidebarOpen && window.innerWidth >= 1024 ? 'ml-0 pl-0 border-l-0' : ''
-                    }`}>
-                      {ordersOutsourcingItems.map(sub => {
-                        const isSubActive = isActive(sub.path);
-                        return (
-                          <Link 
-                            key={sub.id} 
-                            to={sub.path} 
-                            className={`flex items-center gap-2 py-2.5 px-3 text-sm rounded-xl transition-all duration-200 ${
-                              isSubActive 
-                                ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white font-semibold shadow-md' 
-                                : 'text-slate-500 hover:text-white hover:bg-slate-800/40'
-                            } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center' : ''}`}
-                            onClick={closeSidebar}
-                            title={!desktopSidebarOpen && window.innerWidth >= 1024 ? sub.label : ""}
-                          >
-                            <sub.icon size={14} className="flex-shrink-0" />
-                            <span className={`transition-all duration-300 ${
-                              !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-                            }`}>
-                              {sub.label}
-                            </span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {item.id === 'employeeManagement' && employeeManagementOpen && (
-                    <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
-                      !desktopSidebarOpen && window.innerWidth >= 1024 ? 'ml-0 pl-0 border-l-0' : ''
-                    }`}>
-                      {employeeManagementItems.map(sub => {
-                        const isSubActive = isActive(sub.path);
-                        return (
-                          <Link 
-                            key={sub.id} 
-                            to={sub.path} 
-                            className={`flex items-center gap-2 py-2.5 px-3 text-sm rounded-xl transition-all duration-200 ${
-                              isSubActive 
-                                ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white font-semibold shadow-md' 
-                                : 'text-slate-500 hover:text-white hover:bg-slate-800/40'
-                            } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center' : ''}`}
-                            onClick={closeSidebar}
-                            title={!desktopSidebarOpen && window.innerWidth >= 1024 ? sub.label : ""}
-                          >
-                            <sub.icon size={14} className="flex-shrink-0" />
-                            <span className={`transition-all duration-300 ${
-                              !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-                            }`}>
-                              {sub.label}
-                            </span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {item.id === 'reports' && reportsOpen && (
-                    <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
-                      !desktopSidebarOpen && window.innerWidth >= 1024 ? 'ml-0 pl-0 border-l-0' : ''
-                    }`}>
-                      {reportsItems.map(sub => {
-                        const isSubActive = isActive(sub.path);
-                        return (
-                          <Link 
-                            key={sub.id} 
-                            to={sub.path} 
-                            className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
-                              isSubActive 
-                                ? 'text-blue-400 font-medium' 
-                                : 'text-slate-500 hover:text-blue-400'
-                            } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center' : ''}`}
-                            onClick={closeSidebar}
-                            title={!desktopSidebarOpen && window.innerWidth >= 1024 ? sub.label : ""}
-                          >
-                            <sub.icon size={14} className="flex-shrink-0" />
-                            <span className={`transition-all duration-300 ${
-                              !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-                            }`}>
-                              {sub.label}
-                            </span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Link 
-                  to={item.path} 
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm ${
-                    isActive(item.path) 
-                      ? 'bg-blue-600 text-white shadow-lg' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                  } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center px-2' : ''}`}
-                  onClick={closeSidebar}
-                  title={!desktopSidebarOpen && window.innerWidth >= 1024 ? item.label : ""}
-                >
-                  <item.icon size={19} /> 
-                  <span className={`transition-all duration-300 ${
-                    !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-                  }`}>
-                    {item.label}
-                  </span>
-                  {isActive(item.path) && (
-                    <span className={`ml-auto w-1.5 h-1.5 bg-white rounded-full transition-all duration-300 ${
-                      !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'block'
-                    }`}></span>
-                  )}
-                </Link>
-              )}
-            </div>
-          );
-        })}
-      </nav>
-
-      {/* Footer */}
-      <div className={`px-4 py-3 border-t border-slate-800 bg-[#0F172A] transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'block'
-      }`}>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-slate-500 gap-2">
-          <div className="flex items-center gap-1"><Clock size={12} /><span>{new Date().toLocaleTimeString()}</span></div>
-          <div className="flex items-center gap-1"><Calendar size={12} /><span>{new Date().toLocaleDateString()}</span></div>
-        </div>
-      </div>
-
-      {/* Logout Button */}
-      <div className={`p-4 border-t border-slate-800 bg-[#0F172A] transition-all duration-300 ${
-        !desktopSidebarOpen && window.innerWidth >= 1024 ? 'px-2' : 'p-4'
-      }`}>
-        <button 
-          onClick={handleLogout} 
-          className={`flex items-center gap-3 text-slate-500 hover:text-red-400 w-full p-3 rounded-xl transition-all hover:bg-red-400/10 font-bold ${
-            !desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center' : ''
-          }`}
-          title={!desktopSidebarOpen && window.innerWidth >= 1024 ? "Log Out" : ""}
-        >
-          <LogOut size={19} /> 
-          <span className={`transition-all duration-300 ${
-            !desktopSidebarOpen && window.innerWidth >= 1024 ? 'hidden' : 'inline'
-          }`}>
-            Log Out System
-          </span>
-        </button>
-      </div>
-    </>
-  );
 
   return (
     <div className="flex h-screen bg-[#F1F5F9] overflow-hidden font-sans relative">
@@ -1280,7 +948,10 @@ export default function MainLayout() {
 
           {filteredNavItems.map((item) => {
             const isItemActive = item.isDropdown
-              ? (item.id === 'banking' && isBankingActive()) || (item.id === 'reports' && isReportsActive())
+              ? (item.id === 'banking' && isBankingActive()) || 
+                (item.id === 'reports' && isReportsActive()) ||
+                (item.id === 'ordersOutsourcing' && isOrdersOutsourcingActive()) ||
+                (item.id === 'employeeManagement' && isEmployeeManagementActive())
               : isActive(item.path);
 
             return (
@@ -1289,8 +960,10 @@ export default function MainLayout() {
                   <div>
                     <button
                       onClick={() => {
-                        if (item.id === 'banking') setBankingOpen(!bankingOpen);
-                        if (item.id === 'reports') setReportsOpen(!reportsOpen);
+                       if (item.id === 'banking') setBankingOpen(!bankingOpen);
+                       if (item.id === 'reports') setReportsOpen(!reportsOpen);
+                       if (item.id === 'ordersOutsourcing') setOrdersOutsourcingOpen(!ordersOutsourcingOpen);
+                       if (item.id === 'employeeManagement') setEmployeeManagementOpen(!employeeManagementOpen);
                       }}
                       className={`w-full flex justify-between items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm cursor-pointer ${
                         isItemActive
@@ -1307,7 +980,10 @@ export default function MainLayout() {
                           {item.label}
                         </span>
                       </div>
-                      {(item.id === 'banking' && bankingOpen) || (item.id === 'reports' && reportsOpen) ? (
+                      {(item.id === 'banking' && bankingOpen) || 
+                       (item.id === 'reports' && reportsOpen) ||
+                       (item.id === 'ordersOutsourcing' && ordersOutsourcingOpen) ||
+                       (item.id === 'employeeManagement' && employeeManagementOpen) ? (
                         <ChevronDown size={14} className={`transition-all duration-300 ${
                           !desktopSidebarOpen && isDesktop ? 'hidden' : 'block'
                         }`} />
@@ -1362,6 +1038,66 @@ export default function MainLayout() {
                               className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
                                 isSubActive 
                                   ? 'text-blue-400 font-medium' 
+                                  : 'text-slate-500 hover:text-blue-400'
+                              } ${!desktopSidebarOpen && isDesktop ? 'justify-center' : ''}`}
+                              onClick={closeSidebar}
+                              title={!desktopSidebarOpen && isDesktop ? sub.label : ""}
+                            >
+                              <sub.icon size={14} className="flex-shrink-0" />
+                              <span className={`transition-all duration-300 ${
+                                !desktopSidebarOpen && isDesktop ? 'hidden' : 'inline'
+                              }`}>
+                                {sub.label}
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {item.id === 'ordersOutsourcing' && ordersOutsourcingOpen && (
+                      <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
+                        !desktopSidebarOpen && isDesktop ? 'ml-0 pl-0 border-l-0' : ''
+                      }`}>
+                        {ordersOutsourcingItems.map(sub => {
+                          const isSubActive = isActive(sub.path);
+                          return (
+                            <Link
+                              key={sub.id}
+                              to={sub.path}
+                              className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
+                                isSubActive
+                                  ? 'text-blue-400 font-medium'
+                                  : 'text-slate-500 hover:text-blue-400'
+                              } ${!desktopSidebarOpen && isDesktop ? 'justify-center' : ''}`}
+                              onClick={closeSidebar}
+                              title={!desktopSidebarOpen && isDesktop ? sub.label : ""}
+                            >
+                              <sub.icon size={14} className="flex-shrink-0" />
+                              <span className={`transition-all duration-300 ${
+                                !desktopSidebarOpen && isDesktop ? 'hidden' : 'inline'
+                              }`}>
+                                {sub.label}
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {item.id === 'employeeManagement' && employeeManagementOpen && (
+                      <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
+                        !desktopSidebarOpen && isDesktop ? 'ml-0 pl-0 border-l-0' : ''
+                      }`}>
+                        {employeeManagementItems.map(sub => {
+                          const isSubActive = isActive(sub.path);
+                          return (
+                            <Link
+                              key={sub.id}
+                              to={sub.path}
+                              className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
+                                isSubActive
+                                  ? 'text-blue-400 font-medium'
                                   : 'text-slate-500 hover:text-blue-400'
                               } ${!desktopSidebarOpen && isDesktop ? 'justify-center' : ''}`}
                               onClick={closeSidebar}
@@ -1515,4 +1251,3 @@ export default function MainLayout() {
     </div>
   );
 }
-
