@@ -455,7 +455,7 @@ const CheckAvailabilityPage = lazy(() =>
   import("../Pages/admin/availability/CheckAvailabilityPage"),
 );
 const AppointmentsPage = lazy(() =>
-  import("../Pages/admin/appointments/AppointmentsPage"),
+  import("../Pages/admin/appointments/AppointmentsPage")
 );
 const CrmPage = lazy(() => import("../Pages/admin/crm/CrmPage"));
 const SourcingPage = lazy(() => import("../Pages/admin/sourcing/SourcingPage"));
