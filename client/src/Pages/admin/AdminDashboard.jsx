@@ -111,6 +111,7 @@ import {
 } from '../../features/transaction/transactionSlice';
 
 import StatCard from '../../components/common/StatCard';
+import DeliveryPipelineSection from '../../components/dashboard/DeliveryPipelineSection';
 import showToast from '../../utils/toast';
 
 export default function AdminDashboard() {
@@ -2094,6 +2095,9 @@ const displayPerformers = (isAdmin || isStoreKeeper)
             </div>
           </div>
         </div>
+
+        {/* ===== DELIVERY PIPELINE ===== */}
+        <DeliveryPipelineSection works={recentWorks} basePath={basePath} />
 
         {/* ===== ROW 4: WORK QUEUE - Responsive ===== */}
         <div className="mb-6 lg:mb-8">
