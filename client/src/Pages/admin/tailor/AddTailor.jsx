@@ -545,6 +545,7 @@ export default function AddTailor() {
     },
     specialization: [],
     experience: "",
+    basicSalary: 0,
   });
 
   const [specializationInput, setSpecializationInput] = useState("");
@@ -642,6 +643,7 @@ export default function AddTailor() {
       email: formData.email || "",
       password: password, // Explicitly set
       experience: formData.experience ? parseInt(formData.experience) : 0,
+      basicSalary: formData.basicSalary ? parseInt(formData.basicSalary) : 0,
       specialization: formData.specialization || [],
       address: {
         street: formData.address.street || "",
@@ -890,6 +892,25 @@ export default function AddTailor() {
                       max="50"
                       placeholder="5"
                       className="w-full pl-8 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm sm:text-base"
+                    />
+                  </div>
+                </div>
+
+                {/* Basic Salary */}
+                <div>
+                  <label className="block text-xs font-black uppercase text-slate-500 mb-2">
+                    Basic Salary (Monthly)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-3.5 text-slate-400 font-bold">₹</span>
+                    <input
+                      type="number"
+                      name="basicSalary"
+                      value={formData.basicSalary}
+                      onChange={handleChange}
+                      min="0"
+                      placeholder="25000"
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold"
                     />
                   </div>
                 </div>

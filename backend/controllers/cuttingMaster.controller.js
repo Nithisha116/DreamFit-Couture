@@ -3029,7 +3029,7 @@ export const createCuttingMaster = async (req, res) => {
   try {
     console.log("📝 Creating cutting master with data:", req.body);
     
-    const { name, phone, email, password, address, specialization, experience } = req.body;
+    const { name, phone, email, password, address, specialization, experience, basicSalary } = req.body;
 
     // Validate required fields
     if (!name) return res.status(400).json({ message: "Name is required" });
@@ -3053,6 +3053,7 @@ export const createCuttingMaster = async (req, res) => {
       address: address || {},
       specialization: specialization || [],
       experience: experience || 0,
+      basicSalary: basicSalary || 0,
       createdBy: req.user?._id,
       joiningDate: new Date()
     });
@@ -3294,7 +3295,7 @@ export const updateCuttingMaster = async (req, res) => {
     }
 
     // Fields that can be updated
-    const updatableFields = ['name', 'phone', 'email', 'address', 'specialization', 'experience', 'isActive', 'isAvailable'];
+    const updatableFields = ['name', 'phone', 'email', 'address', 'specialization', 'experience', 'basicSalary', 'isActive', 'isAvailable'];
 
     updatableFields.forEach(field => {
       if (req.body[field] !== undefined) {

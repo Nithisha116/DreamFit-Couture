@@ -1512,7 +1512,7 @@ export const createTailor = async (req, res) => {
       password: req.body.password ? '[PRESENT]' : '[MISSING]'
     });
     
-    const { name, phone, email, password, address, specialization, experience } = req.body;
+    const { name, phone, email, password, address, specialization, experience, basicSalary } = req.body;
 
     // Validate required fields
     if (!name) {
@@ -1557,6 +1557,7 @@ export const createTailor = async (req, res) => {
       address: address || {},
       specialization: specialization || [],
       experience: experience || 0,
+      basicSalary: basicSalary || 0,
       createdBy: req.user?._id,
       joiningDate: new Date(),
       isActive: true,
@@ -1848,7 +1849,7 @@ export const updateTailor = async (req, res) => {
       return res.status(403).json({ message: "Not authorized to update this tailor" });
     }
 
-    const updatableFields = ['name', 'phone', 'email', 'address', 'specialization', 'experience'];
+    const updatableFields = ['name', 'phone', 'email', 'address', 'specialization', 'experience', 'basicSalary'];
     
     if (isAdmin || isStoreKeeper) {
       updatableFields.push('isAvailable', 'leaveStatus', 'leaveFrom', 'leaveTo', 'leaveReason');

@@ -8,7 +8,7 @@ export const createStoreKeeper = async (req, res) => {
   try {
     console.log("📝 Creating store keeper with data:", req.body);
     
-    const { name, phone, email, password, address, department, experience } = req.body;
+    const { name, phone, email, password, address, department, experience, basicSalary } = req.body;
 
     // Validate required fields
     if (!name) return res.status(400).json({ message: "Name is required" });
@@ -32,6 +32,7 @@ export const createStoreKeeper = async (req, res) => {
       address: address || {},
       department: department || "both",
       experience: experience || 0,
+      basicSalary: basicSalary || 0,
       createdBy: req.user?._id,
       joiningDate: new Date()
     });
@@ -226,7 +227,7 @@ export const updateStoreKeeper = async (req, res) => {
     }
 
     // Fields that can be updated
-    const updatableFields = ['name', 'phone', 'email', 'address', 'department', 'experience', 'isActive'];
+    const updatableFields = ['name', 'phone', 'email', 'address', 'department', 'experience', 'basicSalary', 'isActive'];
 
     updatableFields.forEach(field => {
       if (req.body[field] !== undefined) {

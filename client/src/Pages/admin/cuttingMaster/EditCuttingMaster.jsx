@@ -406,6 +406,7 @@ export default function EditCuttingMaster() {
     },
     specialization: [],
     experience: "",
+    basicSalary: 0,
   });
 
   const [specializationInput, setSpecializationInput] = useState("");
@@ -434,6 +435,7 @@ export default function EditCuttingMaster() {
         },
         specialization: currentCuttingMaster.specialization || [],
         experience: currentCuttingMaster.experience || "",
+        basicSalary: currentCuttingMaster.basicSalary || 0,
       });
     }
   }, [currentCuttingMaster]);
@@ -659,6 +661,26 @@ export default function EditCuttingMaster() {
                       max="50"
                       disabled={!canEdit}
                       className="w-full pl-8 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 text-sm sm:text-base"
+                    />
+                  </div>
+                </div>
+
+                {/* Basic Salary */}
+                <div>
+                  <label className="block text-[10px] sm:text-xs font-black uppercase text-slate-500 mb-1 sm:mb-2">
+                    Basic Salary (Monthly)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 sm:left-4 sm:top-3.5 text-slate-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      name="basicSalary"
+                      value={formData.basicSalary}
+                      onChange={handleChange}
+                      disabled={!canEdit}
+                      min="0"
+                      placeholder="35000"
+                      className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 text-sm sm:text-base font-bold"
                     />
                   </div>
                 </div>

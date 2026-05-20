@@ -139,7 +139,7 @@ export const getAllStaff = async (req, res) => {
 // 🆕 Create New User (Staff)
 export const createUser = async (req, res) => {
   try {
-    const { name, email, password, role, phone } = req.body;
+    const { name, email, password, role, phone, basicSalary } = req.body;
 
     // Validate input
     if (!name || !email || !password || !role) {
@@ -168,6 +168,7 @@ export const createUser = async (req, res) => {
       password: hashedPassword,
       role,
       phone: phone || "",
+      basicSalary: basicSalary || 0,
       isActive: true
     });
 
@@ -193,7 +194,7 @@ export const createUser = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, phone } = req.body;
+    const { name, email, role, phone, basicSalary } = req.body;
 
     // Check if user exists
     const user = await User.findById(id);
@@ -212,7 +213,7 @@ export const updateUser = async (req, res) => {
     // Update user
     const updatedUser = await User.findByIdAndUpdate(
       id,
-      { name, email, role, phone },
+      { name, email, role, phone, basicSalary },
       { new: true, runValidators: true }
     ).select("-password");
 

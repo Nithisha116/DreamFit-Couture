@@ -24,6 +24,10 @@ import customerSizeReducer from "../features/customerSize/customerSizeSlice";
 import transactionReducer from '../features/transaction/transactionSlice';
 import paymentReducer from "../features/payment/paymentSlice";
 import appointmentReducer from "../features/appointment/appointmentSlice";
+import outsourcingReducer from "../features/outsourcing/outsourcingSlice";
+import attendanceReducer from "../features/attendance/attendanceSlice";
+import leaveReducer from "../features/leave/leaveSlice";
+import salaryReducer from "../features/salary/salarySlice";
 
 // Combine all reducers
 const rootReducer = combineReducers({
@@ -40,6 +44,8 @@ const rootReducer = combineReducers({
   work: workReducer,
   tailor: tailorReducer,
   customerSize: customerSizeReducer,
+  attendance: attendanceReducer,
+  leave: leaveReducer,
   
   // ✅ NEW: Add these to the store
   cuttingMaster: cuttingMasterReducer,
@@ -48,6 +54,8 @@ notification: notificationReducer,
    transaction: transactionReducer,
      payment: paymentReducer,
   appointment: appointmentReducer,
+  outsourcing: outsourcingReducer,
+  salary: salaryReducer,
 });
 
 // Persist config

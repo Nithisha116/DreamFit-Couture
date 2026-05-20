@@ -74,24 +74,6 @@
 //     type: Boolean,
 //     default: true,
 //     index: true
-//   },
-//   isAvailable: {
-//     type: Boolean,
-//     default: true,
-//     index: true
-//   },
-//   leaveStatus: {
-//     type: String,
-//     enum: ["present", "leave", "half-day", "holiday"],
-//     default: "present",
-//     index: true
-//   },
-//   leaveFrom: Date,
-//   leaveTo: {
-//     type: Date,
-//     validate: {
-//       validator: function(value) {
-//         if (this.leaveFrom && value) {
 //           return value >= this.leaveFrom;
 //         }
 //         return true;
@@ -267,6 +249,11 @@ const tailorSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  basicSalary: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   isActive: {
     type: Boolean,
     default: true,
@@ -282,6 +269,11 @@ const tailorSchema = new mongoose.Schema({
     enum: ["present", "leave", "half-day", "holiday"],
     default: "present",
     index: true
+  },
+  leaveBalance: {
+    casual: { type: Number, default: 12 },
+    sick: { type: Number, default: 10 },
+    paid: { type: Number, default: 15 }
   },
   leaveFrom: Date,
   leaveTo: {

@@ -242,12 +242,22 @@ const cuttingMasterSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  basicSalary: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   
   // ✅ Status Management
   isActive: {
     type: Boolean,
     default: true,
     index: true
+  },
+  leaveBalance: {
+    casual: { type: Number, default: 12 },
+    sick: { type: Number, default: 10 },
+    paid: { type: Number, default: 15 }
   },
   isAvailable: {
     type: Boolean,

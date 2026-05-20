@@ -492,10 +492,12 @@ import authRoutes from "./routes/auth.routes.js";
 import customerRoutes from "./routes/customer.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import fabricRoutes from "./routes/fabric.routes.js";
+import attendanceRoutes from "./routes/attendance.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
 import itemRoutes from "./routes/item.routes.js";
 import sizeTemplateRoutes from "./routes/sizeTemplate.routes.js";
 import sizeFieldRoutes from "./routes/sizeField.routes.js";
+import leaveRoutes from "./routes/leave.routes.js";
 
 // Customer Size Profile Routes
 import customerSizeRoutes from "./routes/customerSize.routes.js";
@@ -524,6 +526,10 @@ import transactionRoutes from "./routes/transaction.routes.js";
 // APPOINTMENT ROUTES
 import appointmentRoutes from "./routes/appointment.routes.js";
 
+// OUTSOURCING ROUTES
+import outsourcingRoutes from "./routes/outsourcing.routes.js";
+import salaryRoutes from "./routes/salary.routes.js";
+
 // IMPORT ERROR HANDLING MIDDLEWARE
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
 
@@ -548,6 +554,8 @@ const allowedOrigins = [
   "http://localhost:5175",
   "http://127.0.0.1:5175",
   "http://localhost:5176",
+  "http://localhost:5177",
+  "http://127.0.0.1:5177",
   "http://localhost:5000",
   "https://dream-fitcouture-bnuc.vercel.app",
   "https://dream-fitcouture.vercel.app"
@@ -844,6 +852,11 @@ app.use("/api/cutting-masters", cuttingMasterRoutes);
 app.use("/api/store-keepers", storeKeeperRoutes);
 
 // ====================================================
+// 💰 SALARY & PAYROLL - COMPLETE ✅
+// ====================================================
+app.use("/api/salary", salaryRoutes);
+
+// ====================================================
 // 💰 BANKING / TRANSACTION MANAGEMENT - COMPLETE ✅
 // ====================================================
 app.use("/api/transactions", transactionRoutes);
@@ -852,6 +865,17 @@ app.use("/api/transactions", transactionRoutes);
 // 📅 APPOINTMENT MANAGEMENT - COMPLETE ✅
 // ====================================================
 app.use("/api/appointments", appointmentRoutes);
+
+// ====================================================
+// 🚚 OUTSOURCING MANAGEMENT - COMPLETE ✅
+// ====================================================
+app.use("/api/outsourcing", outsourcingRoutes);
+
+// ====================================================
+// 🕒 ATTENDANCE MANAGEMENT - COMPLETE ✅
+// ====================================================
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/leaves", leaveRoutes);
 
 // ==================== ERROR HANDLING MIDDLEWARE ====================
 app.use(notFound);

@@ -73,6 +73,9 @@
 // // ✅ NOTIFICATION COMPONENTS
 // import NotificationsPage from "../Pages/notifications/NotificationsPage";
 
+// // ✅ ATTENDANCE COMPONENTS
+// import AttendancePage from "../Pages/admin/attendance/AttendancePage";
+
 // // Placeholders
 // const ManagerDashboard = () => (
 //   <div className="p-8 font-black text-slate-800 uppercase italic">
@@ -485,6 +488,28 @@ const PaymentDetails = lazy(() => import("../Pages/admin/payment/PaymentDetails"
 // 🚀 LAZY LOADING - NOTIFICATION COMPONENTS
 const NotificationsPage = lazy(() => import("../Pages/notifications/NotificationsPage"));
 
+// 🚀 LAZY LOADING - OUTSOURCING
+const OutsourcingPage = lazy(() =>
+  import("../Pages/admin/outsourcing/OutsourcingPage")
+);
+
+// 🚀 LAZY LOADING - ATTENDANCE
+const AttendancePage = lazy(() =>
+  import("../Pages/admin/attendance/AttendancePage")
+);
+
+// 🚀 LAZY LOADING - LEAVE MANAGEMENT
+const LeavePage = lazy(() =>
+  import("../Pages/admin/leave/LeavePage")
+);
+
+const SalaryManagement = lazy(() =>
+  import("../Pages/admin/salary/SalaryManagement")
+);
+
+const EmployeeAnalytics = lazy(() =>
+  import("../Pages/admin/salary/EmployeeAnalytics")
+);
 // Placeholders (keep as is - they're simple components)
 const ManagerDashboard = () => (
   <div className="p-8 font-black text-slate-800 uppercase italic">
@@ -616,6 +641,9 @@ export default function AppRouter() {
             {/* Appointments Management */}
             <Route path="appointments" element={<AppointmentsPage />} />
             
+            {/* Outsourcing Management */}
+            <Route path="outsourcing" element={<OutsourcingPage />} />
+            
             {/* Garment Management */}
             <Route path="garments/:id" element={<GarmentDetails />} />
             <Route path="garments/edit/:id" element={<EditGarment />} />
@@ -673,6 +701,16 @@ export default function AppRouter() {
             <Route path="staff" element={<Staff />} />
             <Route path="staff/:id" element={<StaffDetails />} />
             <Route path="add-staff" element={<AddStaff />} />
+
+            {/* Attendance Management */}
+            <Route path="attendance" element={<AttendancePage />} />
+            
+            {/* Leave Management */}
+            <Route path="leave" element={<LeavePage />} />
+            
+            {/* Salary & Payroll Management */}
+            <Route path="salary" element={<SalaryManagement />} />
+            <Route path="salary/analytics/:id" element={<EmployeeAnalytics />} />
             
             {/* Shop Keeper */}
             <Route path="shopkeeper" element={<ShopKeeper />} />
@@ -718,6 +756,9 @@ export default function AppRouter() {
             
             {/* Appointments Management */}
             <Route path="appointments" element={<AppointmentsPage />} />
+            
+            {/* Outsourcing Management */}
+            <Route path="outsourcing" element={<OutsourcingPage />} />
             
             {/* Garment Management */}
             <Route path="garments/:id" element={<GarmentDetails />} />
