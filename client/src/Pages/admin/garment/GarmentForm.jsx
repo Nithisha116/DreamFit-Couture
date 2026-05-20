@@ -34,6 +34,7 @@ import {
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import showToast from "../../../utils/toast";
+import ImageUploadSection from "../../../components/common/ImageUploadSection";
 
 export default function GarmentForm({
   onClose,
@@ -378,34 +379,10 @@ export default function GarmentForm({
   }, [editingGarment]);
 
   // ==================== IMAGE HANDLERS ====================
-  const handleImageChange = (e, type) => {
-    const files = Array.from(e.target.files);
-
-    const invalidFiles = files.filter((f) => f.size > 5 * 1024 * 1024);
-    if (invalidFiles.length > 0) {
-      showToast.error("Some images exceed 5MB limit");
-      return;
-    }
-
-    const validTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
-    const invalidTypes = files.filter((f) => !validTypes.includes(f.type));
-    if (invalidTypes.length > 0) {
-      showToast.error("Please upload only JPG, PNG or WEBP images");
-      return;
-    }
-
-    const newPreviews = files.map((file) => ({
-      file,
-      preview: URL.createObjectURL(file),
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      isExisting: false,
-    }));
-
+  const handleImagesChange = (newImages, type) => {
     setPreviewImages((prev) => ({
       ...prev,
-      [type]: [...prev[type], ...newPreviews],
+      [type]: newImages,
     }));
 
     let imageField;
@@ -423,48 +400,11 @@ export default function GarmentForm({
         return;
     }
 
-    const existingFiles = formData[imageField] || [];
-
+    const files = newImages.map(img => img.file).filter(Boolean);
     setFormData((prev) => ({
       ...prev,
-      [imageField]: [...existingFiles, ...files],
+      [imageField]: files,
     }));
-
-    console.log(`📸 Added ${files.length} images to ${imageField}`);
-  };
-
-  const removeImage = (index, type) => {
-    const imageToRemove = previewImages[type][index];
-    if (imageToRemove.preview && imageToRemove.preview.startsWith("blob:")) {
-      URL.revokeObjectURL(imageToRemove.preview);
-    }
-
-    setPreviewImages((prev) => ({
-      ...prev,
-      [type]: prev[type].filter((_, i) => i !== index),
-    }));
-
-    let imageField;
-    switch (type) {
-      case "studio":
-        imageField = "studioImages";
-        break;
-      case "customerProvided":
-        imageField = "customerProvidedImages";
-        break;
-      case "customerCloth":
-        imageField = "customerClothImages";
-        break;
-      default:
-        return;
-    }
-
-    setFormData((prev) => ({
-      ...prev,
-      [imageField]: prev[imageField].filter((_, i) => i !== index),
-    }));
-
-    console.log(`🗑️ Removed image from ${imageField}`);
   };
 
   // ==================== MEASUREMENT HANDLERS ====================
@@ -1887,199 +1827,42 @@ const renderDayContents = useCallback(
               )}
             </div>
 
-            {/* IMAGES SECTION - UNCHANGED */}
+            {/* IMAGES SECTION */}
             <div className="bg-slate-50 rounded-lg sm:rounded-xl p-3 sm:p-4">
               <h3 className="font-black text-slate-800 text-sm sm:text-base mb-3 sm:mb-4 flex items-center gap-2">
                 <Camera size={14} className="text-blue-600 sm:w-5 sm:h-5" />
                 Garment Images
               </h3>
 
-              {/* Studio/Reference Images */}
-              <div className="mb-6 sm:mb-8">
-                <div className="flex items-center gap-2 mb-2 sm:mb-3">
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <ImageIcon
-                      size={12}
-                      className="text-indigo-600 sm:w-4 sm:h-4"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-bold text-slate-800 text-xs sm:text-sm">
-                      Studio Reference Images
-                    </h4>
-                    <p className="text-[8px] sm:text-xs text-slate-500">
-                      Designer images, style references
-                    </p>
-                  </div>
-                </div>
+              <ImageUploadSection
+                title="Studio Reference Images"
+                subtitle="Designer images, style references"
+                icon={ImageIcon}
+                theme="indigo"
+                type="studio"
+                images={previewImages.studio}
+                onImagesChange={(newImages) => handleImagesChange(newImages, 'studio')}
+              />
 
-                <div className="border-2 border-dashed border-slate-300 rounded-lg sm:rounded-xl p-2 sm:p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 mb-2 sm:mb-4">
-                    {previewImages.studio.map((img, index) => (
-                      <div key={index} className="relative group aspect-square">
-                        <img
-                          src={img.preview}
-                          alt={`Studio ${index + 1}`}
-                          className="w-full h-full object-cover rounded-lg"
-                        />
-                        {!img.isExisting && (
-                          <button
-                            type="button"
-                            onClick={() => removeImage(index, "studio")}
-                            className="absolute top-1 right-1 w-5 h-5 sm:w-6 sm:h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                          >
-                            <Trash2 size={10} className="sm:w-3 sm:h-3" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    <label className="border-2 border-dashed border-slate-300 rounded-lg aspect-square flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
-                      <Upload
-                        size={14}
-                        className="text-slate-400 mb-1 sm:w-5 sm:h-5"
-                      />
-                      <span className="text-[8px] sm:text-xs text-slate-500">
-                        Upload
-                      </span>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleImageChange(e, "studio")}
-                      />
-                    </label>
-                  </div>
-                  <p className="text-[8px] sm:text-xs text-slate-400">
-                    Max 5MB per image
-                  </p>
-                </div>
-              </div>
+              <ImageUploadSection
+                title="Customer Digital Images"
+                subtitle="Photos sent by customer"
+                icon={User}
+                theme="green"
+                type="customerProvided"
+                images={previewImages.customerProvided}
+                onImagesChange={(newImages) => handleImagesChange(newImages, 'customerProvided')}
+              />
 
-              {/* Customer Provided Images */}
-              <div className="mb-6 sm:mb-8">
-                <div className="flex items-center gap-2 mb-2 sm:mb-3">
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <User size={12} className="text-green-600 sm:w-4 sm:h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-bold text-slate-800 text-xs sm:text-sm">
-                      Customer Digital Images
-                    </h4>
-                    <p className="text-[8px] sm:text-xs text-slate-500">
-                      Photos sent by customer
-                    </p>
-                  </div>
-                </div>
-
-                <div className="border-2 border-dashed border-slate-300 rounded-lg sm:rounded-xl p-2 sm:p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 mb-2 sm:mb-4">
-                    {previewImages.customerProvided.map((img, index) => (
-                      <div key={index} className="relative group aspect-square">
-                        <img
-                          src={img.preview}
-                          alt={`Customer Digital ${index + 1}`}
-                          className="w-full h-full object-cover rounded-lg"
-                        />
-                        {!img.isExisting && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              removeImage(index, "customerProvided")
-                            }
-                            className="absolute top-1 right-1 w-5 h-5 sm:w-6 sm:h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                          >
-                            <Trash2 size={10} className="sm:w-3 sm:h-3" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    <label className="border-2 border-dashed border-slate-300 rounded-lg aspect-square flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
-                      <Upload
-                        size={14}
-                        className="text-slate-400 mb-1 sm:w-5 sm:h-5"
-                      />
-                      <span className="text-[8px] sm:text-xs text-slate-500">
-                        Upload
-                      </span>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) =>
-                          handleImageChange(e, "customerProvided")
-                        }
-                      />
-                    </label>
-                  </div>
-                  <p className="text-[8px] sm:text-xs text-slate-400">
-                    Max 5MB per image
-                  </p>
-                </div>
-              </div>
-
-              {/* Customer Cloth Images */}
-              <div>
-                <div className="flex items-center gap-2 mb-2 sm:mb-3">
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Scissors
-                      size={12}
-                      className="text-orange-600 sm:w-4 sm:h-4"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-bold text-slate-800 text-xs sm:text-sm">
-                      Customer's Reference Cloth
-                    </h4>
-                    <p className="text-[8px] sm:text-xs text-slate-500">
-                      Photos of physical cloth/design
-                    </p>
-                  </div>
-                </div>
-
-                <div className="border-2 border-dashed border-orange-200 bg-orange-50/30 rounded-lg sm:rounded-xl p-2 sm:p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 mb-2 sm:mb-4">
-                    {previewImages.customerCloth.map((img, index) => (
-                      <div key={index} className="relative group aspect-square">
-                        <img
-                          src={img.preview}
-                          alt={`Customer Cloth ${index + 1}`}
-                          className="w-full h-full object-cover rounded-lg border border-orange-200"
-                        />
-                        {!img.isExisting && (
-                          <button
-                            type="button"
-                            onClick={() => removeImage(index, "customerCloth")}
-                            className="absolute top-1 right-1 w-5 h-5 sm:w-6 sm:h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                          >
-                            <Trash2 size={10} className="sm:w-3 sm:h-3" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    <label className="border-2 border-dashed border-orange-300 rounded-lg aspect-square flex flex-col items-center justify-center cursor-pointer hover:bg-orange-100 transition-all">
-                      <Upload
-                        size={14}
-                        className="text-orange-400 mb-1 sm:w-5 sm:h-5"
-                      />
-                      <span className="text-[8px] sm:text-xs text-orange-600 font-medium">
-                        Upload
-                      </span>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleImageChange(e, "customerCloth")}
-                      />
-                    </label>
-                  </div>
-                  <p className="text-[8px] sm:text-xs text-orange-600">
-                    Photos of actual cloth/design for reference
-                  </p>
-                </div>
-              </div>
+              <ImageUploadSection
+                title="Customer's Reference Cloth"
+                subtitle="Photos of physical cloth/design"
+                icon={Scissors}
+                theme="orange"
+                type="customerCloth"
+                images={previewImages.customerCloth}
+                onImagesChange={(newImages) => handleImagesChange(newImages, 'customerCloth')}
+              />
             </div>
 
             {/* Additional Info - UNCHANGED */}

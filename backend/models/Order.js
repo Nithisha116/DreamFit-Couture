@@ -1,24 +1,5 @@
 import mongoose from "mongoose";
 
-// ✅ PAYMENT ENTRY SCHEMA - Store field removed (since no Store model exists)
-const paymentEntrySchema = new mongoose.Schema({
-  amount: { type: Number, required: true },
-  method: { 
-    type: String, 
-    enum: ["cash", "upi", "bank-transfer", "card"], 
-    default: "cash" 
-  },
-type: { 
-  type: String, 
-  enum: ["advance", "partial", "full", "final-settlement", "refund", "extra"], 
-  default: "advance" 
-},
-  referenceNumber: { type: String, default: "" },
-  date: { type: Date, default: Date.now },
-  notes: { type: String, default: "" }
-  // ✅ STORE FIELD REMOVED - No Store model exists
-}, { _id: true });
-
 // ✅ PRICE SUMMARY SCHEMA
 const priceSummarySchema = new mongoose.Schema({
   totalMin: { type: Number, default: 0 },
@@ -33,7 +14,7 @@ const paymentSummarySchema = new mongoose.Schema({
   paymentCount: { type: Number, default: 0 },
   paymentStatus: { 
     type: String, 
-    enum: ["pending", "partial", "paid", "overpaid"], 
+    enum: ["pending", "partial", "paid"], 
     default: "pending" 
   }
 }, { _id: false });
@@ -57,7 +38,7 @@ const orderSchema = new mongoose.Schema({
   garments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Garment" }],
   specialNotes: { type: String, default: "" },
   priceSummary: { type: priceSummarySchema, default: () => ({ totalMin: 0, totalMax: 0 }) },
-  payments: [paymentEntrySchema],
+  // NOTE: payments are stored in the separate Payment collection — NOT embedded here
   advancePayment: {
     amount: { type: Number, default: 0 },
     method: { type: String, default: "cash" },
@@ -82,75 +63,22 @@ const orderSchema = new mongoose.Schema({
 // ============================================
 orderSchema.pre('save', async function() {
   try {
-    console.log("\n🔧 ===== ORDER PRE-SAVE HOOK STARTED =====");
-    console.log("📦 Order ID:", this.orderId);
-    console.log("👤 Customer:", this.customer);
-    console.log("📅 Delivery Date:", this.deliveryDate);
-    console.log("💰 Price Summary:", JSON.stringify(this.priceSummary));
-    console.log("💳 Payments count:", this.payments?.length || 0);
-    console.log("👤 Created By:", this.createdBy);
-
     // Check required fields
     if (!this.customer) throw new Error("Customer is required");
     if (!this.deliveryDate) throw new Error("Delivery date is required");
     if (!this.createdBy) throw new Error("Created by is required");
 
-    // Generate Order ID if not present
+    // Generate Order ID if not present (fallback only)
     if (!this.orderId) {
       const date = new Date();
       const dateStr = `${String(date.getDate()).padStart(2, '0')}${String(date.getMonth() + 1).padStart(2, '0')}${date.getFullYear()}`;
       this.orderId = `${dateStr}-${Date.now().toString().slice(-4)}`;
-      console.log("📋 Generated Order ID:", this.orderId);
     }
 
-    // Process payments
-    const totalMax = Number(this.priceSummary?.totalMax) || 0;
-    
-    if (this.payments && this.payments.length > 0) {
-      console.log("💰 Processing", this.payments.length, "payments");
-      
-      const totalPaid = this.payments.reduce((sum, p) => {
-        const amount = Number(p.amount) || 0;
-        return sum + amount;
-      }, 0);
-      
-      const lastPayment = this.payments[this.payments.length - 1];
-      
-      let paymentStatus = 'pending';
-      if (totalPaid >= totalMax) {
-        paymentStatus = totalPaid > totalMax ? 'overpaid' : 'paid';
-      } else if (totalPaid > 0) {
-        paymentStatus = 'partial';
-      }
-      
-      this.paymentSummary = {
-        totalPaid,
-        lastPaymentDate: lastPayment?.date || new Date(),
-        lastPaymentAmount: lastPayment?.amount || 0,
-        paymentCount: this.payments.length,
-        paymentStatus
-      };
-      
-      this.advancePayment = {
-        amount: this.payments[0]?.amount || 0,
-        method: this.payments[0]?.method || 'cash',
-        date: this.payments[0]?.date || new Date()
-      };
-      
-      this.balanceAmount = totalMax - totalPaid;
-      console.log(`💰 Total Paid: ${totalPaid}, Balance: ${this.balanceAmount}`);
-    } else {
-      this.balanceAmount = totalMax;
-      this.paymentSummary.paymentStatus = 'pending';
-    }
+    // NOTE: Payment summary is managed exclusively by updateOrderPaymentSummary()
+    // in the payment controller. Do NOT recalculate it here to avoid dual-source conflicts.
 
-    console.log("✅ Pre-save hook completed successfully");
-    
   } catch (error) {
-    console.error("\n❌ PRE-SAVE HOOK ERROR:");
-    console.error("Error message:", error.message);
-    console.error("Error stack:", error.stack);
-    
     throw new Error(`Order validation failed: ${error.message}`);
   }
 });
@@ -168,7 +96,12 @@ orderSchema.post('save', function(doc) {
 orderSchema.post('save', function(error, doc, next) {
   if (error.name === 'MongoServerError' || error.name === 'MongoError') {
     if (error.code === 11000) {
-      next(new Error('Order ID already exists. Please try again.'));
+      // 🔥 FIX: Preserve the error code so controller can detect and retry
+      const dupError = new Error('Order ID already exists. Please try again.');
+      dupError.code = 11000;
+      dupError.keyPattern = error.keyPattern || { orderId: 1 };
+      dupError.keyValue = error.keyValue || {};
+      next(dupError);
     } else {
       next(error);
     }

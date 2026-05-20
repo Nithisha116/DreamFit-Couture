@@ -138,8 +138,7 @@ const transactionSchema = new mongoose.Schema({
     // ✅ UPDATED: Include all payment types for income
     enum: [
       // Income categories
-      'customer-advance', 'full-payment', 'part-payment', 'fabric-sale', 
-      'project-payment', 'advance', 'final-settlement', 'other-income',
+      'customer-advance', 'full-payment', 'project-payment', 'other-income',
       // Expense categories
       'salary', 'electricity', 'travel', 'material-purchase', 'rent', 
       'maintenance', 'other-expense'

@@ -4432,13 +4432,8 @@ const handleSavePayment = useCallback((paymentData) => {
   console.log("💰 Amount in paymentData:", paymentData.amount);
   console.log("💰 Amount type:", typeof paymentData.amount);
   
-  // Map type
+  // Use exactly what the user selected
   let backendType = paymentData.type || 'advance';
-  if (backendType === 'partial') {
-    backendType = 'part-payment';
-  } else if (backendType === 'full') {
-    backendType = 'final-settlement';
-  }
   
   // ✅ FIXED: Get current time for the payment
   const now = new Date();
@@ -5121,10 +5116,10 @@ const renderDayContents = useCallback((day, date) => {
       const mappedPayments = payments.map((payment, idx) => {
         let modelType = payment.type || 'advance';
         
-        if (modelType === 'partial') {
-          modelType = 'part-payment';
-        } else if (modelType === 'full') {
-          modelType = 'final-settlement';
+        if (modelType === 'partial' || modelType === 'part-payment') {
+          modelType = 'advance';
+        } else if (modelType === 'final-settlement') {
+          modelType = 'full';
         }
         
         // 🔥 CRITICAL: Safe number conversion with multiple checks
@@ -5193,16 +5188,13 @@ const renderDayContents = useCallback((day, date) => {
         deliveryDate: formData.deliveryDate,
         specialNotes: formData.specialNotes || "",
         payments: mappedPayments,
-        advancePayment: {
-          amount: mappedPayments.length > 0 ? (isNaN(Number(mappedPayments[0].amount)) ? 0 : Number(mappedPayments[0].amount)) : 0,
-          method: mappedPayments.length > 0 ? mappedPayments[0].method : "cash",
-          date: new Date().toISOString()
-        },
+        // NOTE: advancePayment is derived from payments[] on the backend.
+        // Do NOT send it separately to avoid duplicate entries.
         priceSummary: {
           totalMin: safeTotalMin,
           totalMax: safeTotalMax
         },
-        balanceAmount: safeTotalMax - safeTotalPayments,
+        balanceAmount: Math.max(0, safeTotalMax - safeTotalPayments),
         createdBy: finalUserId,
         status: "confirmed",
         orderDate: new Date().toISOString(),
@@ -5980,14 +5972,12 @@ const renderDayContents = useCallback((day, date) => {
                             <div className="flex items-center gap-2">
                               <p className="font-bold text-green-600">₹{payment.amount}</p>
                               <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                payment.type === 'advance' ? 'bg-blue-100 text-blue-700' :
-                                payment.type === 'part-payment' ? 'bg-orange-100 text-orange-700' :
-                                payment.type === 'final-settlement' ? 'bg-green-100 text-green-700' :
+                                ['advance', 'partial', 'part-payment'].includes(payment.type) ? 'bg-blue-100 text-blue-700' :
+                                ['full', 'final-settlement'].includes(payment.type) ? 'bg-green-100 text-green-700' :
                                 'bg-purple-100 text-purple-700'
                               }`}>
-                                {payment.type === 'advance' ? 'Advance' :
-                                 payment.type === 'part-payment' ? 'Part' :
-                                 payment.type === 'final-settlement' ? 'Full' : 'Extra'}
+                                {['advance', 'partial', 'part-payment'].includes(payment.type) ? 'Advance' :
+                                 ['full', 'final-settlement'].includes(payment.type) ? 'Full' : 'Extra'}
                               </span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">

@@ -742,6 +742,7 @@ import { fetchItems } from "../../../features/item/itemSlice";
 import { fetchAllSizeFields } from "../../../features/sizeField/sizeFieldSlice";
 import { fetchAllTemplates } from "../../../features/sizeTemplate/sizeTemplateSlice";
 import showToast from "../../../utils/toast";
+import ImageUploadSection from "../../../components/common/ImageUploadSection";
 
 export default function EditGarment() {
   const { id } = useParams();
@@ -876,79 +877,39 @@ export default function EditGarment() {
     }
   }, [currentGarment]);
 
-  const handleImageChange = (e, type) => {
-    const files = Array.from(e.target.files);
-    
-    // Validate files
-    const invalidFiles = files.filter(f => f.size > 5 * 1024 * 1024);
-    if (invalidFiles.length > 0) {
-      showToast.error("Some images exceed 5MB limit");
-      return;
-    }
-
-    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
-    const invalidTypes = files.filter(f => !validTypes.includes(f.type));
-    if (invalidTypes.length > 0) {
-      showToast.error("Please upload only JPG, PNG or WEBP images");
-      return;
-    }
-
-    // Create previews
-    const newPreviews = files.map(file => ({
-      file,
-      preview: URL.createObjectURL(file),
-      isExisting: false
-    }));
-
+  const handleImagesChange = (updatedImagesArray, type) => {
     setPreviewImages(prev => ({
       ...prev,
-      [type]: [...prev[type], ...newPreviews]
+      [type]: updatedImagesArray
     }));
-
+    
+    const files = updatedImagesArray
+      .filter(img => !img.isExisting && img.file)
+      .map(img => img.file);
+      
     setNewImages(prev => ({
       ...prev,
-      [type]: [...prev[type], ...files]
+      [type]: files
     }));
-
-    console.log(`✅ Added ${files.length} new ${type} images`);
   };
 
-  const removeImage = (index, type, isExisting) => {
-    if (isExisting) {
-      // Remove existing image - add to deleted list
-      const imageToRemove = existingImages[type][index];
-      
-      // Add to deleted images
-      setDeletedImages(prev => ({
-        ...prev,
-        [type]: [...prev[type], imageToRemove.key]
-      }));
-      
-      // Remove from existing images
-      setExistingImages(prev => ({
-        ...prev,
-        [type]: prev[type].filter((_, i) => i !== index)
-      }));
-      
-      console.log("🗑️ Marked for deletion:", imageToRemove.key);
-    } else {
-      // Remove new image
-      const imageToRemove = previewImages[type][index];
-      if (imageToRemove.preview?.startsWith('blob:')) {
-        URL.revokeObjectURL(imageToRemove.preview);
-      }
-      
-      setNewImages(prev => ({
-        ...prev,
-        [type]: prev[type].filter((_, i) => i !== index)
-      }));
-    }
-
-    // Remove from preview
+  const handleRemoveExisting = (index, img, type) => {
+    setDeletedImages(prev => ({
+      ...prev,
+      [type]: [...prev[type], img.key]
+    }));
+    
+    setExistingImages(prev => ({
+      ...prev,
+      [type]: prev[type].filter(existingImg => existingImg.key !== img.key)
+    }));
+    
     setPreviewImages(prev => ({
       ...prev,
       [type]: prev[type].filter((_, i) => i !== index)
     }));
+    
+    console.log("🗑️ Marked for deletion:", img.key);
   };
 
   const handleSubmit = async (e) => {
@@ -1309,140 +1270,38 @@ export default function EditGarment() {
                 Garment Images
               </h3>
 
-              {/* Reference Images */}
-              <div className="mb-6 sm:mb-8">
-                <div className="flex items-center gap-2 mb-2 sm:mb-3">
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <ImageIcon size={12} className="text-indigo-600 sm:w-4 sm:h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-bold text-slate-800 text-xs sm:text-sm">Reference Images</h4>
-                    <p className="text-[8px] sm:text-xs text-slate-500">Current: {existingImages.reference.length} images</p>
-                  </div>
-                </div>
-                
-                <div className="border-2 border-dashed border-slate-300 rounded-lg sm:rounded-xl p-2 sm:p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 mb-2 sm:mb-4">
-                    {previewImages.reference.map((img, index) => (
-                      <div key={index} className="relative group aspect-square">
-                        <img
-                          src={img.preview || img.url}
-                          alt={`Reference ${index + 1}`}
-                          className="w-full h-full object-cover rounded-lg"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index, 'reference', img.isExisting)}
-                          className="absolute top-1 right-1 w-5 h-5 sm:w-6 sm:h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                        >
-                          <Trash2 size={10} className="sm:w-3 sm:h-3" />
-                        </button>
-                      </div>
-                    ))}
-                    <label className="border-2 border-dashed border-slate-300 rounded-lg aspect-square flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
-                      <Upload size={16} className="text-slate-400 mb-1 sm:w-5 sm:h-5" />
-                      <span className="text-[8px] sm:text-xs text-slate-500">Add More</span>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleImageChange(e, 'reference')}
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
+              <ImageUploadSection
+                title="Reference Images"
+                subtitle={`Current: ${existingImages.reference.length} images`}
+                icon={ImageIcon}
+                theme="indigo"
+                type="reference"
+                images={previewImages.reference}
+                onImagesChange={(newImages) => handleImagesChange(newImages, 'reference')}
+                onRemoveExisting={(index, img) => handleRemoveExisting(index, img, 'reference')}
+              />
 
-              {/* Customer Images */}
-              <div className="mb-6 sm:mb-8">
-                <div className="flex items-center gap-2 mb-2 sm:mb-3">
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <User size={12} className="text-green-600 sm:w-4 sm:h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-bold text-slate-800 text-xs sm:text-sm">Customer Images</h4>
-                    <p className="text-[8px] sm:text-xs text-slate-500">Current: {existingImages.customer.length} images</p>
-                  </div>
-                </div>
-                
-                <div className="border-2 border-dashed border-slate-300 rounded-lg sm:rounded-xl p-2 sm:p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 mb-2 sm:mb-4">
-                    {previewImages.customer.map((img, index) => (
-                      <div key={index} className="relative group aspect-square">
-                        <img
-                          src={img.preview || img.url}
-                          alt={`Customer ${index + 1}`}
-                          className="w-full h-full object-cover rounded-lg"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index, 'customer', img.isExisting)}
-                          className="absolute top-1 right-1 w-5 h-5 sm:w-6 sm:h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                        >
-                          <Trash2 size={10} className="sm:w-3 sm:h-3" />
-                        </button>
-                      </div>
-                    ))}
-                    <label className="border-2 border-dashed border-slate-300 rounded-lg aspect-square flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
-                      <Upload size={16} className="text-slate-400 mb-1 sm:w-5 sm:h-5" />
-                      <span className="text-[8px] sm:text-xs text-slate-500">Add More</span>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleImageChange(e, 'customer')}
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
+              <ImageUploadSection
+                title="Customer Images"
+                subtitle={`Current: ${existingImages.customer.length} images`}
+                icon={User}
+                theme="green"
+                type="customer"
+                images={previewImages.customer}
+                onImagesChange={(newImages) => handleImagesChange(newImages, 'customer')}
+                onRemoveExisting={(index, img) => handleRemoveExisting(index, img, 'customer')}
+              />
 
-              {/* Cloth Images */}
-              <div>
-                <div className="flex items-center gap-2 mb-2 sm:mb-3">
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Scissors size={12} className="text-orange-600 sm:w-4 sm:h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-bold text-slate-800 text-xs sm:text-sm">Cloth Images</h4>
-                    <p className="text-[8px] sm:text-xs text-slate-500">Current: {existingImages.cloth.length} images</p>
-                  </div>
-                </div>
-                
-                <div className="border-2 border-dashed border-orange-200 bg-orange-50/30 rounded-lg sm:rounded-xl p-2 sm:p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 mb-2 sm:mb-4">
-                    {previewImages.cloth.map((img, index) => (
-                      <div key={index} className="relative group aspect-square">
-                        <img
-                          src={img.preview || img.url}
-                          alt={`Cloth ${index + 1}`}
-                          className="w-full h-full object-cover rounded-lg border border-orange-200"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index, 'cloth', img.isExisting)}
-                          className="absolute top-1 right-1 w-5 h-5 sm:w-6 sm:h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                        >
-                          <Trash2 size={10} className="sm:w-3 sm:h-3" />
-                        </button>
-                      </div>
-                    ))}
-                    <label className="border-2 border-dashed border-orange-300 rounded-lg aspect-square flex flex-col items-center justify-center cursor-pointer hover:bg-orange-100 transition-all">
-                      <Upload size={16} className="text-orange-400 mb-1 sm:w-5 sm:h-5" />
-                      <span className="text-[8px] sm:text-xs text-orange-600 font-medium">Add More</span>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleImageChange(e, 'cloth')}
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
+              <ImageUploadSection
+                title="Cloth Images"
+                subtitle={`Current: ${existingImages.cloth.length} images`}
+                icon={Scissors}
+                theme="orange"
+                type="cloth"
+                images={previewImages.cloth}
+                onImagesChange={(newImages) => handleImagesChange(newImages, 'cloth')}
+                onRemoveExisting={(index, img) => handleRemoveExisting(index, img, 'cloth')}
+              />
             </div>
 
             {/* Additional Info */}

@@ -2001,6 +2001,9 @@ export default function OrderDetails() {
   // Calculate payment statistics
   const displayPayments = currentPayments?.length > 0 ? currentPayments : payments;
 
+  // Check if a full payment has already been recorded — no more payments needed
+  const hasFullPayment = displayPayments?.some(p => p.type === 'full') || false;
+
   console.log("💰 Display payments:", {
     currentPaymentsCount: currentPayments?.length,
     paymentsCount: payments?.length,
@@ -2727,17 +2730,25 @@ const handleSavePayment = async (paymentData) => {
                     Edit Order
                   </button>
 
-                  <button
-                    onClick={() => {
-                      handleAddPayment();
-                      setMobileMenuOpen(false);
-                    }}
-                    disabled={paymentLoading}
-                    className="w-full flex items-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50"
-                  >
-                    <Wallet size={18} />
-                    Add Payment
-                  </button>
+                  {!hasFullPayment && (
+                    <button
+                      onClick={() => {
+                        handleAddPayment();
+                        setMobileMenuOpen(false);
+                      }}
+                      disabled={paymentLoading}
+                      className="w-full flex items-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50"
+                    >
+                      <Wallet size={18} />
+                      Add Payment
+                    </button>
+                  )}
+                  {hasFullPayment && (
+                    <div className="w-full flex items-center gap-2 px-4 py-3 bg-green-50 text-green-700 rounded-lg font-bold border border-green-200">
+                      <Wallet size={18} />
+                      Payment Complete ✓
+                    </div>
+                  )}
 
                   {currentOrder.status === 'in-progress' && (
                     <button
@@ -2925,18 +2936,25 @@ const handleSavePayment = async (paymentData) => {
                   </button>
                 )}
 
-                <button
-                  onClick={handleAddPayment}
-                  disabled={paymentLoading}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50"
-                >
-                  {paymentLoading ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
+{!hasFullPayment ? (
+                  <button
+                    onClick={handleAddPayment}
+                    disabled={paymentLoading}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {paymentLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Wallet size={18} />
+                    )}
+                    Add Payment
+                  </button>
+                ) : (
+                  <div className="bg-green-50 text-green-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 border border-green-200">
                     <Wallet size={18} />
-                  )}
-                  Add Payment
-                </button>
+                    Payment Complete ✓
+                  </div>
+                )}
 
                 {currentOrder.status === 'ready-to-delivery' && (
                   <button

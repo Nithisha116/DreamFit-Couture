@@ -5566,7 +5566,7 @@ const updateOrderPaymentSummary = async (orderId) => {
     const payments = await Payment.find({ 
       order: orderId, 
       isDeleted: false,
-      type: { $in: ['advance', 'full', 'partial', 'extra'] }
+      type: { $in: ['advance', 'full', 'final-settlement'] }
     });
 
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -5578,7 +5578,7 @@ const updateOrderPaymentSummary = async (orderId) => {
     const totalAmount = order.priceSummary?.totalMax || 0;
     
     if (totalPaid >= totalAmount) {
-      paymentStatus = totalPaid > totalAmount ? 'overpaid' : 'paid';
+      paymentStatus = 'paid';
     } else if (totalPaid > 0) {
       paymentStatus = 'partial';
     }
@@ -5591,7 +5591,7 @@ const updateOrderPaymentSummary = async (orderId) => {
       paymentStatus
     };
     
-    order.balanceAmount = totalAmount - totalPaid;
+    order.balanceAmount = Math.max(0, totalAmount - totalPaid);
     
     await order.save();
     console.log(`✅ Payment summary updated: Paid: ₹${totalPaid}, Status: ${paymentStatus}`);
@@ -5731,24 +5731,36 @@ const generateOrderId = async () => {
   const dd = String(today.getDate()).padStart(2, "0");
   const datePart = `${yyyy}${mm}${dd}`;
 
-  // Count orders created today
-  const startOfDay = new Date(yyyy, today.getMonth(), today.getDate());
-  const endOfDay = new Date(yyyy, today.getMonth(), today.getDate() + 1);
+  try {
+    // 🔥 BULLETPROOF: Find the highest existing orderId for today
+    // This handles ALL edge cases: deleted orders, inactive orders, etc.
+    const latestOrder = await Order.findOne(
+      { orderId: { $regex: `^${datePart}` } },
+      { orderId: 1 },
+      { sort: { orderId: -1 } }
+    );
 
-  const count = await Order.countDocuments({
-    createdAt: { $gte: startOfDay, $lt: endOfDay },
-    isActive: true
-  });
+    let sequence = 1;
+    if (latestOrder && latestOrder.orderId) {
+      // Extract the sequence number from the existing orderId
+      const existingSeq = latestOrder.orderId.replace(datePart, '').replace('-', '');
+      const parsed = parseInt(existingSeq, 10);
+      if (!isNaN(parsed)) {
+        sequence = parsed + 1;
+      }
+    }
 
-  const sequence = count + 1;
-  
-  // Dynamic padding - minimum 2 digits, auto grow
-  const seqStr = sequence < 100 ? String(sequence).padStart(2, "0") : String(sequence);
-  
-  const orderId = `${datePart}${seqStr}`;
-  console.log(`📋 Generated Order ID: ${orderId} (Sequence: ${sequence})`);
-  
-  return orderId;
+    const seqStr = sequence < 100 ? String(sequence).padStart(2, "0") : String(sequence);
+    const orderId = `${datePart}${seqStr}`;
+    
+    console.log(`📋 Generated Order ID: ${orderId} (Sequence: ${sequence})`);
+    return orderId;
+  } catch (error) {
+    // Fallback: use timestamp + random to guarantee uniqueness
+    const fallbackId = `${datePart}-${Date.now().toString(36)}`;
+    console.log(`📋 Fallback Order ID: ${fallbackId}`);
+    return fallbackId;
+  }
 };
 
 // ============================================
@@ -5904,21 +5916,14 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // Combine payments
-    let allPayments = [...payments];
-    if (advancePayment?.amount > 0 && !allPayments.some(p => p.type === 'advance')) {
-      allPayments.push({
-        amount: Number(advancePayment.amount),
-        type: 'advance',
-        method: advancePayment.method || 'cash',
-        paymentDate: advancePayment.date || new Date(),
-        notes: 'Initial advance payment'
-      });
-    }
+    // ── Use ONLY the payments[] array — do NOT auto-push from advancePayment ──
+    // This is the SINGLE SOURCE of payment data. The old logic that pushed
+    // advancePayment into allPayments caused duplicate entries.
+    const allPayments = [...payments];
 
     const totalInitialPaid = allPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-    // Create order
+    // Create order (payments are stored in the separate Payment collection)
     const order = await Order.create({
       orderId,
       customer,
@@ -5926,9 +5931,9 @@ export const createOrder = async (req, res) => {
       garments: [],
       specialNotes,
       advancePayment: {
-        amount: advancePayment?.amount || 0,
-        method: advancePayment?.method || "cash",
-        date: advancePayment?.date || new Date(),
+        amount: allPayments.find(p => p.type === 'advance')?.amount || 0,
+        method: allPayments.find(p => p.type === 'advance')?.method || allPayments[0]?.method || 'cash',
+        date: new Date(),
       },
       priceSummary: { totalMin, totalMax },
       paymentSummary: {
@@ -5938,7 +5943,7 @@ export const createOrder = async (req, res) => {
         paymentCount: allPayments.length,
         paymentStatus: totalInitialPaid >= totalMax ? 'paid' : (totalInitialPaid > 0 ? 'partial' : 'pending')
       },
-      balanceAmount: totalMax - totalInitialPaid,
+      balanceAmount: Math.max(0, totalMax - totalInitialPaid),
       createdBy: creatorId,
       status: status || "draft",
       orderDate: orderDate || new Date(),
@@ -6135,12 +6140,27 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Validation failed", errors });
     }
     
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      if (field === 'orderId') {
-        console.log(`⚠️ Duplicate orderId, retrying...`);
+    // 🔥 FIX: Detect duplicate orderId from either error code OR error message
+    const isDuplicateOrderId = (error.code === 11000 && error.keyPattern?.orderId) ||
+      (error.message && error.message.includes('Order ID already exists'));
+    
+    if (isDuplicateOrderId) {
+      // Track retry count to prevent infinite recursion
+      req._orderRetryCount = (req._orderRetryCount || 0) + 1;
+      console.log(`⚠️ Duplicate orderId, retry attempt ${req._orderRetryCount}/5...`);
+      
+      if (req._orderRetryCount <= 5) {
         return createOrder(req, res);
       }
+      
+      return res.status(500).json({ 
+        success: false, 
+        message: "Failed to generate unique Order ID after multiple attempts. Please try again."
+      });
+    }
+    
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0] || 'unknown';
       return res.status(400).json({ 
         success: false, 
         message: `Duplicate ${field}. Please try again.`

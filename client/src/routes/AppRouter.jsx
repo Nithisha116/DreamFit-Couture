@@ -613,6 +613,9 @@ export default function AppRouter() {
             <Route path="orders/:id" element={<OrderDetails />} />
             <Route path="orders/edit/:id" element={<EditOrder />} />
             
+            {/* Appointments Management */}
+            <Route path="appointments" element={<AppointmentsPage />} />
+            
             {/* Garment Management */}
             <Route path="garments/:id" element={<GarmentDetails />} />
             <Route path="garments/edit/:id" element={<EditGarment />} />
@@ -622,7 +625,6 @@ export default function AppRouter() {
             <Route path="works" element={<RedirectWorksListToTasks />} />
             <Route path="works/:id" element={<WorkDetailsPage />} />
             <Route path="check-availability" element={<CheckAvailabilityPage />} />
-            <Route path="appointments" element={<AppointmentsPage />} />
             <Route path="crm" element={<CrmPage />} />
             <Route path="sourcing" element={<SourcingPage />} />
             
@@ -714,6 +716,9 @@ export default function AppRouter() {
             <Route path="orders/:id" element={<OrderDetails />} />
             <Route path="orders/edit/:id" element={<EditOrder />} />
             
+            {/* Appointments Management */}
+            <Route path="appointments" element={<AppointmentsPage />} />
+            
             {/* Garment Management */}
             <Route path="garments/:id" element={<GarmentDetails />} />
             <Route path="garments/edit/:id" element={<EditGarment />} />
@@ -723,7 +728,6 @@ export default function AppRouter() {
             <Route path="works" element={<RedirectWorksListToTasks />} />
             <Route path="works/:id" element={<WorkDetailsPage />} />
             <Route path="check-availability" element={<CheckAvailabilityPage />} />
-            <Route path="appointments" element={<AppointmentsPage />} />
             <Route path="crm" element={<CrmPage />} />
             <Route path="sourcing" element={<SourcingPage />} />
             

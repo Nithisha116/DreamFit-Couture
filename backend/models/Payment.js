@@ -19,15 +19,15 @@ const paymentSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
-  
-  // ✅ Payment Type - Added 'extra'
-type: {
-  type: String,
-  enum: ['advance', 'partial', 'full', 'final-settlement', 'refund', 'extra'],
-  default: 'advance',
-  index: true
-},
-  
+
+  // Payment type: advance = partial upfront, full = direct full payment, final-settlement = remaining after advance
+  type: {
+    type: String,
+    enum: ['advance', 'full', 'final-settlement'],
+    default: 'advance',
+    index: true
+  },
+
   method: {
     type: String,
     enum: ['cash', 'upi', 'bank-transfer', 'card'],

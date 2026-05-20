@@ -23,6 +23,7 @@ import notificationReducer from "../features/notification/notificationSlice";
 import customerSizeReducer from "../features/customerSize/customerSizeSlice";
 import transactionReducer from '../features/transaction/transactionSlice';
 import paymentReducer from "../features/payment/paymentSlice";
+import appointmentReducer from "../features/appointment/appointmentSlice";
 
 // Combine all reducers
 const rootReducer = combineReducers({
@@ -46,7 +47,7 @@ const rootReducer = combineReducers({
 notification: notificationReducer,
    transaction: transactionReducer,
      payment: paymentReducer,
-
+  appointment: appointmentReducer,
 });
 
 // Persist config

@@ -1617,7 +1617,7 @@ export default function CustomerDetails() {
     fullPayments: customerPayments?.filter(p => p.type === 'full').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     partialPayments: customerPayments?.filter(p => p.type === 'partial').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     extraPayments: customerPayments?.filter(p => p.type === 'extra').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
-    finalSettlementPayments: customerPayments?.filter(p => p.type === 'final-settlement').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    finalSettlementPayments: customerPayments?.filter(p => p.type === 'full' || p.type === 'final-settlement').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     byMethod: {
       cash: customerPayments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
       upi: customerPayments?.filter(p => p.method === 'upi').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
@@ -1629,7 +1629,7 @@ export default function CustomerDetails() {
   // Filter payments
   const filteredPayments = customerPayments?.filter(p => {
     if (paymentFilter === "all") return true;
-    if (paymentFilter === "final") return p.type === "final-settlement";
+    if (paymentFilter === "final") return p.type === "full" || p.type === "final-settlement";
     return p.type === paymentFilter;
   }) || [];
 
@@ -2477,36 +2477,7 @@ export default function CustomerDetails() {
                         >
                           Full
                         </button>
-                        <button
-                          onClick={() => setPaymentFilter("partial")}
-                          className={`flex-1 sm:flex-none px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
-                            paymentFilter === "partial" 
-                              ? "bg-white text-blue-600 shadow-sm" 
-                              : "text-slate-500 hover:text-slate-700"
-                          }`}
-                        >
-                          Partial
-                        </button>
-                        <button
-                          onClick={() => setPaymentFilter("extra")}
-                          className={`flex-1 sm:flex-none px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
-                            paymentFilter === "extra" 
-                              ? "bg-white text-blue-600 shadow-sm" 
-                              : "text-slate-500 hover:text-slate-700"
-                          }`}
-                        >
-                          Extra
-                        </button>
-                        <button
-                          onClick={() => setPaymentFilter("final")}
-                          className={`flex-1 sm:flex-none px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
-                            paymentFilter === "final" 
-                              ? "bg-white text-blue-600 shadow-sm" 
-                              : "text-slate-500 hover:text-slate-700"
-                          }`}
-                        >
-                          Final
-                        </button>
+
                       </div>
                       <button 
                         onClick={handleExportPayments}
@@ -2544,14 +2515,11 @@ export default function CustomerDetails() {
                                     {formatCurrency(payment.amount)}
                                   </span>
                                   <span className={`text-[10px] sm:text-xs px-2 sm:px-3 py-1 rounded-full font-bold whitespace-nowrap ${
-                                    payment.type === 'full' ? 'bg-green-100 text-green-700' :
-                                    payment.type === 'advance' ? 'bg-blue-100 text-blue-700' :
-                                    payment.type === 'partial' ? 'bg-orange-100 text-orange-700' :
-                                    payment.type === 'extra' ? 'bg-purple-100 text-purple-700' :
-                                    payment.type === 'final-settlement' ? 'bg-indigo-100 text-indigo-700' :
+                                    ['full', 'final-settlement'].includes(payment.type) ? 'bg-green-100 text-green-700' :
+                                    ['advance', 'partial'].includes(payment.type) ? 'bg-blue-100 text-blue-700' :
                                     'bg-slate-100 text-slate-700'
                                   }`}>
-                                    {payment.type === 'final-settlement' ? 'FINAL' : payment.type.toUpperCase()}
+                                    {['full', 'final-settlement'].includes(payment.type) ? 'FULL' : ['advance', 'partial'].includes(payment.type) ? 'ADVANCE' : payment.type.toUpperCase()}
                                   </span>
                                 </div>
 
