@@ -1679,7 +1679,7 @@
 
 
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -2002,7 +2002,11 @@ export default function OrderDetails() {
   const displayPayments = currentPayments?.length > 0 ? currentPayments : payments;
 
   // Check if a full payment has already been recorded — no more payments needed
-  const hasFullPayment = displayPayments?.some(p => p.type === 'full') || false;
+  const hasFullPayment = 
+    displayPayments?.some(p => p.type === 'full') || 
+    currentOrder?.paymentSummary?.paymentStatus === 'paid' || 
+    (currentOrder?.balanceAmount !== undefined && currentOrder.balanceAmount <= 0) || 
+    false;
 
   console.log("💰 Display payments:", {
     currentPaymentsCount: currentPayments?.length,
@@ -2026,13 +2030,28 @@ export default function OrderDetails() {
     }
   };
 
+  // Calculate estimated range and finalized billing amount from garments
+  const estimatedRange = useMemo(() => {
+    const min = garments.reduce((sum, g) => sum + (Number(g.priceRange?.min) || 0), 0);
+    const max = garments.reduce((sum, g) => sum + (Number(g.priceRange?.max) || 0), 0);
+    return { min, max };
+  }, [garments]);
+
+  const finalizedAmount = useMemo(() => {
+    return garments.reduce((sum, g) => {
+      const hasFinalized = g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== "";
+      const val = hasFinalized ? g.finalizedPrice : (g.priceRange?.max || 0);
+      return sum + Number(val);
+    }, 0);
+  }, [garments]);
+
   // Calculate price summary from currentOrder
   const priceSummary = currentOrder?.priceSummary || { totalMin: 0, totalMax: 0 };
 
-  // Calculate balance with price range
+  // Calculate balance with finalizedAmount
   const balanceAmount = {
-    min: priceSummary.totalMin - paymentStats.totalPaid,
-    max: priceSummary.totalMax - paymentStats.totalPaid
+    min: (currentOrder?.finalizedAmount || finalizedAmount) - paymentStats.totalPaid,
+    max: (currentOrder?.finalizedAmount || finalizedAmount) - paymentStats.totalPaid
   };
 
   // Handle Back
@@ -2844,8 +2863,8 @@ const handleSavePayment = async (paymentData) => {
           onSave={handleSavePayment}
           orderTotalMin={priceSummary.totalMin}
           orderTotalMax={priceSummary.totalMax}
-          existingPayments={displayPayments}
-          balanceAmount={balanceAmount}
+          remainingAmount={balanceAmount.max}
+          alreadyPaid={paymentStats.totalPaid}
           orderId={id}
           customerId={currentOrder?.customer?._id}
           initialData={editingPayment}
@@ -2963,6 +2982,17 @@ const handleSavePayment = async (paymentData) => {
                   >
                     <Check size={18} />
                     Mark Delivered
+                  </button>
+                )}
+
+                {/* 💳 Enterprise Billing Hub Trigger */}
+                {(currentOrder.status === 'ready-to-delivery' || currentOrder.status === 'delivered') && (
+                  <button
+                    onClick={() => navigate(`/admin/billing/create/${currentOrder._id}`)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"
+                  >
+                    <Receipt size={18} />
+                    Billing Hub
                   </button>
                 )}
               </>
@@ -3131,7 +3161,7 @@ const handleSavePayment = async (paymentData) => {
                               <div className="min-w-0">
                                 <p className="text-slate-400 text-[10px]">Price</p>
                                 <p className="font-bold text-blue-600 text-xs">
-                                  ₹{garment.priceRange?.min} - ₹{garment.priceRange?.max}
+                                  ₹{(garment.finalizedPrice || garment.priceRange?.max || 0).toLocaleString('en-IN')}
                                 </p>
                               </div>
                               <div className="min-w-0 col-span-2 sm:col-span-1">
@@ -3328,11 +3358,17 @@ const handleSavePayment = async (paymentData) => {
               <h2 className="text-base sm:text-lg font-black text-slate-800 mb-3 sm:mb-4">Payment Summary</h2>
 
               <div className="space-y-3 sm:space-y-4">
-                <div className="bg-blue-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
-                  <p className="text-[10px] sm:text-xs text-blue-600 font-black uppercase mb-1">Total Amount</p>
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-blue-100 shadow-sm">
+                  <p className="text-[9px] sm:text-[10px] text-blue-600 font-black uppercase mb-0.5">Finalized Billing Amount</p>
                   <p className="text-lg sm:text-xl lg:text-2xl font-black text-blue-700 break-words">
-                    {formatCurrency(priceSummary.totalMin)} - {formatCurrency(priceSummary.totalMax)}
+                    {formatCurrency(finalizedAmount || priceSummary.totalMax)}
                   </p>
+                  {estimatedRange.min > 0 && estimatedRange.max > 0 && (
+                    <div className="mt-2 pt-2 border-t border-blue-200/50 flex justify-between text-[8px] sm:text-[9px] text-slate-500 font-bold">
+                      <span>ESTIMATED RANGE:</span>
+                      <span>{formatCurrency(estimatedRange.min)} – {formatCurrency(estimatedRange.max)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -3447,7 +3483,9 @@ const handleSavePayment = async (paymentData) => {
                 <div className="bg-orange-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
                   <p className="text-[10px] sm:text-xs text-orange-600 font-black uppercase mb-1">Balance Amount</p>
                   <p className="text-base sm:text-lg lg:text-xl font-black text-orange-700 break-words">
-                    {formatCurrency(balanceAmount.min)} - {formatCurrency(balanceAmount.max)}
+                    {balanceAmount.min === balanceAmount.max
+                      ? formatCurrency(balanceAmount.max)
+                      : `${formatCurrency(balanceAmount.min)} - ${formatCurrency(balanceAmount.max)}`}
                   </p>
                   {balanceAmount.min <= 0 && balanceAmount.max <= 0 && (
                     <p className="text-[10px] sm:text-xs text-green-600 mt-1">✅ Fully paid</p>
@@ -3624,6 +3662,17 @@ const handleSavePayment = async (paymentData) => {
                         >
                           <Check size={16} />
                           Mark as Delivered
+                        </button>
+                      )}
+
+                      {/* 💳 Enterprise Billing Hub Trigger */}
+                      {(currentOrder.status === 'ready-to-delivery' || currentOrder.status === 'delivered') && (
+                        <button
+                          onClick={() => navigate(`/admin/billing/create/${currentOrder._id}`)}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 text-sm"
+                        >
+                          <Receipt size={16} />
+                          Billing Hub
                         </button>
                       )}
                     </>

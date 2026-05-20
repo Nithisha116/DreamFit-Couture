@@ -5556,12 +5556,38 @@ const createIncomeFromPayment = async (payment, order, creatorId) => {
 // ============================================
 // ✅ HELPER: UPDATE ORDER PAYMENT SUMMARY
 // ============================================
-const updateOrderPaymentSummary = async (orderId) => {
+export const updateOrderPaymentSummary = async (orderId) => {
   console.log(`\n💰 Updating payment summary for order: ${orderId}`);
   
   try {
     const order = await Order.findById(orderId);
     if (!order) return;
+
+    // Dynamically calculate and self-heal the priceSummary from the actual garments in database
+    const garments = await Garment.find({ order: orderId, isActive: true });
+    if (garments && garments.length > 0) {
+      let totalMin = 0;
+      let totalMax = 0;
+      let totalFinalized = 0;
+      for (const g of garments) {
+        const minVal = g.minPrice !== undefined && g.minPrice !== null ? g.minPrice : (g.priceRange?.min || 0);
+        const maxVal = g.maxPrice !== undefined && g.maxPrice !== null ? g.maxPrice : (g.priceRange?.max || 0);
+        const finalVal = g.finalizedAmount !== undefined && g.finalizedAmount !== null
+          ? g.finalizedAmount
+          : (g.finalizedPrice !== undefined && g.finalizedPrice !== null
+            ? g.finalizedPrice
+            : maxVal);
+
+        totalMin += minVal;
+        totalMax += maxVal;
+        totalFinalized += finalVal;
+      }
+      order.minPrice = totalMin;
+      order.maxPrice = totalMax;
+      order.finalizedAmount = totalFinalized;
+      // We set totalMax in priceSummary to totalFinalized so legacy/reference areas also pick up finalized price!
+      order.priceSummary = { totalMin, totalMax: totalFinalized };
+    }
 
     const payments = await Payment.find({ 
       order: orderId, 
@@ -5575,7 +5601,7 @@ const updateOrderPaymentSummary = async (orderId) => {
     )[0];
 
     let paymentStatus = 'pending';
-    const totalAmount = order.priceSummary?.totalMax || 0;
+    const totalAmount = order.finalizedAmount || order.priceSummary?.totalMax || 0;
     
     if (totalPaid >= totalAmount) {
       paymentStatus = 'paid';
@@ -5592,6 +5618,7 @@ const updateOrderPaymentSummary = async (orderId) => {
     };
     
     order.balanceAmount = Math.max(0, totalAmount - totalPaid);
+    order.dueAmount = Math.max(0, totalAmount - totalPaid);
     
     await order.save();
     console.log(`✅ Payment summary updated: Paid: ₹${totalPaid}, Status: ${paymentStatus}`);
@@ -5794,7 +5821,7 @@ export const getOrderStats = async (req, res) => {
       { $group: { 
         _id: "$paymentSummary.paymentStatus",
         count: { $sum: 1 },
-        totalAmount: { $sum: "$priceSummary.totalMax" },
+        totalAmount: { $sum: { $ifNull: ["$finalizedAmount", "$priceSummary.totalMax"] } },
         totalPaid: { $sum: "$paymentSummary.totalPaid" }
       }}
     ]);
@@ -5904,16 +5931,28 @@ export const createOrder = async (req, res) => {
     const orderId = await generateOrderId();
 
     // Calculate totals
-    let totalMin = priceSummary?.totalMin || 0;
-    let totalMax = priceSummary?.totalMax || 0;
+    let totalMin = 0;
+    let totalMax = 0;
+    let totalFinalized = 0;
     
     if (garments && garments.length > 0) {
       garments.forEach((g) => {
-        if (g.priceRange) {
-          totalMin += Number(g.priceRange.min) || 0;
-          totalMax += Number(g.priceRange.max) || 0;
-        }
+        const minVal = Number(g.minPrice || g.priceRange?.min) || 0;
+        const maxVal = Number(g.maxPrice || g.priceRange?.max) || 0;
+        const finalVal = g.finalizedAmount !== undefined && g.finalizedAmount !== null && g.finalizedAmount !== ""
+          ? Number(g.finalizedAmount)
+          : (g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
+            ? Number(g.finalizedPrice)
+            : maxVal);
+
+        totalMin += minVal;
+        totalMax += maxVal;
+        totalFinalized += finalVal;
       });
+    } else if (priceSummary) {
+      totalMin = Number(priceSummary.totalMin) || 0;
+      totalMax = Number(priceSummary.totalMax) || 0;
+      totalFinalized = Number(priceSummary.totalMax) || 0;
     }
 
     // ── Use ONLY the payments[] array — do NOT auto-push from advancePayment ──
@@ -5935,15 +5974,19 @@ export const createOrder = async (req, res) => {
         method: allPayments.find(p => p.type === 'advance')?.method || allPayments[0]?.method || 'cash',
         date: new Date(),
       },
-      priceSummary: { totalMin, totalMax },
+      minPrice: totalMin,
+      maxPrice: totalMax,
+      finalizedAmount: totalFinalized,
+      dueAmount: Math.max(0, totalFinalized - totalInitialPaid),
+      priceSummary: { totalMin, totalMax: totalFinalized },
       paymentSummary: {
         totalPaid: totalInitialPaid,
         lastPaymentDate: allPayments.length > 0 ? new Date() : null,
         lastPaymentAmount: allPayments.length > 0 ? allPayments[allPayments.length - 1].amount : 0,
         paymentCount: allPayments.length,
-        paymentStatus: totalInitialPaid >= totalMax ? 'paid' : (totalInitialPaid > 0 ? 'partial' : 'pending')
+        paymentStatus: totalInitialPaid >= totalFinalized ? 'paid' : (totalInitialPaid > 0 ? 'partial' : 'pending')
       },
-      balanceAmount: Math.max(0, totalMax - totalInitialPaid),
+      balanceAmount: Math.max(0, totalFinalized - totalInitialPaid),
       createdBy: creatorId,
       status: status || "draft",
       orderDate: orderDate || new Date(),
@@ -6074,6 +6117,22 @@ export const createOrder = async (req, res) => {
               min: Number(g.priceRange?.min) || 0,
               max: Number(g.priceRange?.max) || 0
             },
+            finalizedPrice: g.finalizedAmount !== undefined && g.finalizedAmount !== null && g.finalizedAmount !== ""
+              ? Number(g.finalizedAmount)
+              : (g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
+                ? Number(g.finalizedPrice)
+                : (Number(g.priceRange?.max) || 0)),
+            finalizedAmount: g.finalizedAmount !== undefined && g.finalizedAmount !== null && g.finalizedAmount !== ""
+              ? Number(g.finalizedAmount)
+              : (g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
+                ? Number(g.finalizedPrice)
+                : (Number(g.priceRange?.max) || 0)),
+            minPrice: g.minPrice !== undefined && g.minPrice !== null && g.minPrice !== ""
+              ? Number(g.minPrice)
+              : (Number(g.priceRange?.min) || 0),
+            maxPrice: g.maxPrice !== undefined && g.maxPrice !== null && g.maxPrice !== ""
+              ? Number(g.maxPrice)
+              : (Number(g.priceRange?.max) || 0),
             fabricSource: g.fabricSource || 'customer',
             fabricPrice: g.fabricPrice || '0',
             referenceImages: uploadedImages.referenceImages,
@@ -6407,6 +6466,37 @@ export const updateOrderStatus = async (req, res) => {
         success: false, 
         message: `Cannot transition from ${order.status} to ${status}` 
       });
+    }
+
+    // 🔒 Delivery Lock: Prevent delivery if there is a due balance amount
+    if (status === 'delivered') {
+      const balance = Number(order.balanceAmount) || 0;
+      const isBypassed = req.body.bypassDeliveryLock === true;
+      
+      if (balance > 0 && !isBypassed) {
+        return res.status(400).json({
+          success: false,
+          deliveryLocked: true,
+          message: `Delivery Blocked: Order #${order.orderId} has an outstanding balance of ₹${balance}. Please settle the remaining amount or request an admin override.`
+        });
+      }
+      
+      if (balance > 0 && isBypassed) {
+        // Record bypass override inside Audit Logs
+        const userId = req.user?.id || req.user?._id;
+        try {
+          const { default: billingEmitter } = await import('../services/billingEmitter.js');
+          billingEmitter.emit("AUDIT_LOG", {
+            action: "LOCK_BYPASS",
+            user: userId,
+            entityType: "Order",
+            entityId: order._id,
+            description: `Delivery lock manually bypassed by user for Order #${order.orderId} with outstanding balance: ₹${balance}`
+          });
+        } catch (auditErr) {
+          console.error("⚠️ Failed to emit LOCK_BYPASS audit log:", auditErr.message);
+        }
+      }
     }
     
     const oldStatus = order.status;
@@ -7008,10 +7098,10 @@ export const getFilteredOrders = async (req, res) => {
         $group: {
           _id: null,
           totalOrders: { $sum: 1 },
-          totalRevenue: { $sum: '$priceSummary.totalMax' },
+          totalRevenue: { $sum: { $ifNull: ["$finalizedAmount", "$priceSummary.totalMax"] } },
           totalPaid: { $sum: '$paymentSummary.totalPaid' },
           pendingAmount: { $sum: '$balanceAmount' },
-          avgOrderValue: { $avg: '$priceSummary.totalMax' }
+          avgOrderValue: { $avg: { $ifNull: ["$finalizedAmount", "$priceSummary.totalMax"] } }
         }
       }
     ]);

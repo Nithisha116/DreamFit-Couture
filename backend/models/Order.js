@@ -50,6 +50,10 @@ const orderSchema = new mongoose.Schema({
     paymentStatus: "pending"
   }) },
   balanceAmount: { type: Number, default: 0 },
+  minPrice: { type: Number, default: 0 },
+  maxPrice: { type: Number, default: 0 },
+  finalizedAmount: { type: Number, default: 0 },
+  dueAmount: { type: Number, default: 0 },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",

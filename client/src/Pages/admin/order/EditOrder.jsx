@@ -181,15 +181,25 @@ export default function EditOrder() {
   }, [currentOrder]);
 
   // ── Payment calculations ───────────────────────────────────────────────────
-  const priceSummary = garments?.reduce(
-    (acc, g) => ({
-      min: acc.min + (g.priceRange?.min || 0),
-      max: acc.max + (g.priceRange?.max || 0),
-    }),
+  const estimatedRange = garments?.reduce(
+    (acc, g) => {
+      return {
+        min: acc.min + (g.priceRange?.min || 0),
+        max: acc.max + (g.priceRange?.max || 0),
+      };
+    },
     { min: 0, max: 0 }
   ) || { min: 0, max: 0 };
 
-  const totalAmount = priceSummary.max || 0;
+  const finalizedAmount = garments?.reduce(
+    (sum, g) => {
+      const val = g.finalizedPrice !== undefined && g.finalizedPrice !== null ? g.finalizedPrice : (g.priceRange?.max || 0);
+      return sum + Number(val);
+    },
+    0
+  ) || 0;
+
+  const totalAmount = finalizedAmount;
 
   const paymentStats = {
     totalPaid: payments?.reduce((s, p) => s + (p.amount || 0), 0) || 0,
@@ -377,7 +387,7 @@ export default function EditOrder() {
             specialNotes: formData.specialNotes,
             advancePayment: { amount: Number(formData.advancePayment.amount) || 0, method: formData.advancePayment.method },
             status: formData.status,
-            priceSummary: { totalMin: priceSummary.min, totalMax: priceSummary.max },
+            priceSummary: { totalMin: finalizedAmount, totalMax: finalizedAmount },
             balanceAmount,
           },
         })
@@ -499,10 +509,8 @@ export default function EditOrder() {
         isOpen={showPaymentModal}
         onClose={() => { setShowPaymentModal(false); setEditingPayment(null); }}
         onSave={handleSavePayment}
-        orderTotalMin={priceSummary.min}
-        orderTotalMax={priceSummary.max}
-        existingPayments={payments}
-        balanceAmount={balanceAmount}
+        orderTotalMin={finalizedAmount}
+        orderTotalMax={finalizedAmount}
         remainingAmount={balanceAmount}
         alreadyPaid={paymentStats.totalPaid}
         orderId={id}
@@ -738,11 +746,17 @@ export default function EditOrder() {
 
               <div className="space-y-4">
                 {/* Total Amount */}
-                <div className="bg-blue-50 p-4 rounded-xl">
-                  <p className="text-xs text-blue-600 font-black uppercase mb-1">Total Amount</p>
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+                  <p className="text-[10px] text-blue-600 font-black uppercase mb-0.5">Finalized Billing Amount</p>
                   <p className="text-2xl font-black text-blue-700">
-                    ₹{priceSummary.min} – ₹{priceSummary.max}
+                    ₹{finalizedAmount.toLocaleString('en-IN')}
                   </p>
+                  {estimatedRange.min > 0 && estimatedRange.max > 0 && (
+                    <div className="mt-2 pt-2 border-t border-blue-200/50 flex justify-between text-[9px] text-slate-500 font-bold">
+                      <span>ESTIMATED RANGE:</span>
+                      <span>₹{estimatedRange.min.toLocaleString('en-IN')} – ₹{estimatedRange.max.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Payment Status Badge */}

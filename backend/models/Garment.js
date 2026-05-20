@@ -197,6 +197,22 @@ const garmentSchema = new mongoose.Schema({
     min: { type: Number, required: true, default: 0 },
     max: { type: Number, required: true, default: 0 },
   },
+  finalizedPrice: {
+    type: Number,
+    default: null,
+  },
+  minPrice: {
+    type: Number,
+    default: 0,
+  },
+  maxPrice: {
+    type: Number,
+    default: 0,
+  },
+  finalizedAmount: {
+    type: Number,
+    default: null,
+  },
   status: {
     type: String,
     enum: ["pending", "accepted", "cutting", "stitching", "ironing", "ready_to_deliver"],
@@ -214,6 +230,29 @@ const garmentSchema = new mongoose.Schema({
 }, { 
   timestamps: true,
   validateBeforeSave: true 
+});
+
+// ✅ Sync legacy and new price fields before validation
+garmentSchema.pre('validate', function() {
+  if (this.finalizedAmount !== undefined && this.finalizedAmount !== null) {
+    this.finalizedPrice = this.finalizedAmount;
+  } else if (this.finalizedPrice !== undefined && this.finalizedPrice !== null) {
+    this.finalizedAmount = this.finalizedPrice;
+  }
+
+  if (this.minPrice !== undefined && this.minPrice !== null && this.minPrice !== 0) {
+    if (!this.priceRange) this.priceRange = {};
+    this.priceRange.min = this.minPrice;
+  } else if (this.priceRange && this.priceRange.min !== undefined) {
+    this.minPrice = this.priceRange.min;
+  }
+
+  if (this.maxPrice !== undefined && this.maxPrice !== null && this.maxPrice !== 0) {
+    if (!this.priceRange) this.priceRange = {};
+    this.priceRange.max = this.maxPrice;
+  } else if (this.priceRange && this.priceRange.max !== undefined) {
+    this.maxPrice = this.priceRange.max;
+  }
 });
 
 // ✅ FIXED PRE-SAVE: Removed 'next' to avoid "next is not a function" error

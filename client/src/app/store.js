@@ -28,6 +28,7 @@ import outsourcingReducer from "../features/outsourcing/outsourcingSlice";
 import attendanceReducer from "../features/attendance/attendanceSlice";
 import leaveReducer from "../features/leave/leaveSlice";
 import salaryReducer from "../features/salary/salarySlice";
+import invoiceReducer from "../features/invoice/invoiceSlice";
 
 // Combine all reducers
 const rootReducer = combineReducers({
@@ -56,6 +57,7 @@ notification: notificationReducer,
   appointment: appointmentReducer,
   outsourcing: outsourcingReducer,
   salary: salaryReducer,
+  invoice: invoiceReducer,
 });
 
 // Persist config

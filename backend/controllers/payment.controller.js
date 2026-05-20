@@ -4,6 +4,7 @@ import Payment from '../models/Payment.js';
 import Customer from '../models/Customer.js';
 import Transaction from '../models/Transaction.js';
 import Order from '../models/Order.js';
+import Garment from '../models/Garment.js';
 
 // ============================================
 // 🔧 HELPER — Map payment type to income category
@@ -143,6 +144,31 @@ async function updateOrderPaymentSummary(orderId) {
     const order = await Order.findById(orderId);
     if (!order) return;
 
+    // Dynamically calculate and self-heal the priceSummary from the actual garments in database
+    const garments = await Garment.find({ order: orderId, isActive: true });
+    let totalMin = 0;
+    let totalMax = 0;
+    let totalFinalized = 0;
+    if (garments && garments.length > 0) {
+      for (const g of garments) {
+        const minVal = g.minPrice !== undefined && g.minPrice !== null ? g.minPrice : (g.priceRange?.min || 0);
+        const maxVal = g.maxPrice !== undefined && g.maxPrice !== null ? g.maxPrice : (g.priceRange?.max || 0);
+        const finalVal = g.finalizedAmount !== undefined && g.finalizedAmount !== null
+          ? g.finalizedAmount
+          : (g.finalizedPrice !== undefined && g.finalizedPrice !== null
+            ? g.finalizedPrice
+            : maxVal);
+
+        totalMin += minVal;
+        totalMax += maxVal;
+        totalFinalized += finalVal;
+      }
+      order.minPrice = totalMin;
+      order.maxPrice = totalMax;
+      order.finalizedAmount = totalFinalized;
+      order.priceSummary = { totalMin, totalMax: totalFinalized };
+    }
+
     const payments = await Payment.find({
       order: orderId,
       isDeleted: false,
@@ -155,7 +181,7 @@ async function updateOrderPaymentSummary(orderId) {
     );
     const lastPayment = sorted[0];
 
-    const totalAmount = order.priceSummary?.totalMax || order.totalAmount || 0;
+    const totalAmount = order.finalizedAmount || order.priceSummary?.totalMax || order.totalAmount || 0;
     // Balance can NEVER be negative
     const balanceAmount = Math.max(0, totalAmount - totalPaid);
 
@@ -167,6 +193,11 @@ async function updateOrderPaymentSummary(orderId) {
     }
 
     await Order.findByIdAndUpdate(orderId, {
+      minPrice: order.minPrice,
+      maxPrice: order.maxPrice,
+      finalizedAmount: order.finalizedAmount,
+      dueAmount: balanceAmount,
+      priceSummary: order.priceSummary,
       paymentSummary: {
         totalPaid,
         lastPaymentDate: lastPayment?.paymentDate,

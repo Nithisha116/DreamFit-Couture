@@ -635,6 +635,7 @@ export default function MainLayout() {
   const canViewSettings = isAdmin;
   const canViewCuttingMasters = isAdmin;
   const canViewStoreKeepers = isAdmin;
+  const canViewBilling = isAdmin || isStoreKeeper;
 
   const isActive = (path) => {
     if (path === '#') return false;
@@ -697,6 +698,7 @@ export default function MainLayout() {
       { id: 'appointments', icon: Calendar, label: 'Appointments', path: `/${rolePath}/appointments`, show: true },
       { id: 'banking', icon: Landmark, label: 'Banking', path: '#', show: canViewBanking, isDropdown: true },
       { id: 'employeeManagement', icon: UserCircle, label: 'Employee Management', path: '#', show: canViewStaff, isDropdown: true },
+      { id: 'billing', icon: Receipt, label: 'Billing & Invoicing', path: `/${rolePath}/billing`, show: canViewBilling },
     ];
     return items.filter(item => item.show);
   };

@@ -409,28 +409,23 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
 
   const calculateGarmentTotal = (garment) => {
     const qty = getQuantity(garment);
-    const min = garment.priceRange?.min || 0;
-    const max = garment.priceRange?.max || 0;
-    return {
-      min: min * qty,
-      max: max * qty,
-    };
+    const finalized = garment.finalizedPrice !== undefined && garment.finalizedPrice !== null && garment.finalizedPrice !== ""
+      ? Number(garment.finalizedPrice)
+      : (garment.priceRange?.max || 0);
+    return finalized * qty;
   };
 
-  // Calculate subtotals with proper quantity
-  const subtotalMin = garments.reduce((sum, g) => {
+  // Calculate finalized subtotal
+  const finalizedSubtotal = garments.reduce((sum, g) => {
     const qty = getQuantity(g);
-    return sum + (g.priceRange?.min || 0) * qty;
-  }, 0);
-
-  const subtotalMax = garments.reduce((sum, g) => {
-    const qty = getQuantity(g);
-    return sum + (g.priceRange?.max || 0) * qty;
+    const finalized = g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
+      ? Number(g.finalizedPrice)
+      : (g.priceRange?.max || 0);
+    return sum + finalized * qty;
   }, 0);
 
   const advance = order.advancePayment?.amount || 0;
-  const balanceMin = Math.max(0, subtotalMin - advance);
-  const balanceMax = Math.max(0, subtotalMax - advance);
+  const balanceDue = Math.max(0, finalizedSubtotal - advance);
 
   const getGarmentId = (garment, index) => {
     if (garment.garmentId) return garment.garmentId;
@@ -800,12 +795,10 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
                         fontFamily: "monospace",
                       }}
                     >
-                      {g.priceRange?.min === g.priceRange?.max ? (
-                        <>₹{g.priceRange?.min}</>
+                      {g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== "" ? (
+                        <>₹{Number(g.finalizedPrice).toLocaleString('en-IN')}</>
                       ) : (
-                        <>
-                          ₹{g.priceRange?.min} – ₹{g.priceRange?.max}
-                        </>
+                        <>₹{(g.priceRange?.max || 0).toLocaleString('en-IN')}</>
                       )}
                     </td>
                     <td
@@ -817,13 +810,7 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
                         color: "#be185d",
                       }}
                     >
-                      {total.min === total.max ? (
-                        <>₹{total.min}</>
-                      ) : (
-                        <>
-                          ₹{total.min} – ₹{total.max}
-                        </>
-                      )}
+                      <>₹{total.toLocaleString('en-IN')}</>
                     </td>
                   </tr>
                 );
@@ -840,7 +827,7 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
                     fontWeight: "600",
                   }}
                 >
-                  Subtotal Range
+                  Subtotal
                 </td>
                 <td
                   style={{
@@ -851,7 +838,7 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
                     color: "#be185d",
                   }}
                 >
-                  ₹{subtotalMin} – ₹{subtotalMax}
+                  ₹{finalizedSubtotal.toLocaleString('en-IN')}
                 </td>
               </tr>
             </tfoot>
@@ -948,7 +935,7 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
                     fontSize: "18px",
                   }}
                 >
-                  ₹{balanceMin} – ₹{balanceMax}
+                  ₹{balanceDue.toLocaleString('en-IN')}
                 </span>
               </div>
             </div>

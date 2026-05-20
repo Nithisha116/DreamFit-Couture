@@ -2143,6 +2143,7 @@ import Order from "../models/Order.js";
 import r2Service from "../services/r2.service.js";
 import mongoose from "mongoose";
 import { createNotification } from './notification.controller.js';
+import { updateOrderPaymentSummary } from "./order.controller.js";
 
 // ===== CREATE GARMENT =====
 export const createGarment = async (req, res) => {
@@ -2166,6 +2167,7 @@ export const createGarment = async (req, res) => {
       estimatedDelivery,
       priority,
       priceRange,
+      finalizedPrice,
       createdBy,
     } = req.body;
 
@@ -2321,6 +2323,7 @@ export const createGarment = async (req, res) => {
       estimatedDelivery,
       priority: priority || "normal",
       priceRange: parsedPriceRange || { min: 0, max: 0 },
+      finalizedPrice: finalizedPrice !== undefined && finalizedPrice !== null && finalizedPrice !== "" ? Number(finalizedPrice) : (parsedPriceRange?.max ? Number(parsedPriceRange.max) : (parsedPriceRange?.min ? Number(parsedPriceRange.min) : 0)),
     });
 
     console.log("💾 Saving garment with images:", {
@@ -2410,6 +2413,9 @@ export const createGarment = async (req, res) => {
     ]);
 
     console.log("✅ Garment fully created and populated");
+
+    // Recalculate order payment summary to include new garment prices
+    await updateOrderPaymentSummary(orderId);
 
     res.status(201).json({
       message: "Garment created successfully",
@@ -2503,6 +2509,10 @@ export const updateGarment = async (req, res) => {
       estimatedDelivery,
       priority,
       priceRange,
+      finalizedPrice,
+      minPrice,
+      maxPrice,
+      finalizedAmount,
       status,
       existingReferenceImages,
       existingCustomerImages,
@@ -2566,6 +2576,17 @@ export const updateGarment = async (req, res) => {
     if (estimatedDelivery) garment.estimatedDelivery = estimatedDelivery;
     if (priority) garment.priority = priority;
     if (priceRange) garment.priceRange = priceRange;
+    if (minPrice !== undefined) garment.minPrice = (minPrice === "" || minPrice === null || minPrice === "null") ? 0 : Number(minPrice);
+    if (maxPrice !== undefined) garment.maxPrice = (maxPrice === "" || maxPrice === null || maxPrice === "null") ? 0 : Number(maxPrice);
+    
+    const incomingFinalized = finalizedAmount !== undefined ? finalizedAmount : finalizedPrice;
+    if (incomingFinalized !== undefined) {
+      const finalVal = (incomingFinalized === "" || incomingFinalized === null || incomingFinalized === "null")
+        ? (priceRange?.max || garment.priceRange?.max || priceRange?.min || garment.priceRange?.min || 0)
+        : Number(incomingFinalized);
+      garment.finalizedPrice = finalVal;
+      garment.finalizedAmount = finalVal;
+    }
     if (status) garment.status = status;
 
     // Handle images - keep only those not deleted
@@ -2655,6 +2676,9 @@ export const updateGarment = async (req, res) => {
       cloth: garment.customerClothImages.length,
     });
 
+    // Recalculate order payment summary to include new garment prices
+    await updateOrderPaymentSummary(garment.order);
+
     res.json({
       message: "Garment updated successfully",
       garment
@@ -2699,6 +2723,9 @@ export const deleteGarment = async (req, res) => {
 
     garment.isActive = false;
     await garment.save();
+
+    // Recalculate order payment summary to include new garment prices
+    await updateOrderPaymentSummary(garment.order);
 
     res.json({ message: "Garment deleted successfully" });
   } catch (error) {

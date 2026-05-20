@@ -4195,67 +4195,46 @@ export default function NewOrder() {
     return total;
   }, [payments]);
 
-  // Calculate price summary - with NaN protection and DEBUG
-  const priceSummary = useMemo(() => {
-    console.log("%c👕👕👕 CALCULATING PRICE SUMMARY 👕👕👕", "background: blue; color: white; font-size: 12px");
-    console.log("Garments count:", garments.length);
-    
-    const totalMin = garments.reduce((sum, g, idx) => {
-      const rawMin = g.priceRange?.min;
-      const numMin = Number(rawMin);
-      const safeMin = isNaN(numMin) ? 0 : numMin;
-      
-      console.log(`  Garment ${idx + 1} (${g.name}):`, {
-        raw: rawMin,
-        type: typeof rawMin,
-        converted: numMin,
-        safe: safeMin,
-        isNaN: isNaN(numMin)
-      });
-      
-      return sum + safeMin;
-    }, 0);
-    
-    const totalMax = garments.reduce((sum, g, idx) => {
-      const rawMax = g.priceRange?.max;
-      const numMax = Number(rawMax);
-      const safeMax = isNaN(numMax) ? 0 : numMax;
-      
-      console.log(`  Garment ${idx + 1} max:`, {
-        raw: rawMax,
-        type: typeof rawMax,
-        converted: numMax,
-        safe: safeMax,
-        isNaN: isNaN(numMax)
-      });
-      
-      return sum + safeMax;
-    }, 0);
-    
-    console.log("✅ Price summary - Min:", totalMin, "Max:", totalMax);
-    return { totalMin, totalMax };
+  // Calculate estimated range reference
+  const estimatedRange = useMemo(() => {
+    const min = garments.reduce((sum, g) => sum + (Number(g.priceRange?.min) || 0), 0);
+    const max = garments.reduce((sum, g) => sum + (Number(g.priceRange?.max) || 0), 0);
+    return { min, max };
   }, [garments]);
+
+  // Calculate finalized amount (negotiated sum)
+  const finalizedAmount = useMemo(() => {
+    return garments.reduce((sum, g) => {
+      const hasFinalized = g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== "";
+      const val = hasFinalized ? g.finalizedPrice : (g.priceRange?.max || 0);
+      return sum + Number(val);
+    }, 0);
+  }, [garments]);
+
+  // Unified driving totalAmount
+  const totalAmount = finalizedAmount;
+
+  // Calculate priceSummary object for backward compatibility
+  const priceSummary = useMemo(() => {
+    return { totalMin: finalizedAmount, totalMax: finalizedAmount };
+  }, [finalizedAmount]);
 
   // Calculate balance - with NaN protection and DEBUG
   const balanceAmount = useMemo(() => {
     console.log("%c⚖️⚖️⚖️ CALCULATING BALANCE ⚖️⚖️⚖️", "background: orange; color: white; font-size: 12px");
     
-    const totalMin = isNaN(priceSummary.totalMin) ? 0 : Number(priceSummary.totalMin);
-    const totalMax = isNaN(priceSummary.totalMax) ? 0 : Number(priceSummary.totalMax);
     const paid = isNaN(totalPayments) ? 0 : Number(totalPayments);
+    const remaining = Math.max(0, finalizedAmount - paid);
     
-    console.log("  Total Min:", totalMin);
-    console.log("  Total Max:", totalMax);
+    console.log("  Finalized Total Amount:", finalizedAmount);
     console.log("  Total Paid:", paid);
+    console.log("  Remaining Balance:", remaining);
     
-    const balance = {
-      min: totalMin - paid,
-      max: totalMax - paid,
+    return {
+      min: remaining,
+      max: remaining,
     };
-    
-    console.log("✅ Balance - Min:", balance.min, "Max:", balance.max);
-    return balance;
-  }, [priceSummary, totalPayments]);
+  }, [finalizedAmount, totalPayments]);
 
   // 🔍🔍🔍 CUSTOMER HANDLERS 🔍🔍🔍
   
@@ -4623,6 +4602,8 @@ const handleSavePayment = useCallback((paymentData) => {
             } catch (e) {
               garmentObj[key] = value;
             }
+          } else if (key === 'finalizedPrice') {
+            garmentObj[key] = value === "" || value === "null" || value === "undefined" ? null : Number(value);
           } else {
             garmentObj[key] = value;
           }
@@ -5228,6 +5209,18 @@ const renderDayContents = useCallback((day, date) => {
               min: minPrice,
               max: maxPrice
             },
+            finalizedPrice: g.finalizedAmount !== undefined && g.finalizedAmount !== null && g.finalizedAmount !== ""
+              ? Number(g.finalizedAmount)
+              : (g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
+                ? Number(g.finalizedPrice)
+                : maxPrice),
+            finalizedAmount: g.finalizedAmount !== undefined && g.finalizedAmount !== null && g.finalizedAmount !== ""
+              ? Number(g.finalizedAmount)
+              : (g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
+                ? Number(g.finalizedPrice)
+                : maxPrice),
+            minPrice: minPrice,
+            maxPrice: maxPrice,
             fabricSource: g.fabricSource || 'customer',
             fabricPrice: fabricPrice,
             referenceImages: g.referenceImages || [],
@@ -5430,8 +5423,8 @@ const renderDayContents = useCallback((day, date) => {
         onSave={handleSavePayment}
         orderTotalMin={priceSummary.totalMin}
         orderTotalMax={priceSummary.totalMax}
-        existingPayments={payments}
-        balanceAmount={balanceAmount}
+        remainingAmount={balanceAmount.max}
+        alreadyPaid={totalPayments}
         orderId={currentOrderId}
         customerId={formData.customer}
         initialData={editingPayment}
@@ -5629,8 +5622,10 @@ const renderDayContents = useCallback((day, date) => {
                             </div>
                             
                             <div>
-                              <p className="text-xs text-slate-400">Price Range</p>
-                              <p className="font-medium">₹{garment.priceRange?.min} - ₹{garment.priceRange?.max}</p>
+                              <p className="text-xs text-slate-400">Price</p>
+                              <p className="font-semibold text-emerald-600">
+                                ₹{(garment.finalizedPrice || garment.priceRange?.max || 0).toLocaleString('en-IN')}
+                              </p>
                             </div>
                           </div>
 
@@ -5925,11 +5920,17 @@ const renderDayContents = useCallback((day, date) => {
             <h2 className="text-lg font-black text-slate-800 mb-4">Price Summary</h2>
             
             <div className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-xl">
-                <p className="text-xs text-blue-600 font-black uppercase mb-1">Total Amount</p>
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+                <p className="text-[10px] text-blue-600 font-black uppercase mb-0.5">Finalized Billing Amount</p>
                 <p className="text-2xl font-black text-blue-700">
-                  ₹{priceSummary.totalMin} - ₹{priceSummary.totalMax}
+                  ₹{finalizedAmount.toLocaleString('en-IN')}
                 </p>
+                {estimatedRange.min > 0 && estimatedRange.max > 0 && (
+                  <div className="mt-2 pt-2 border-t border-blue-200/50 flex justify-between text-[9px] text-slate-500 font-bold">
+                    <span>ESTIMATED RANGE:</span>
+                    <span>₹{estimatedRange.min.toLocaleString('en-IN')} - ₹{estimatedRange.max.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
               </div>
 
               {garments.length > 0 && (

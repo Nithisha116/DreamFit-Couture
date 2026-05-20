@@ -81,6 +81,7 @@ export default function GarmentForm({
       min: "",
       max: "",
     },
+    finalizedPrice: "",
     fabricSource: "customer",
     selectedFabric: "",
     fabricMeters: "",
@@ -180,14 +181,31 @@ export default function GarmentForm({
     if (formData.item && items) {
       const selectedItem = items.find((item) => item._id === formData.item);
       if (selectedItem) {
-        setFormData((prev) => ({
-          ...prev,
-          itemName: selectedItem.name || selectedItem.itemName || "",
-          priceRange: {
-            min: selectedItem.priceRange?.min || "",
-            max: selectedItem.priceRange?.max || "",
-          },
-        }));
+        setFormData((prev) => {
+          const newMin = selectedItem.priceRange?.min || 0;
+          const newMax = selectedItem.priceRange?.max || 0;
+          let newFinalized = prev.finalizedPrice;
+
+          // Auto-populate with catalog max price if not already set, or handle bounds reset
+          if (!newFinalized) {
+            newFinalized = newMax;
+          } else if (newFinalized && (newFinalized < newMin || newFinalized > newMax)) {
+            newFinalized = newMax; // Auto-replace with new upper limit if out of new item range
+            setTimeout(() => {
+              showToast.info(`Custom price ₹${prev.finalizedPrice} was outside the new garment range. Reset to new maximum ₹${newMax}.`);
+            }, 100);
+          }
+
+          return {
+            ...prev,
+            itemName: selectedItem.name || selectedItem.itemName || "",
+            priceRange: {
+              min: newMin,
+              max: newMax,
+            },
+            finalizedPrice: newFinalized,
+          };
+        });
       }
     }
   }, [formData.item, items]);
@@ -315,6 +333,7 @@ export default function GarmentForm({
           editingGarment.estimatedDelivery?.split("T")[0] || "",
         priority: editingGarment.priority || "normal",
         priceRange: editingGarment.priceRange || { min: "", max: "" },
+        finalizedPrice: (editingGarment.finalizedPrice !== undefined && editingGarment.finalizedPrice !== null && editingGarment.finalizedPrice !== "") ? editingGarment.finalizedPrice : (editingGarment.priceRange?.max || ""),
         fabricSource: editingGarment.fabricSource || "customer",
         selectedFabric: editingGarment.selectedFabric || "",
         fabricMeters: editingGarment.fabricMeters || "",
@@ -536,9 +555,16 @@ export default function GarmentForm({
 
   // ==================== PRICE CALCULATION ====================
   const getTotalPrices = () => {
+    const fabricPrice = formData.fabricPrice || 0;
+    if (formData.finalizedPrice !== "" && formData.finalizedPrice !== undefined && formData.finalizedPrice !== null) {
+      const finalPrice = parseFloat(formData.finalizedPrice) || 0;
+      return {
+        totalMin: finalPrice + fabricPrice,
+        totalMax: finalPrice + fabricPrice,
+      };
+    }
     const itemMin = parseFloat(formData.priceRange.min) || 0;
     const itemMax = parseFloat(formData.priceRange.max) || 0;
-    const fabricPrice = formData.fabricPrice || 0;
 
     return {
       totalMin: itemMin + fabricPrice,
@@ -813,6 +839,26 @@ const renderDayContents = useCallback(
       return;
     }
 
+    if (formData.finalizedPrice === "" || formData.finalizedPrice === undefined || formData.finalizedPrice === null) {
+      showToast.error("Please enter the price for this garment");
+      setLoading(false);
+      return;
+    }
+
+    const finalPriceNum = Number(formData.finalizedPrice);
+    const minPriceNum = Number(formData.priceRange.min) || 0;
+    const maxPriceNum = Number(formData.priceRange.max) || 0;
+    
+    if (minPriceNum > 0 && maxPriceNum > 0) {
+      if (finalPriceNum < minPriceNum || finalPriceNum > maxPriceNum) {
+        const proceed = window.confirm(`⚠️ Custom Price Warning:\nThe entered price ₹${finalPriceNum} is outside the standard catalog range of ₹${minPriceNum} - ₹${maxPriceNum}.\n\nDo you want to override and lock this custom price?`);
+        if (!proceed) {
+          setLoading(false);
+          return;
+        }
+      }
+    }
+
     if (formData.fabricSource === "shop") {
       if (!formData.selectedFabric) {
         showToast.error("Please select a fabric");
@@ -894,6 +940,9 @@ const renderDayContents = useCallback(
       formDataToSend.append("estimatedDelivery", formData.estimatedDelivery);
       formDataToSend.append("priority", formData.priority);
       formDataToSend.append("priceRange", JSON.stringify(formData.priceRange));
+      if (formData.finalizedPrice !== "" && formData.finalizedPrice !== null && formData.finalizedPrice !== undefined) {
+        formDataToSend.append("finalizedPrice", String(formData.finalizedPrice));
+      }
 
       // Add fabric data
       formDataToSend.append("fabricSource", formData.fabricSource);
@@ -1297,7 +1346,7 @@ const renderDayContents = useCallback(
               )}
             </div>
 
-            {/* Price Range & Total Display - UNCHANGED */}
+            {/* Price Range & Total Display */}
             <div className="bg-slate-50 rounded-lg sm:rounded-xl p-3 sm:p-4">
               <h3 className="font-black text-slate-800 text-sm sm:text-base mb-3 sm:mb-4">
                 Pricing
@@ -1305,7 +1354,7 @@ const renderDayContents = useCallback(
 
               <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-[8px] sm:text-xs text-blue-600 font-bold mb-1">
-                  Item Price
+                  Item Price Range
                 </p>
                 <div className="grid grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm">
                   <div>
@@ -1321,6 +1370,65 @@ const renderDayContents = useCallback(
                     </span>
                   </div>
                 </div>
+              </div>
+
+              {/* Finalized Price Input */}
+              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200">
+                <label className="block text-[8px] sm:text-xs font-black uppercase text-slate-500 mb-2">
+                  Garment Price (₹) <span className="text-rose-500">*</span>
+                </label>
+                
+                {/* Quick Selection Buttons */}
+                {formData.priceRange.min && formData.priceRange.max && (
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, finalizedPrice: Number(formData.priceRange.min) || 0 }))}
+                      className="flex-1 py-1.5 px-3 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold border border-blue-200 transition-all text-center"
+                    >
+                      Min Preset: ₹{formData.priceRange.min}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, finalizedPrice: Number(formData.priceRange.max) || 0 }))}
+                      className="flex-1 py-1.5 px-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold border border-indigo-200 transition-all text-center"
+                    >
+                      Max Preset: ₹{formData.priceRange.max}
+                    </button>
+                  </div>
+                )}
+
+                <div className="relative">
+                  <span className="absolute left-3 top-3.5 text-slate-400 font-bold text-sm">₹</span>
+                  <input
+                    type="number"
+                    name="finalizedPrice"
+                    value={formData.finalizedPrice || ""}
+                    onChange={(e) => {
+                      const val = e.target.value === "" ? "" : Number(e.target.value);
+                      setFormData(prev => ({ ...prev, finalizedPrice: val }));
+                    }}
+                    placeholder="Enter garment price (e.g. 2500)"
+                    required
+                    className="w-full pl-8 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-bold text-slate-800"
+                  />
+                </div>
+                
+                {formData.finalizedPrice !== "" && formData.finalizedPrice !== undefined && formData.finalizedPrice !== null && (
+                  (Number(formData.finalizedPrice) < Number(formData.priceRange.min) || Number(formData.finalizedPrice) > Number(formData.priceRange.max)) ? (
+                    <p className="text-[10px] text-amber-600 font-bold mt-1.5 flex items-center gap-1">
+                      ⚠️ Custom price is outside standard catalog range
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-green-600 font-bold mt-1.5 flex items-center gap-1">
+                      ✓ Price is within catalog range
+                    </p>
+                  )
+                )}
+                
+                <p className="text-[9px] text-slate-400 mt-1">
+                  This price is locked and will be used directly for all order billing, invoicing, and balance calculations.
+                </p>
               </div>
 
               {formData.fabricSource === "shop" && formData.fabricPrice > 0 && (

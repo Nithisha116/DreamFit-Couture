@@ -530,6 +530,9 @@ import appointmentRoutes from "./routes/appointment.routes.js";
 import outsourcingRoutes from "./routes/outsourcing.routes.js";
 import salaryRoutes from "./routes/salary.routes.js";
 
+// BILLING & INVOICING ROUTES
+import invoiceRoutes from "./routes/invoice.routes.js";
+
 // IMPORT ERROR HANDLING MIDDLEWARE
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
 
@@ -870,6 +873,11 @@ app.use("/api/appointments", appointmentRoutes);
 // 🚚 OUTSOURCING MANAGEMENT - COMPLETE ✅
 // ====================================================
 app.use("/api/outsourcing", outsourcingRoutes);
+
+// ====================================================
+// 💳 BILLING & INVOICING MANAGEMENT - COMPLETE ✅
+// ====================================================
+app.use("/api/invoices", invoiceRoutes);
 
 // ====================================================
 // 🕒 ATTENDANCE MANAGEMENT - COMPLETE ✅

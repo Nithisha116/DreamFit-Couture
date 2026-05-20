@@ -772,9 +772,9 @@ export default function GarmentDetails() {
                 </div>
 
                 <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
-                  <p className="text-[10px] sm:text-xs text-slate-400 mb-1">Price Range</p>
+                  <p className="text-[10px] sm:text-xs text-slate-400 mb-1">Price</p>
                   <p className="font-bold text-purple-600 text-sm sm:text-base">
-                    ₹{currentGarment.priceRange?.min} - ₹{currentGarment.priceRange?.max}
+                    ₹{(currentGarment.finalizedPrice || currentGarment.priceRange?.max || 0).toLocaleString('en-IN')}
                   </p>
                 </div>
               </div>

@@ -493,6 +493,12 @@ const OutsourcingPage = lazy(() =>
   import("../Pages/admin/outsourcing/OutsourcingPage")
 );
 
+// 🚀 LAZY LOADING - BILLING COMPONENTS
+const BillingDashboard = lazy(() => import("../Pages/admin/billing/BillingDashboard"));
+const InvoiceList = lazy(() => import("../Pages/admin/billing/InvoiceList"));
+const CreateInvoice = lazy(() => import("../Pages/admin/billing/CreateInvoice"));
+const InvoiceDetails = lazy(() => import("../Pages/admin/billing/InvoiceDetails"));
+
 // 🚀 LAZY LOADING - ATTENDANCE
 const AttendancePage = lazy(() =>
   import("../Pages/admin/attendance/AttendancePage")
@@ -729,6 +735,12 @@ export default function AppRouter() {
 
             {/*  PAYMENT ROUTE */}
             <Route path="payments/:id" element={<PaymentDetails />} />  
+            
+            {/* 💳 BILLING SYSTEM ROUTES */}
+            <Route path="billing" element={<BillingDashboard />} />
+            <Route path="billing/invoices" element={<InvoiceList />} />
+            <Route path="billing/create/:orderId" element={<CreateInvoice />} />
+            <Route path="billing/invoices/:id" element={<InvoiceDetails />} />
             
             {/* Settings */}
             <Route path="settings" element={<Settings />} />

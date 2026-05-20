@@ -25,7 +25,9 @@ function getDeliveryUrgency(order) {
 
 const PaymentProgressBar = memo(({ order }) => {
   const paid    = order.paymentSummary?.totalPaid || 0;
-  const total   = order.priceSummary?.totalMax || 0;
+  const total   = order.finalizedAmount !== undefined && order.finalizedAmount !== null && order.finalizedAmount > 0
+    ? order.finalizedAmount
+    : (order.priceSummary?.totalMax || 0);
   const pct     = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
   const status  = order.paymentSummary?.paymentStatus || 'pending';
 
