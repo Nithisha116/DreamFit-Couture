@@ -3950,6 +3950,9 @@ import GarmentForm from "../garment/GarmentForm";
 import AddPaymentModal from "../../../components/AddPaymentModal";
 import ImagePreviewModal from "../../../components/ImagePreviewModal";
 import showToast from "../../../utils/toast";
+import { registerWorkflowJobsFromOrder } from "../../../workflow/orderWorkflowBridge";
+import { fetchWorks } from "../../../features/work/workSlice";
+import { syncWorksToWorkflowJobs } from "../../../workflow/workflowEngine";
 
 export default function NewOrder() {
   const dispatch = useDispatch();
@@ -5351,7 +5354,38 @@ const renderDayContents = useCallback((day, date) => {
       console.log("✅ Updated currentOrderId to:", orderId);
       
       showToast.success("Order created successfully! 🎉");
-      navigate(`${basePath}/orders`);
+
+      try {
+        const apiOrder = result.order || result;
+        const orderPayload = {
+          ...apiOrder,
+          _id: orderId,
+          orderId: apiOrder.orderId || apiOrder.orderNumber,
+          customer: apiOrder.customer?.name
+            ? apiOrder.customer
+            : { name: selectedCustomerDisplay || "Customer" },
+          deliveryDate: apiOrder.deliveryDate || orderData.deliveryDate,
+          garments: orderData.garments,
+        };
+        registerWorkflowJobsFromOrder(orderPayload, []);
+
+        try {
+          const worksData = await dispatch(
+            fetchWorks({ orderId, limit: 50 }),
+          ).unwrap();
+          const worksList = worksData?.works || [];
+          if (worksList.length) {
+            registerWorkflowJobsFromOrder(orderPayload, worksList);
+            syncWorksToWorkflowJobs(worksList, []);
+          }
+        } catch (worksErr) {
+          console.warn("Works fetch for workflow sync:", worksErr);
+        }
+      } catch (wfErr) {
+        console.warn("Workflow job registration skipped:", wfErr);
+      }
+
+      navigate(`${basePath}/tasks`, { state: { view: "unassigned", refreshWorkflow: true } });
       
     } catch (error) {
       console.error("\n");

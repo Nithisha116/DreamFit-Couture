@@ -7,8 +7,8 @@ export default function TaskViewToggle({ view, setView }) {
         aria-label="Task view"
       >
         {[
-          { id: "today", label: "Today's tasks" },
-          { id: "completed", label: "Completed tasks" },
+          { id: "unassigned", label: "Unassigned tasks" },
+          { id: "assigned", label: "Assigned tasks" },
         ].map(({ id, label }) => (
           <button
             key={id}
@@ -16,7 +16,7 @@ export default function TaskViewToggle({ view, setView }) {
             role="tab"
             aria-selected={view === id}
             onClick={() => setView(id)}
-            className={`min-w-[140px] sm:min-w-[180px] px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
+            className={`min-w-[120px] sm:min-w-[150px] px-3 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
               view === id
                 ? "bg-gradient-to-r from-[#1E6BFF] to-blue-600 text-white shadow-md"
                 : "text-slate-500 hover:text-slate-800"

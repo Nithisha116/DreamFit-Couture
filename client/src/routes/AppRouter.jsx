@@ -449,6 +449,8 @@ const EditGarment = lazy(() => import("../Pages/admin/garment/EditGarment"));
 
 // 🚀 LAZY LOADING - TASKS & WORK DETAILS
 const TasksPage = lazy(() => import("../Pages/tasks/TasksPage"));
+const TaskJobDetailPage = lazy(() => import("../Pages/tasks/TaskJobDetailPage"));
+const WorkflowScanPage = lazy(() => import("../Pages/tasks/WorkflowScanPage"));
 const WorkDetailsPage = lazy(() => import("../Pages/works/WorkDetailsPage"));
 const CuttingMasterWorks = lazy(() => import("../Pages/works/CuttingMasterWorks"));
 const CheckAvailabilityPage = lazy(() =>
@@ -656,6 +658,8 @@ export default function AppRouter() {
             
             {/* ✅ TASKS (boutique floor) + legacy /works list redirect */}
             <Route path="tasks" element={<TasksPage />} />
+            <Route path="tasks/job/:trackingId" element={<TaskJobDetailPage />} />
+            <Route path="tasks/scan" element={<WorkflowScanPage />} />
             <Route path="works" element={<RedirectWorksListToTasks />} />
             <Route path="works/:id" element={<WorkDetailsPage />} />
             <Route path="check-availability" element={<CheckAvailabilityPage />} />
@@ -778,6 +782,8 @@ export default function AppRouter() {
             
             {/* ✅ TASKS + legacy /works list redirect */}
             <Route path="tasks" element={<TasksPage />} />
+            <Route path="tasks/job/:trackingId" element={<TaskJobDetailPage />} />
+            <Route path="tasks/scan" element={<WorkflowScanPage />} />
             <Route path="works" element={<RedirectWorksListToTasks />} />
             <Route path="works/:id" element={<WorkDetailsPage />} />
             <Route path="check-availability" element={<CheckAvailabilityPage />} />

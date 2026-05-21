@@ -9,11 +9,11 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import useWorkflowJobs from "../../hooks/useWorkflowJobs";
 import {
-  buildPipelineViewModel,
-  filterWorksForPipeline,
-  loadBoutiqueTasks,
-  sortWorksForPipeline,
+  buildPipelineViewModelFromJob,
+  filterJobsForPipeline,
+  sortJobsForPipeline,
 } from "../../utils/deliveryPipelineUtils";
 
 function StageNode({ stage, isLast }) {
@@ -70,7 +70,11 @@ function PipelineRow({ model, basePath }) {
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              to={`${basePath}/works/${model.workId}`}
+              to={
+                model.workflowTrackingId
+                  ? `${basePath}/tasks/job/${model.workflowTrackingId}`
+                  : `${basePath}/works/${model.workId}`
+              }
               className="font-mono text-xs font-bold text-violet-700 hover:text-violet-900 sm:text-sm"
             >
               {model.orderId}
@@ -107,10 +111,14 @@ function PipelineRow({ model, basePath }) {
         </div>
 
         <Link
-          to={`${basePath}/works/${model.workId}`}
+          to={
+            model.workflowTrackingId
+              ? `${basePath}/tasks/job/${model.workflowTrackingId}`
+              : `${basePath}/works/${model.workId}`
+          }
           className="hidden shrink-0 items-center gap-1 text-xs font-semibold text-violet-600 opacity-0 transition-opacity group-hover:opacity-100 lg:inline-flex"
         >
-          View work <ArrowRight className="h-3.5 w-3.5" />
+          View job <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>
 
@@ -131,15 +139,14 @@ export default function DeliveryPipelineSection({
   maxItems = 8,
   daysAhead = 5,
 }) {
-  const boutiqueTasks = useMemo(() => loadBoutiqueTasks(), [works.length]);
+  const { jobs, version } = useWorkflowJobs(works);
 
   const pipelineItems = useMemo(() => {
-    const filtered = filterWorksForPipeline(works, daysAhead);
-    const sorted = sortWorksForPipeline(filtered);
-    return sorted
-      .slice(0, maxItems)
-      .map((work) => buildPipelineViewModel(work, boutiqueTasks));
-  }, [works, boutiqueTasks, maxItems, daysAhead]);
+    const openJobs = jobs.filter((j) => j.lifecycleStatus !== "completed");
+    const filtered = filterJobsForPipeline(openJobs.length ? openJobs : jobs, daysAhead);
+    const sorted = sortJobsForPipeline(filtered);
+    return sorted.slice(0, maxItems).map((job) => buildPipelineViewModelFromJob(job));
+  }, [jobs, version, maxItems, daysAhead]);
 
   const overdueCount = pipelineItems.filter((p) => p.overdue).length;
 

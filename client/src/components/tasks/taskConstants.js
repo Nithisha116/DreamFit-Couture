@@ -1,5 +1,6 @@
 /** DreamFit Tasks — department tabs map to stable keys */
 export const DEPARTMENT_TABS = [
+  { tab: "ALL", key: "all" },
   { tab: "EMBROIDERY", key: "embroidery" },
   { tab: "CUTTING", key: "cutting" },
   { tab: "SEWING", key: "sewing" },
