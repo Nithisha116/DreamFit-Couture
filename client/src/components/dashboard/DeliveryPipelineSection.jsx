@@ -139,14 +139,14 @@ export default function DeliveryPipelineSection({
   maxItems = 8,
   daysAhead = 5,
 }) {
-  const { jobs, version } = useWorkflowJobs(works);
+  const { jobs } = useWorkflowJobs();
 
   const pipelineItems = useMemo(() => {
     const openJobs = jobs.filter((j) => j.lifecycleStatus !== "completed");
     const filtered = filterJobsForPipeline(openJobs.length ? openJobs : jobs, daysAhead);
     const sorted = sortJobsForPipeline(filtered);
     return sorted.slice(0, maxItems).map((job) => buildPipelineViewModelFromJob(job));
-  }, [jobs, version, maxItems, daysAhead]);
+  }, [jobs, maxItems, daysAhead]);
 
   const overdueCount = pipelineItems.filter((p) => p.overdue).length;
 

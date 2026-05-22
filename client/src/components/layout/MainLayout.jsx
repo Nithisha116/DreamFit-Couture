@@ -695,7 +695,6 @@ export default function MainLayout() {
       { id: 'store-keepers', icon: Store, label: 'Store Keepers', path: `/${rolePath}/store-keepers`, show: canViewStoreKeepers },
       { id: 'measurements', icon: Ruler, label: 'Measurements', path: `/${rolePath}/measurements`, show: canViewMeasurement },
       { id: 'products', icon: Package, label: 'Products', path: `/${rolePath}/products`, show: canViewProducts },
-      { id: 'appointments', icon: Calendar, label: 'Appointments', path: `/${rolePath}/appointments`, show: true },
       { id: 'banking', icon: Landmark, label: 'Banking', path: '#', show: canViewBanking, isDropdown: true },
       { id: 'employeeManagement', icon: UserCircle, label: 'Employee Management', path: '#', show: canViewStaff, isDropdown: true },
       { id: 'billing', icon: Receipt, label: 'Billing & Invoicing', path: `/${rolePath}/billing`, show: canViewBilling },

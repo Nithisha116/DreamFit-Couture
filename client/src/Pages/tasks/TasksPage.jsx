@@ -13,7 +13,7 @@ import {
   TAB_TO_KEY,
   EMPLOYEES_BY_DEPARTMENT,
 } from "../../components/tasks/taskConstants";
-import { fetchRecentWorks, selectRecentWorks } from "../../features/work/workSlice";
+import { fetchWorkflowJobs } from "../../features/work/workSlice";
 import useWorkflowJobs from "../../hooks/useWorkflowJobs";
 import { STAGE_TO_DEPARTMENT } from "../../workflow/workflowConstants";
 import { getActiveStageKey } from "../../workflow/workflowEngine";
@@ -28,11 +28,10 @@ import showToast from "../../utils/toast";
 export default function TasksPage() {
   const dispatch = useDispatch();
   const location = useLocation();
-  const recentWorks = useSelector(selectRecentWorks) || [];
   const { user } = useSelector((state) => state.auth);
   const basePath = user?.role === "STORE_KEEPER" ? "/storekeeper" : "/admin";
 
-  const { jobs, refresh, version } = useWorkflowJobs(recentWorks);
+  const { jobs, refresh } = useWorkflowJobs();
 
   const [view, setView] = useState(location.state?.view || "unassigned");
   const [activeDept, setActiveDept] = useState("ALL");
@@ -43,15 +42,11 @@ export default function TasksPage() {
   const departmentEmployees = EMPLOYEES_BY_DEPARTMENT[deptKey] || [];
 
   useEffect(() => {
-    dispatch(fetchRecentWorks({ limit: 200 }));
-  }, [dispatch]);
-
-  useEffect(() => {
     if (location.state?.view) setView(location.state.view);
     if (location.state?.refreshWorkflow) {
-      dispatch(fetchRecentWorks({ limit: 200 })).then(() => refresh());
+      refresh();
     }
-  }, [location.state, dispatch, refresh]);
+  }, [location.state, refresh]);
 
   const matchesSearch = (job) => {
     const q = search.trim().toLowerCase();
@@ -69,7 +64,7 @@ export default function TasksPage() {
     list = filterJobsByDepartment(list, deptKey);
     list = sortJobsForDisplay(list);
     return list.filter(matchesSearch);
-  }, [jobs, view, deptKey, search, version]);
+  }, [jobs, view, deptKey, search]);
 
   const workloadTasks = useMemo(() => {
     return jobs
@@ -85,7 +80,7 @@ export default function TasksPage() {
           estimatedHours: 2,
         };
       });
-  }, [jobs, deptKey, version]);
+  }, [jobs, deptKey]);
 
   const onAssigned = () => {
     refresh();

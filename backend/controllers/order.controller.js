@@ -6346,8 +6346,7 @@ export const getOrderById = async (req, res) => {
     .sort('-paymentDate -paymentTime');
 
     const works = await Work.find({ order: order._id, isActive: true })
-      .populate('garment', 'name item category')
-      .populate('cuttingMaster', 'name');
+      .populate('garment', 'name item category');
 
     res.json({ 
       success: true, 

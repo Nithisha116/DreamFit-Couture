@@ -19,15 +19,25 @@ const workSchema = new mongoose.Schema({
     required: true 
   },
   
-  cuttingMaster: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'CuttingMaster' 
-  },
+  assignments: [{
+    stage: { type: String, required: true },
+    role: { type: String, required: true },
+    workerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker' },
+    workerName: { type: String },
+    assignedAt: { type: Date, default: Date.now },
+    startedAt: { type: Date },
+    completedAt: { type: Date },
+    status: { type: String, enum: ['pending', 'active', 'completed'], default: 'pending' },
+    notes: String
+  }],
   
-  tailor: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Tailor' 
-  },
+  history: [{
+    action: { type: String, required: true },
+    details: { type: String },
+    actorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    actorName: { type: String },
+    timestamp: { type: Date, default: Date.now }
+  }],
   
   status: {
     type: String,
@@ -69,7 +79,8 @@ const workSchema = new mongoose.Schema({
     default: true
   }
 }, { 
-  timestamps: true 
+  timestamps: true,
+  strictPopulate: false
 });
 
 // ✅ CORRECTED PRE-SAVE HOOK
@@ -110,8 +121,7 @@ workSchema.pre('save', async function() {
 workSchema.index({ workId: 1 }, { unique: true });
 workSchema.index({ order: 1 });
 workSchema.index({ garment: 1 });
-workSchema.index({ cuttingMaster: 1 });
-workSchema.index({ tailor: 1 });
+workSchema.index({ 'assignments.workerId': 1 });
 workSchema.index({ status: 1 });
 
 export default mongoose.model('Work', workSchema);

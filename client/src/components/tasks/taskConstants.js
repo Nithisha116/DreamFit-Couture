@@ -19,12 +19,12 @@ export const KEY_TO_TAB = Object.fromEntries(
 
 /** Only employees valid for assignment in that department */
 export const EMPLOYEES_BY_DEPARTMENT = {
-  embroidery: ["rakesh", "ram", "santhosh"],
-  sewing: ["anushka", "taniya", "kamali"],
-  cutting: ["vinum", "hema", "ramya"],
-  finishes: ["priyanka", "fathima"],
-  marking: ["myna", "reena", "vinum"],
-  aari: ["aishu", "isha"],
+  embroidery: [],
+  sewing: [],
+  cutting: [],
+  finishes: [],
+  marking: [],
+  aari: [],
 };
 
 /** Default daily capacity (hours) for workload / availability heuristics */

@@ -26,6 +26,7 @@ import paymentReducer from "../features/payment/paymentSlice";
 import appointmentReducer from "../features/appointment/appointmentSlice";
 import outsourcingReducer from "../features/outsourcing/outsourcingSlice";
 import attendanceReducer from "../features/attendance/attendanceSlice";
+import workerReducer from "../features/worker/workerSlice";
 import leaveReducer from "../features/leave/leaveSlice";
 import salaryReducer from "../features/salary/salarySlice";
 import invoiceReducer from "../features/invoice/invoiceSlice";
@@ -43,6 +44,7 @@ const rootReducer = combineReducers({
   order: orderReducer,
   garment: garmentReducer,
   work: workReducer,
+    worker: workerReducer,
   tailor: tailorReducer,
   customerSize: customerSizeReducer,
   attendance: attendanceReducer,

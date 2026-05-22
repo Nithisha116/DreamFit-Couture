@@ -7,7 +7,6 @@ import html2canvas from "html2canvas";
 import JobCardDocument from "../../components/workflow/JobCardDocument";
 import WorkflowStageTimeline from "../../components/workflow/WorkflowStageTimeline";
 import useWorkflowJobs from "../../hooks/useWorkflowJobs";
-import { getWorkflowJobByTrackingId } from "../../workflow/workflowStorage";
 import { advanceStageByTrackingId } from "../../workflow/workflowEngine";
 import { fetchWorkById } from "../../features/work/workSlice";
 import showToast from "../../utils/toast";
@@ -20,13 +19,10 @@ export default function TaskJobDetailPage() {
   const { currentWork, loading } = useSelector((state) => state.work);
   const basePath = user?.role === "STORE_KEEPER" ? "/storekeeper" : "/admin";
 
-  const { jobs, refresh, version } = useWorkflowJobs([]);
+  const { jobs, refresh } = useWorkflowJobs();
   const job = useMemo(() => {
-    return (
-      jobs.find((j) => j.workflowTrackingId === trackingId) ||
-      getWorkflowJobByTrackingId(trackingId)
-    );
-  }, [jobs, trackingId, version]);
+    return jobs.find((j) => j.workflowTrackingId === trackingId) || null;
+  }, [jobs, trackingId]);
 
   useEffect(() => {
     if (job?.workMongoId) {

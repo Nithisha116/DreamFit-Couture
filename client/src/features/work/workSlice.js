@@ -590,6 +590,8 @@ const initialState = {
   },
   
   recentWorks: [],
+  workflowJobs: [],
+  workflowJobsLoading: false,
   
   statusBreakdown: {
     breakdown: [],
@@ -744,6 +746,20 @@ export const fetchWorkStatusBreakdown = createAsyncThunk(
     } catch (error) {
       console.error('❌ [fetchWorkStatusBreakdown] error:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch status breakdown');
+    }
+  }
+);
+
+// Fetch backend-synthesized workflow jobs (replaces localStorage engine)
+export const fetchWorkflowJobs = createAsyncThunk(
+  'work/fetchWorkflowJobs',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await workApi.getWorkflowJobs();
+      return response.data || [];
+    } catch (error) {
+      console.error('❌ [fetchWorkflowJobs] error:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch workflow jobs');
     }
   }
 );
@@ -1110,6 +1126,18 @@ const workSlice = createSlice({
             state.myWorks[index] = action.payload;
           }
         }
+      })
+
+      // Workflow jobs (backend-synthesized)
+      .addCase(fetchWorkflowJobs.pending, (state) => {
+        state.workflowJobsLoading = true;
+      })
+      .addCase(fetchWorkflowJobs.fulfilled, (state, action) => {
+        state.workflowJobsLoading = false;
+        state.workflowJobs = action.payload;
+      })
+      .addCase(fetchWorkflowJobs.rejected, (state) => {
+        state.workflowJobsLoading = false;
       });
   }
 });
@@ -1138,5 +1166,7 @@ export const selectWorkLoading = (state) => state.work.loading;
 export const selectDashboardStats = (state) => state.work.dashboardStats;
 export const selectRecentWorks = (state) => state.work.recentWorks;
 export const selectWorkStatusBreakdown = (state) => state.work.statusBreakdown;
+export const selectWorkflowJobs = (state) => state.work.workflowJobs || [];
+export const selectWorkflowJobsLoading = (state) => state.work.workflowJobsLoading;
 
 export default workSlice.reducer;

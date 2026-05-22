@@ -206,3 +206,9 @@ export const deleteWork = async (id) => {
   const response = await API.delete(`/works/${id}`);
   return response.data;
 };
+
+// Get backend-synthesized workflow jobs (replaces localStorage engine)
+export const getWorkflowJobs = async () => {
+  const response = await API.get('/workflow/jobs');
+  return response.data;
+};

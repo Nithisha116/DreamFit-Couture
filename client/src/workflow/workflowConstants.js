@@ -19,6 +19,7 @@ export const WORKER_ROLES = [
   { id: "aari", label: "Aari worker" },
   { id: "helper", label: "Helper" },
   { id: "ironing", label: "Ironing helper" },
+  { id: "packing", label: "Packing worker" },
 ];
 
 /** Maps workflow stage → boutique department tab key (for filters/workload) */

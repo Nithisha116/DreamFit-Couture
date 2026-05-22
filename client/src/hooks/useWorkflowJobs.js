@@ -1,39 +1,30 @@
-import { useCallback, useEffect, useState } from "react";
-import { WORKFLOW_CHANGED_EVENT } from "../workflow/workflowConstants";
-import { syncWorksToWorkflowJobs } from "../workflow/workflowEngine";
-import { loadWorkflowJobs } from "../workflow/workflowStorage";
-import { loadBoutiqueTasks } from "../utils/deliveryPipelineUtils";
+import { useCallback, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  fetchWorkflowJobs,
+  selectWorkflowJobs,
+  selectWorkflowJobsLoading,
+} from "../features/work/workSlice";
 
 /**
- * Reactive workflow job list — SSOT for Tasks + Delivery Pipeline.
+ * Reactive workflow job list — backed by Redux + backend API.
+ * Replaces the old localStorage-based engine with a single fetch from
+ * GET /api/workflow/jobs which synthesises jobs server-side.
  */
-export function useWorkflowJobs(works = []) {
-  const [jobs, setJobs] = useState(() => loadWorkflowJobs());
-  const [version, setVersion] = useState(0);
+export function useWorkflowJobs() {
+  const dispatch = useDispatch();
+  const jobs = useSelector(selectWorkflowJobs);
+  const loading = useSelector(selectWorkflowJobsLoading);
+
+  useEffect(() => {
+    dispatch(fetchWorkflowJobs());
+  }, [dispatch]);
 
   const refresh = useCallback(() => {
-    const boutiqueTasks = loadBoutiqueTasks();
-    if (works?.length) {
-      syncWorksToWorkflowJobs(works, boutiqueTasks);
-    }
-    setJobs(loadWorkflowJobs());
-    setVersion((v) => v + 1);
-  }, [works]);
+    dispatch(fetchWorkflowJobs());
+  }, [dispatch]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    const onChange = () => {
-      setJobs(loadWorkflowJobs());
-      setVersion((v) => v + 1);
-    };
-    window.addEventListener(WORKFLOW_CHANGED_EVENT, onChange);
-    return () => window.removeEventListener(WORKFLOW_CHANGED_EVENT, onChange);
-  }, []);
-
-  return { jobs, refresh, version };
+  return { jobs, refresh, loading };
 }
 
 export default useWorkflowJobs;

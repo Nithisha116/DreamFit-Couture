@@ -6954,8 +6954,6 @@ export const getWorks = async (req, res) => {
           }
         ]
       })
-      .populate('cuttingMaster', 'name')
-      .populate('tailor', 'name employeeId')
       .populate('createdBy', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -7061,8 +7059,6 @@ export const getWorkById = async (req, res) => {
           }
         ]
       })
-      .populate('cuttingMaster', 'name')
-      .populate('tailor', 'name employeeId phone')
       .populate('createdBy', 'name');
 
     if (!work) {
@@ -7234,7 +7230,6 @@ export const getWorksByCuttingMaster = async (req, res) => {
           }
         ]
       })
-      .populate('tailor', 'name')
       .sort({ createdAt: -1 });
 
     // ✅ Format the response
@@ -8018,7 +8013,6 @@ export const getWorksByTailor = async (req, res) => {
         path: 'garment',
         select: 'name garmentId measurements'
       })
-      .populate('cuttingMaster', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -8496,8 +8490,7 @@ export const getRecentWorks = async (req, res) => {
         path: 'garment',
         select: 'name garmentId priority'  // ✅ Added 'priority'
       })
-      .populate('cuttingMaster', 'name')
-      .populate('tailor', 'name')
+
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
 
@@ -8515,8 +8508,8 @@ export const getRecentWorks = async (req, res) => {
         orderId: work.order.orderId,
         customer: work.order.customer
       } : null,
-      cuttingMaster: work.cuttingMaster?.name,
-      tailor: work.tailor?.name,
+      cuttingMaster: work.assignments?.find(a => a.role === 'cutting_master' || a.role === 'cutting')?.workerName || null,
+      tailor: work.assignments?.find(a => a.role === 'tailor' || a.role === 'stitching')?.workerName || null,
       createdAt: work.createdAt,
       estimatedDelivery: work.estimatedDelivery
     }));
@@ -8743,9 +8736,7 @@ export const getCalendarWorkData = async (req, res) => {
         path: 'garment',
         select: 'name garmentId'
       })
-      .populate('cuttingMaster', 'name')
-      .populate('tailor', 'name')
-      .select('workId status createdAt estimatedDelivery cuttingMaster tailor order garment');
+      .select('workId status createdAt estimatedDelivery assignments order garment');
     
     // Format for calendar (FullCalendar or similar)
     const calendarEvents = works.map(work => {
@@ -8768,8 +8759,8 @@ export const getCalendarWorkData = async (req, res) => {
           orderId: work.order?.orderId,
           customer: work.order?.customer?.name,
           garment: work.garment?.name,
-          cuttingMaster: work.cuttingMaster?.name,
-          tailor: work.tailor?.name,
+          cuttingMaster: work.assignments?.find(a => a.role === 'cutting_master' || a.role === 'cutting')?.workerName || null,
+          tailor: work.assignments?.find(a => a.role === 'tailor' || a.role === 'stitching')?.workerName || null,
           createdAt: work.createdAt
         }
       };

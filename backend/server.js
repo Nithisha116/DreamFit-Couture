@@ -529,6 +529,8 @@ import appointmentRoutes from "./routes/appointment.routes.js";
 // OUTSOURCING ROUTES
 import outsourcingRoutes from "./routes/outsourcing.routes.js";
 import salaryRoutes from "./routes/salary.routes.js";
+import workerRoutes from "./routes/worker.routes.js";
+import workflowRoutes from "./routes/workflow.routes.js";
 
 // BILLING & INVOICING ROUTES
 import invoiceRoutes from "./routes/invoice.routes.js";
@@ -868,6 +870,12 @@ app.use("/api/transactions", transactionRoutes);
 // 📅 APPOINTMENT MANAGEMENT - COMPLETE ✅
 // ====================================================
 app.use("/api/appointments", appointmentRoutes);
+
+// ====================================================
+// 👥 WORKER MANAGEMENT (Dynamic Roles)
+// ====================================================
+app.use("/api/workers", workerRoutes);
+app.use("/api/workflow", workflowRoutes);
 
 // ====================================================
 // 🚚 OUTSOURCING MANAGEMENT - COMPLETE ✅

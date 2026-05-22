@@ -1,101 +1,118 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { format } from "date-fns";
-import { X, UserPlus, Scissors } from "lucide-react";
+import { X, UserPlus, Search, Loader2 } from "lucide-react";
 import { STAGE_TO_WORKER_ROLE, WORKER_ROLES } from "../../workflow/workflowConstants";
-import { assignWorkerToActiveStage } from "../../workflow/workflowEngine";
-import { fetchAllTailors, selectAllTailors } from "../../features/tailor/tailorSlice";
-
-const FLOOR_WORKERS = {
-  cutting: ["vinum", "hema", "ramya"],
-  tailor: ["anushka", "taniya", "kamali"],
-  embroidery: ["rakesh", "ram", "santhosh"],
-  aari: ["aishu", "isha"],
-  ironing: ["priyanka", "fathima"],
-  helper: ["myna", "reena"],
-};
+import {
+  fetchWorkers,
+  selectAllWorkers,
+  selectWorkerLoading,
+  selectWorkerError,
+  clearWorkerList,
+} from "../../features/worker/workerSlice";
+import API from "../../app/axios";
+import showToast from "../../utils/toast";
 
 export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
   const dispatch = useDispatch();
-  const tailors = useSelector(selectAllTailors) || [];
-  const [selectedTailorId, setSelectedTailorId] = useState("");
-  const [name, setName] = useState("");
+  const workers = useSelector(selectAllWorkers) || [];
+  const loading = useSelector(selectWorkerLoading);
+  const error = useSelector(selectWorkerError);
+
   const [role, setRole] = useState("");
-  const [search, setSearch] = useState("");
+  const [selectedWorker, setSelectedWorker] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  useEffect(() => {
-    if (open) dispatch(fetchAllTailors({ limit: 100, status: "active" }));
-  }, [open, dispatch]);
-
-  useEffect(() => {
-    if (!open) {
-      setSelectedTailorId("");
-      setName("");
-      setRole("");
-      setSearch("");
-    }
-  }, [open]);
-
+  // Determine stage and default role for assignment
   const activeKey = job?.currentStageKey || job?.stageKeys?.[0];
   const defaultRole = STAGE_TO_WORKER_ROLE[activeKey] || "helper";
   const roleId = role || defaultRole;
-  const useTailorPicker = roleId === "tailor";
-  const floorSuggestions = FLOOR_WORKERS[roleId] || FLOOR_WORKERS.helper;
 
-  const filteredTailors = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return tailors.filter((t) => {
-      const label = `${t.name || ""} ${t.tailorId || ""}`.toLowerCase();
-      return !q || label.includes(q);
-    });
-  }, [tailors, search]);
+  // Handle debouncing of the search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-  if (!open || !job) return null;
-
-  const handleAssign = () => {
-    let workerName = name.trim();
-    let workerId = null;
-
-    if (useTailorPicker && selectedTailorId) {
-      const t = tailors.find((x) => x._id === selectedTailorId);
-      if (t) {
-        workerName = t.name;
-        workerId = t._id;
-      }
+  // Fetch workers when role or debounced search changes
+  useEffect(() => {
+    if (open && roleId) {
+      dispatch(fetchWorkers({ role: roleId, search: debouncedSearch, status: "active" }));
     }
+  }, [open, roleId, debouncedSearch, dispatch]);
 
-    if (!workerName) return;
+  // Reset states on close
+  useEffect(() => {
+    if (!open) {
+      setSelectedWorker(null);
+      setRole("");
+      setSearchQuery("");
+      setDebouncedSearch("");
+      dispatch(clearWorkerList());
+    }
+  }, [open, dispatch]);
 
-    const updated = assignWorkerToActiveStage(job.workflowTrackingId, {
-      role: roleId,
-      name: workerName,
-      workerId,
-    });
-    onAssigned?.(updated);
-    onClose();
+  const handleRoleChange = (e) => {
+    const nextRole = e.target.value;
+    setRole(nextRole);
+    setSelectedWorker(null);
+    setSearchQuery("");
+    setDebouncedSearch("");
+    dispatch(clearWorkerList());
   };
 
-  const dueLabel = job.dueDate ? format(new Date(job.dueDate), "dd MMM yyyy") : "—";
+  const handleAssign = async () => {
+    if (!selectedWorker) return;
+
+    try {
+      await API.post(`/api/workflow/works/${job._id}/assign-worker`, {
+        stage: activeKey,
+        role: roleId,
+        workerId: selectedWorker._id,
+        workerName: selectedWorker.name,
+      });
+
+      showToast.success(`Worker assigned successfully`);
+      onAssigned?.({ ...job, workerName: selectedWorker.name, workerId: selectedWorker._id, role: roleId });
+      onClose();
+    } catch (err) {
+      console.error("❌ Worker assignment failed:", err);
+      showToast.error(err.response?.data?.message || "Failed to assign worker");
+    }
+  };
+
+  // Guard: render nothing if closed or no job
+  if (!open || !job) return null;
+
+  const dueLabel = job.dueDate
+    ? format(new Date(job.dueDate), "dd MMM yyyy")
+    : "—";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Header */}
         <div className="bg-gradient-to-r from-violet-700 to-indigo-700 px-5 py-4 flex items-start justify-between shrink-0">
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
-              Assign worker
+              Assign Worker
             </h3>
             <p className="text-xs text-indigo-100 mt-1">
               {job.workCode || job.orderId} · {job.garmentName}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-white/80 hover:text-white p-1">
+          <button type="button" onClick={onClose} className="text-white/80 hover:text-white p-1 transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
 
+        {/* Body */}
         <div className="p-5 space-y-4 overflow-y-auto">
+          {/* Job info */}
           <div className="rounded-xl bg-violet-50 border border-violet-100 p-3 text-sm grid grid-cols-2 gap-2">
             <div>
               <p className="text-[10px] font-bold text-violet-500 uppercase">Order</p>
@@ -115,16 +132,15 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
             </div>
           </div>
 
+          {/* Role selector */}
           <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Role</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+              Role
+            </label>
             <select
               value={roleId}
-              onChange={(e) => {
-                setRole(e.target.value);
-                setSelectedTailorId("");
-                setName("");
-              }}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-violet-500/30 outline-none"
+              onChange={handleRoleChange}
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-violet-500/30 outline-none transition-all cursor-pointer bg-white"
             >
               {WORKER_ROLES.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -134,71 +150,103 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
             </select>
           </div>
 
-          {useTailorPicker ? (
-            <>
+          {/* Search Input */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">
+              Search Employee
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search tailors…"
-                className="w-full rounded-xl border border-violet-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-violet-500/30 outline-none"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Type name to search active workers..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-violet-500/30 outline-none transition-all"
               />
-              <div className="max-h-48 overflow-y-auto space-y-2">
-                {filteredTailors.map((t) => (
+            </div>
+          </div>
+
+          {/* Searchable dropdown list */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">
+              Active Workers
+            </label>
+
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-10 space-y-2 text-slate-400">
+                <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+                <p className="text-xs font-semibold">Loading active workers...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8 rounded-xl bg-red-50 border border-red-100 p-4">
+                <p className="text-sm font-bold text-red-600">Failed to load workers</p>
+                <p className="text-xs text-red-500 mt-1">Please check connection or re-login.</p>
+                <button
+                  type="button"
+                  onClick={() => dispatch(fetchWorkers({ role: roleId, search: debouncedSearch, status: "active" }))}
+                  className="mt-2 text-xs font-black text-violet-700 underline uppercase"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : !workers || workers.length === 0 ? (
+              <div className="text-center py-10 rounded-xl bg-slate-50 border border-dashed border-slate-200 p-4">
+                <p className="text-sm font-bold text-slate-500">No employees found</p>
+                <p className="text-xs text-slate-400 mt-1">No active workers found under the selected role.</p>
+              </div>
+            ) : (
+              <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                {workers.map((w) => (
                   <button
-                    key={t._id}
+                    key={w._id}
                     type="button"
-                    onClick={() => setSelectedTailorId(t._id)}
-                    className={`w-full text-left rounded-xl border p-3 flex items-center gap-3 transition-colors ${
-                      selectedTailorId === t._id
-                        ? "border-violet-500 bg-violet-50 ring-2 ring-violet-200"
-                        : "border-slate-200 hover:border-violet-200"
+                    onClick={() => setSelectedWorker(w)}
+                    className={`w-full text-left rounded-xl border p-3 flex items-center justify-between transition-all duration-200 ${
+                      selectedWorker?._id === w._id
+                        ? "border-violet-500 bg-violet-50/55 shadow-sm ring-2 ring-violet-200"
+                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
-                    <div className="h-10 w-10 rounded-full bg-violet-100 flex items-center justify-center">
-                      <Scissors className="h-5 w-5 text-violet-600" />
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-violet-700 capitalize">
+                          {w.name.charAt(0)}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-800 text-sm truncate">{w.name}</p>
+                        <p className="text-[10px] text-slate-500 font-mono capitalize">
+                          {w.role.replace('_', ' ')} · {w.status}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold text-slate-900 truncate">{t.name}</p>
-                      <p className="text-xs text-slate-500 font-mono">{t.tailorId || t._id}</p>
-                    </div>
+                    {selectedWorker?._id === w._id && (
+                      <div className="h-5 w-5 rounded-full bg-violet-600 flex items-center justify-center shrink-0">
+                        <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
                   </button>
                 ))}
-                {!filteredTailors.length && (
-                  <p className="text-xs text-slate-500 text-center py-4">No tailors found</p>
-                )}
               </div>
-            </>
-          ) : (
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Worker name</label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Select or type name…"
-                list="worker-suggestions"
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-violet-500/30 outline-none"
-              />
-              <datalist id="worker-suggestions">
-                {floorSuggestions.map((w) => (
-                  <option key={w} value={w} />
-                ))}
-              </datalist>
-            </div>
-          )}
+            )}
+          </div>
 
-          <div className="flex gap-2 pt-2">
+          {/* Actions */}
+          <div className="flex gap-3 pt-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleAssign}
-              disabled={useTailorPicker ? !selectedTailorId : !name.trim()}
-              className="flex-1 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 py-2.5 text-sm font-bold text-white shadow-md hover:opacity-95 disabled:opacity-50"
+              disabled={!selectedWorker || loading}
+              className="flex-1 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 py-3 text-sm font-bold text-white shadow-md hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               Assign
             </button>

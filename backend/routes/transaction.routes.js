@@ -340,6 +340,7 @@ router.use(protect);
 router.get('/dashboard/main', getDashboardData);
 router.get('/dashboard/today', getTransactionSummary);
 router.get('/dashboard/daily-stats', authorize('ADMIN', 'STORE_KEEPER'), getDailyRevenueStats);
+router.get('/daily-stats', authorize('ADMIN', 'STORE_KEEPER'), getDailyRevenueStats);
 router.get('/summary', getTransactionSummary);
 router.get('/stats', authorize('ADMIN'), getTransactionStats);
 

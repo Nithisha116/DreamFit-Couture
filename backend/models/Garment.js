@@ -161,10 +161,18 @@ const garmentSchema = new mongoose.Schema({
     ref: "Category",
     required: [true, "Category is required"],
   },
+  categoryName: {
+    type: String,
+    trim: true,
+  },
   item: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Item",
     required: [true, "Item is required"],
+  },
+  itemName: {
+    type: String,
+    trim: true,
   },
   measurementTemplate: {
     type: mongoose.Schema.Types.ObjectId,
