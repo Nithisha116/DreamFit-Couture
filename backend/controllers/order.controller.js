@@ -5873,6 +5873,12 @@ export const createOrder = async (req, res) => {
       } catch (e) {}
     }
 
+    if (typeof orderData.workflowStages === 'string') {
+      try {
+        orderData.workflowStages = JSON.parse(orderData.workflowStages);
+      } catch (e) {}
+    }
+
     const {
       customer,
       deliveryDate,
@@ -5883,8 +5889,27 @@ export const createOrder = async (req, res) => {
       status,
       orderDate,
       payments = [],
-      requestId
+      requestId,
+      workflowStages: rawWorkflowStages,
     } = orderData;
+
+    const VALID_STAGE_KEYS = new Set([
+      'cutting', 'stitching', 'ironing', 'packed', 'embroidery', 'aari',
+    ]);
+    const normalizeStageKey = (key) => {
+      const k = String(key || '').trim().toLowerCase().replace(/\s+/g, '_');
+      if (k === 'aari_work' || k === 'aariwork') return 'aari';
+      if (k === 'sewing') return 'stitching';
+      if (k === 'pack' || k === 'ready') return 'packed';
+      return k;
+    };
+    let workflowStages = Array.isArray(rawWorkflowStages) ? rawWorkflowStages : [];
+    workflowStages = workflowStages
+      .map(normalizeStageKey)
+      .filter((k, i, arr) => VALID_STAGE_KEYS.has(k) && arr.indexOf(k) === i);
+    if (!workflowStages.length) {
+      workflowStages = ['cutting', 'stitching', 'ironing', 'packed'];
+    }
 
     const creatorId = req.user?._id || req.user?.id;
     if (!creatorId) {
@@ -5968,6 +5993,7 @@ export const createOrder = async (req, res) => {
       customer,
       deliveryDate,
       garments: [],
+      workflowStages,
       specialNotes,
       advancePayment: {
         amount: allPayments.find(p => p.type === 'advance')?.amount || 0,

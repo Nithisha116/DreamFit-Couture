@@ -9162,6 +9162,9 @@ export const createNewOrder = createAsyncThunk(
         fd.append("customer", orderData.customer);
         fd.append("deliveryDate", orderData.deliveryDate);
         fd.append("specialNotes", orderData.specialNotes || "");
+        if (orderData.workflowStages?.length) {
+          fd.append("workflowStages", JSON.stringify(orderData.workflowStages));
+        }
         
         if (orderData.requestId) {
           fd.append("requestId", orderData.requestId);

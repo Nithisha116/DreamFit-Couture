@@ -3,6 +3,7 @@
  */
 
 import { PIPELINE_STAGE_DEFS } from "../workflow/workflowConstants";
+import { normalizeWorkflowStages } from "../workflow/workflowStageUtils";
 import { getActiveStageKey } from "../workflow/workflowEngine";
 import { getWorkflowJobByWorkMongoId } from "../workflow/workflowStorage";
 
@@ -23,7 +24,7 @@ export function loadBoutiqueTasks() {
 
 /** Pipeline row from WorkflowJob (SSOT) */
 export function buildPipelineViewModelFromJob(job) {
-  const stageKeys = job.stageKeys || [];
+  const stageKeys = normalizeWorkflowStages(job.workflowStages || job.stageKeys);
   const stages = stageKeys.map((key) => ({
     ...PIPELINE_STAGE_DEFS[key],
     state: job.stages?.[key]?.state || "pending",
