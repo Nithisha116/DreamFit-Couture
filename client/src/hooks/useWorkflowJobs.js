@@ -9,7 +9,6 @@ import { loadBoutiqueTasks } from "../utils/deliveryPipelineUtils";
  */
 export function useWorkflowJobs(works = []) {
   const [jobs, setJobs] = useState(() => loadWorkflowJobs());
-  const [version, setVersion] = useState(0);
 
   const refresh = useCallback(() => {
     const boutiqueTasks = loadBoutiqueTasks();
@@ -17,23 +16,27 @@ export function useWorkflowJobs(works = []) {
       syncWorksToWorkflowJobs(works, boutiqueTasks);
     }
     setJobs(loadWorkflowJobs());
-    setVersion((v) => v + 1);
   }, [works]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const boutiqueTasks = loadBoutiqueTasks();
+
+  if (works?.length) {
+    syncWorksToWorkflowJobs(works, boutiqueTasks);
+  }
+
+  setJobs(loadWorkflowJobs());
+}, []);
 
   useEffect(() => {
     const onChange = () => {
       setJobs(loadWorkflowJobs());
-      setVersion((v) => v + 1);
     };
     window.addEventListener(WORKFLOW_CHANGED_EVENT, onChange);
     return () => window.removeEventListener(WORKFLOW_CHANGED_EVENT, onChange);
   }, []);
 
-  return { jobs, refresh, version };
+  return { jobs, refresh };
 }
 
 export default useWorkflowJobs;
