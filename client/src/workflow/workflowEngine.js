@@ -68,26 +68,35 @@ export function recomputeJobMeta(job) {
 }
 
 function workToJobFields(work) {
-  const garment = work?.garment;
   const order = work?.order;
+  const garmentObj = typeof garment === "object" ? garment : null;
   return {
     workMongoId: work._id,
     workCode: work.workId,
     orderId: order?.orderId || "",
     orderMongoId: order?._id || order,
     customerName: order?.customer?.name || "Customer",
-    garmentName: (typeof garment === "object" ? garment?.name : work?.garmentName) || "Garment",
-    garmentId: typeof garment === "object" ? garment?.garmentId : "",
-    categoryName:
-      typeof garment === "object"
-        ? garment?.categoryName || garment?.category?.name
-        : "",
-    itemName: typeof garment === "object" ? garment?.itemName || garment?.item?.name : "",
-    priority: (typeof garment === "object" ? garment?.priority : work?.priority) || "normal",
+    garmentName: (garmentObj?.name ?? work?.garmentName) || "Garment",
+    garmentId: garmentObj?.garmentId || "",
+    categoryName: garmentObj?.categoryName || garmentObj?.category?.name || "",
+    itemName: garmentObj?.itemName || garmentObj?.item?.name || "",
+    priority: garmentObj?.priority || work?.priority || "normal",
     dueDate: work?.estimatedDelivery || order?.deliveryDate || null,
     workStatus: work?.status || "pending",
     workflowStages: order?.workflowStages || work?.workflowStages || null,
     garment,
+    // ── Measurements ──────────────────────────────
+    measurements: garmentObj?.measurements || [],
+    measurementSource: garmentObj?.measurementSource || "template",
+    measurementTemplate: garmentObj?.measurementTemplate || null,
+    measurementTemplateName:
+      typeof garmentObj?.measurementTemplate === "object"
+        ? garmentObj.measurementTemplate?.name
+        : null,
+    // ── Notes / Instructions ──────────────────────
+    additionalInfo: garmentObj?.additionalInfo || "",
+    cuttingNotes: work?.cuttingNotes || "",
+    tailorNotes: work?.tailorNotes || "",
   };
 }
 
@@ -227,6 +236,14 @@ export function createJobFromOrderPayload(
     workMongoId,
     workCode,
     workflowStages,
+    // ── Measurements & Notes ──
+    measurements,
+    measurementSource,
+    measurementTemplate,
+    measurementTemplateName,
+    additionalInfo,
+    cuttingNotes,
+    tailorNotes,
   },
   existingJob = null,
 ) {
@@ -244,6 +261,15 @@ export function createJobFromOrderPayload(
     workCode: workCode || null,
     workStatus: "pending",
     workflowStages: workflowStages || existingJob?.workflowStages,
+    // ── Measurements ──
+    measurements: measurements || [],
+    measurementSource: measurementSource || "template",
+    measurementTemplate: measurementTemplate || null,
+    measurementTemplateName: measurementTemplateName || null,
+    // ── Notes ──
+    additionalInfo: additionalInfo || "",
+    cuttingNotes: cuttingNotes || "",
+    tailorNotes: tailorNotes || "",
   };
   const stageKeys = resolveStageKeysForJob({ ...existingJob, ...fields });
   let stages = existingJob?.stages ? { ...existingJob.stages } : initStages(stageKeys);

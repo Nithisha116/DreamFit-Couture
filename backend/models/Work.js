@@ -31,6 +31,19 @@ const workSchema = new mongoose.Schema({
     notes: String
   }],
   
+  qrCode: String,
+  currentStage: String,
+  overallStatus: String,
+
+  scanLogs: [{
+    scannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    scannerName: String,
+    role: String,
+    stage: String,
+    scannedAt: { type: Date, default: Date.now },
+    action: String
+  }],
+  
   history: [{
     action: { type: String, required: true },
     details: { type: String },
@@ -44,12 +57,14 @@ const workSchema = new mongoose.Schema({
     enum: [
       'pending',
       'accepted',
+      'in-progress',
       'cutting-started',
       'cutting-completed',
       'sewing-started',
       'sewing-completed',
       'ironing',
-      'ready-to-deliver'
+      'ready-to-deliver',
+      'completed'
     ],
     default: 'pending'
   },

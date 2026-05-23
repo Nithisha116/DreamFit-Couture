@@ -124,7 +124,7 @@ export const changePassword = async (req, res) => {
 export const getAllStaff = async (req, res) => {
   try {
     const staff = await User.find({ 
-      role: { $in: ["STORE_KEEPER", "CUTTING_MASTER"] } 
+      role: { $in: ["STORE_KEEPER", "CUTTING_MASTER", "STAFF"] } 
     })
     .select("-password")
     .sort({ createdAt: -1 });
@@ -153,7 +153,7 @@ export const createUser = async (req, res) => {
     }
 
     // Validate role
-    if (!["STORE_KEEPER", "CUTTING_MASTER"].includes(role)) {
+    if (!["STORE_KEEPER", "CUTTING_MASTER", "STAFF"].includes(role)) {
       return res.status(400).json({ message: "Invalid role" });
     }
 

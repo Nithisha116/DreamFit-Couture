@@ -28,6 +28,26 @@ export default function AddStaff() {
     e.preventDefault();
     if (!formData.name || !formData.email) return showToast.error("Name and Email are required");
 
+    if (selectedRole === "STAFF") {
+      try {
+        const staffData = {
+          ...formData,
+          role: "STAFF",
+          password: formData.password || "DreamFit2026!"
+        };
+        const resultAction = await dispatch(createStaff(staffData));
+        if (createStaff.fulfilled.match(resultAction)) {
+          showToast.success("General Staff onboarded successfully!");
+          navigate("/admin/staff");
+        } else {
+          showToast.error(resultAction.payload || "Failed to onboard staff");
+        }
+      } catch (err) {
+        showToast.error("An error occurred during onboarding");
+      }
+      return;
+    }
+
     const redirectionPaths = {
       TAILOR: "/admin/tailors/add",
       CUTTING_MASTER: "/admin/cutting-masters/add",
@@ -37,7 +57,7 @@ export default function AddStaff() {
     showToast.info(`Redirecting to ${selectedRole.replace('_', ' ')} setup...`);
     setTimeout(() => {
       navigate(redirectionPaths[selectedRole], { 
-        state: { name: formData.name, email: formData.email, phone: formData.phone, fromStaff: true }
+        state: { name: formData.name, email: formData.email, phone: formData.phone, password: formData.password, fromStaff: true }
       });
     }, 800);
   };
@@ -46,6 +66,7 @@ export default function AddStaff() {
     { value: "STORE_KEEPER", label: "Store Keeper", icon: <Store size={24} />, description: "Inventory & Operations", color: "emerald", gradient: "from-emerald-500 to-teal-600" },
     { value: "CUTTING_MASTER", label: "Cutting Master", icon: <HardHat size={24} />, description: "Cutting Operations", color: "orange", gradient: "from-orange-400 to-red-500" },
     { value: "TAILOR", label: "Tailor", icon: <Scissors size={24} />, description: "Sewing & Production", color: "indigo", gradient: "from-blue-500 to-indigo-600" },
+    { value: "STAFF", label: "General Staff", icon: <UserCog size={24} />, description: "Operational Staff", color: "violet", gradient: "from-violet-500 to-purple-600" },
   ];
 
   return (
@@ -63,7 +84,7 @@ export default function AddStaff() {
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-full text-xs font-black tracking-widest">
-            <Sparkles size={14} /> STEP 1 OF 2
+            <Sparkles size={14} /> {selectedRole === "STAFF" ? "SINGLE STEP ONBOARD" : "STEP 1 OF 2"}
           </div>
         </div>
 
@@ -120,6 +141,15 @@ export default function AddStaff() {
                       <input type="tel" name="phone" value={formData.phone} maxLength="10" onChange={(e) => setFormData(p => ({ ...p, phone: e.target.value.replace(/\D/g, '') }))} placeholder="10-digit mobile number"
                         className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-slate-700 text-lg placeholder:text-slate-300" />
                     </div>
+
+                    {/* Password */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <Lock size={14} /> Login Password {selectedRole !== "STAFF" && "(Optional - passed to setup)"}
+                      </label>
+                      <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder={selectedRole === "STAFF" ? "Create a login password (min 6 chars)" : "Password for setup"} required={selectedRole === "STAFF"}
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-slate-700 text-lg placeholder:text-slate-300" />
+                    </div>
                   </div>
 
                   <div className="pt-6">
@@ -127,12 +157,14 @@ export default function AddStaff() {
                       className={`w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black uppercase tracking-[0.2em] shadow-2xl shadow-slate-900/20 flex items-center justify-center gap-3 group transition-all active:scale-[0.98] ${loading ? 'opacity-50' : 'hover:bg-blue-600 hover:-translate-y-1'}`}>
                       {loading ? <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div> : (
                         <>
-                          NEXT: {selectedRole.replace('_', ' ')} DETAILS
+                          {selectedRole === "STAFF" ? "ONBOARD GENERAL STAFF" : `NEXT: ${selectedRole.replace('_', ' ')} DETAILS`}
                           <ArrowRight size={20} className="group-hover:translate-x-2 transition-transform" />
                         </>
                       )}
                     </button>
-                    <p className="text-center text-slate-400 font-bold text-[10px] mt-6 tracking-widest uppercase">YOU WILL COMPLETE THE FULL PROFILE IN THE NEXT STEP</p>
+                    <p className="text-center text-slate-400 font-bold text-[10px] mt-6 tracking-widest uppercase">
+                      {selectedRole === "STAFF" ? "GENERAL STAFF WILL BE CREATED IMMEDIATELY IN THE SYSTEM" : "YOU WILL COMPLETE THE FULL PROFILE IN THE NEXT STEP"}
+                    </p>
                   </div>
                 </form>
               </div>

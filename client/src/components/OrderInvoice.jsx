@@ -356,7 +356,7 @@
 
 import React, { forwardRef, useImperativeHandle, useRef } from "react";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import html2canvas from "html2canvas-pro";
 import pdfBg from "../assets/Pdfbg.png";
 import logo from "../assets/logo.png";
 

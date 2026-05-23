@@ -1,4 +1,8 @@
 import Worker from '../models/Worker.js';
+import Tailor from '../models/Tailor.js';
+import CuttingMaster from '../models/CuttingMaster.js';
+import StoreKeeper from '../models/StoreKeeper.js';
+import User from '../models/User.js';
 
 // @desc    Get all workers with optional role filtering
 // @route   GET /api/workers
@@ -6,29 +10,101 @@ import Worker from '../models/Worker.js';
 export const getWorkers = async (req, res) => {
   try {
     const { role, status, search } = req.query;
-    
-    let query = {};
-    if (role) {
-      if (role === 'cutting') {
-        query.role = 'cutting_master';
-      } else {
-        query.role = role;
+    let workersList = [];
+
+    // Normalize search query if any
+    const searchFilter = search
+      ? {
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { phone: { $regex: search, $options: 'i' } }
+          ]
+        }
+      : {};
+
+    // Map status filter
+    const getIsActiveFilter = () => {
+      if (!status) return {};
+      if (status === 'active') return { isActive: true };
+      if (status === 'inactive') return { isActive: false };
+      return {};
+    };
+
+    const normalizedRole = role ? role.toLowerCase() : '';
+
+    if (normalizedRole === 'tailor') {
+      const query = { ...getIsActiveFilter(), ...searchFilter };
+      const tailors = await Tailor.find(query).sort({ name: 1 }).lean();
+      workersList = tailors.map(t => ({
+        _id: t._id,
+        name: t.name,
+        fullName: t.name,
+        role: 'tailor',
+        phone: t.phone || '',
+        status: t.isActive ? 'active' : 'inactive'
+      }));
+    } else if (normalizedRole === 'cutting' || normalizedRole === 'cutting_master') {
+      const query = { ...getIsActiveFilter(), ...searchFilter };
+      const cuttingMasters = await CuttingMaster.find(query).sort({ name: 1 }).lean();
+      workersList = cuttingMasters.map(c => ({
+        _id: c._id,
+        name: c.name,
+        fullName: c.name,
+        role: 'cutting_master',
+        phone: c.phone || '',
+        status: c.isActive ? 'active' : 'inactive'
+      }));
+    } else if (normalizedRole === 'store_keeper') {
+      const query = { ...getIsActiveFilter(), ...searchFilter };
+      const storeKeepers = await StoreKeeper.find(query).sort({ name: 1 }).lean();
+      workersList = storeKeepers.map(s => ({
+        _id: s._id,
+        name: s.name,
+        fullName: s.name,
+        role: 'store_keeper',
+        phone: s.phone || '',
+        status: s.isActive ? 'active' : 'inactive'
+      }));
+    } else if (normalizedRole === 'staff') {
+      const query = { role: 'STAFF', ...getIsActiveFilter(), ...searchFilter };
+      const staffList = await User.find(query).sort({ name: 1 }).lean();
+      workersList = staffList.map(s => ({
+        _id: s._id,
+        name: s.name,
+        fullName: s.name,
+        role: 'staff',
+        phone: s.phone || '',
+        status: s.isActive ? 'active' : 'inactive'
+      }));
+    } else {
+      // General search or other roles: query standard/legacy Worker collection
+      let query = {};
+      if (role) {
+        query.role = role === 'cutting' ? 'cutting_master' : role;
       }
-    }
-    if (status) query.status = status;
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } }
-      ];
+      if (status) query.status = status;
+      if (search) {
+        query.$or = [
+          { name: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } }
+        ];
+      }
+      const workers = await Worker.find(query).sort({ name: 1 }).lean();
+      workersList = workers.map(w => ({
+        _id: w._id,
+        name: w.name,
+        fullName: w.name,
+        role: w.role,
+        phone: w.phone || '',
+        status: w.status
+      }));
     }
 
-    const workers = await Worker.find(query).sort({ name: 1 });
-    
     res.json({
       success: true,
-      count: workers.length,
-      data: workers
+      count: workersList.length,
+      workers: workersList,
+      data: workersList
     });
   } catch (error) {
     console.error('Error fetching workers:', error);

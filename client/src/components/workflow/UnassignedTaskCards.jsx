@@ -56,7 +56,19 @@ export default function UnassignedTaskCards({ jobs, onAssign, basePath = "/admin
                   </span>
                 </div>
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="flex shrink-0 gap-2 flex-wrap sm:flex-nowrap">
+                <Link
+                  to={`${basePath}/tasks/job/${job.workflowTrackingId}?action=print`}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 shrink-0"
+                >
+                  Print
+                </Link>
+                <Link
+                  to={`${basePath}/tasks/job/${job.workflowTrackingId}?action=pdf`}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 shrink-0"
+                >
+                  PDF
+                </Link>
                 <Link
                   to={`${basePath}/tasks/job/${job.workflowTrackingId}`}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-violet-200 bg-white px-4 py-2.5 text-sm font-bold text-violet-700 hover:bg-violet-50"

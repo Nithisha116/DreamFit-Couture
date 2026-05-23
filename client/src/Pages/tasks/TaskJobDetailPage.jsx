@@ -1,15 +1,16 @@
 import { useEffect, useMemo } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { ArrowLeft, Download, Printer, QrCode, ScanLine } from "lucide-react";
-import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
 import JobCardDocument from "../../components/workflow/JobCardDocument";
+import { exportJobCardToPdf } from "../../components/workflow/JobCardPDFExport";
 import WorkflowStageTimeline from "../../components/workflow/WorkflowStageTimeline";
 import useWorkflowJobs from "../../hooks/useWorkflowJobs";
 import { advanceStageByTrackingId } from "../../workflow/workflowEngine";
 import { fetchWorkById } from "../../features/work/workSlice";
 import showToast from "../../utils/toast";
+
+
 
 export default function TaskJobDetailPage() {
   const { trackingId } = useParams();
@@ -18,6 +19,8 @@ export default function TaskJobDetailPage() {
   const { user } = useSelector((state) => state.auth);
   const { currentWork, loading } = useSelector((state) => state.work);
   const basePath = user?.role === "STORE_KEEPER" ? "/storekeeper" : "/admin";
+
+  const location = useLocation();
 
   const { jobs, refresh } = useWorkflowJobs();
   const job = useMemo(() => {
@@ -32,152 +35,112 @@ export default function TaskJobDetailPage() {
 
   const workRecord = job?.workMongoId && currentWork?._id === job.workMongoId ? currentWork : null;
 
+  // Wait for the DOM to render the JobCardDocument before capturing
+  useEffect(() => {
+    if (!job || !workRecord) return;
+    const params = new URLSearchParams(location.search);
+    const action = params.get("action");
+    if (action) {
+      // Clear the query string so it doesn't run again on refresh
+      navigate(location.pathname, { replace: true });
+      
+      // Delay slightly to ensure fonts/images in DOM are loaded
+      setTimeout(() => {
+        if (action === "print") handlePrint();
+        if (action === "pdf") handlePdf();
+      }, 500);
+    }
+  }, [job, workRecord, location.search, navigate]);
+
   const handlePrint = () => {
     const el = document.getElementById("job-card-print");
     if (!el) return;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(
-      `<html><head><title>Job Card ${job?.orderId}</title><style>body{font-family:system-ui,sans-serif;margin:0;padding:16px;}</style></head><body>${el.outerHTML}</body></html>`,
-    );
-    w.document.close();
-    setTimeout(() => {
-      w.print();
-    }, 500);
+
+    // Remove any existing print iframe
+    const oldFrame = document.getElementById("print-iframe");
+    if (oldFrame) oldFrame.remove();
+
+    // Create a new iframe
+    const iframe = document.createElement("iframe");
+    iframe.id = "print-iframe";
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+    // Copy stylesheets from main page to print iframe
+    let stylesHtml = "";
+    for (const sheet of document.styleSheets) {
+      try {
+        if (sheet.href) {
+          stylesHtml += `<link rel="stylesheet" href="${sheet.href}">`;
+        } else {
+          const rules = Array.from(sheet.cssRules).map(rule => rule.cssText).join("\n");
+          stylesHtml += `<style>${rules}</style>`;
+        }
+      } catch (e) {
+        // Ignore CORS issues with external stylesheets
+      }
+    }
+
+    doc.write(`
+      <html>
+        <head>
+          <title>Job Card ${job?.orderId || ""}</title>
+          ${stylesHtml}
+          <style>
+            body {
+              font-family: system-ui, sans-serif;
+              margin: 0;
+              padding: 16px;
+              background-color: white !important;
+              color: black !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-container">
+            ${el.innerHTML}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    // Wait for images (like QR code) and styles to load in the iframe
+    iframe.contentWindow.focus();
+
+    const images = doc.getElementsByTagName("img");
+    const imagePromises = Array.from(images).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(resolve => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
+    });
+
+    Promise.all(imagePromises).then(() => {
+      setTimeout(() => {
+        iframe.contentWindow.print();
+      }, 300);
+    });
   };
 
   const handlePdf = async () => {
-    const el = document.getElementById("job-card-print");
-    if (!el || !job) return;
+    if (!job) return;
+    const loadingToastId = showToast.loading("Preparing PDF...");
     try {
-      showToast.success("Generating PDF...", { duration: 2000 });
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        onclone: (doc) => {
-          const cloned = doc.getElementById("job-card-print");
-
-          if (cloned) {
-            cloned.style.color = "#000";
-            cloned.style.background = "#fff";
-          }
-
-          // FIX 1: Strip oklch from any style tags directly
-          doc.querySelectorAll("style").forEach((styleTag) => {
-            try {
-              if (styleTag.innerHTML.includes("oklch")) {
-                styleTag.innerHTML = styleTag.innerHTML.replace(/oklch\([^)]+\)/gi, "#94a3b8");
-              }
-            } catch (e) {
-              // Ignore cross-origin stylesheet errors
-            }
-          });
-
-          // FIX 2: Deep traversal to safely scrub ALL problematic CSS properties 
-          doc.querySelectorAll("*").forEach((node) => {
-            try {
-              if (!(node instanceof HTMLElement) && !(node instanceof SVGElement)) return;
-
-              // Force gradient classes to safe flat colors manually (fixes Timeline circles)
-              if (node.classList?.contains("bg-gradient-to-br")) {
-                if (node.classList.contains("from-emerald-500")) {
-                  node.style.backgroundColor = "#10b981"; // Safe emerald HEX
-                } else if (node.classList.contains("from-violet-600")) {
-                  node.style.backgroundColor = "#7c3aed"; // Safe violet HEX
-                } else {
-                  node.style.backgroundColor = "#cbd5e1"; // Generic fallback
-                }
-                node.style.backgroundImage = "none";
-              }
-
-              const style = doc.defaultView ? doc.defaultView.getComputedStyle(node) : node.style;
-              
-              // Map all CSS properties that html2canvas will parse and potentially crash on
-              const propsToFix = [
-                'color', 'backgroundColor', 'borderColor', 
-                'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-                'fill', 'stroke', 'outlineColor', 'textDecorationColor'
-              ];
-
-              propsToFix.forEach(prop => {
-                const val = style[prop];
-                if (val && (val.includes("oklch") || val.includes("var("))) {
-                  // Apply a safe fallback based on the property context
-                  if (prop === 'backgroundColor') node.style[prop] = '#ffffff';
-                  else if (prop.includes('border') || prop === 'outlineColor') node.style[prop] = '#e2e8f0';
-                  else node.style[prop] = '#111827';
-                }
-              });
-
-              // Disable background images if they contain oklch gradients
-              if (style.backgroundImage && (style.backgroundImage.includes("oklch") || style.backgroundImage.includes("var("))) {
-                node.style.backgroundImage = "none";
-              }
-
-              // Always disable complex properties that crash html2canvas
-              node.style.boxShadow = "none";
-              node.style.filter = "none";
-              node.style.backdropFilter = "none";
-              node.style.animation = "none";
-              node.style.transition = "none";
-            } catch (e) {
-              console.warn("Style cleanup skipped for a node", e);
-            }
-          });
-        },
-      });
-
-      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const margin = 24;
-      const imgW = pageW - margin * 2;
-      const imgH = (canvas.height * imgW) / canvas.width;
-      
-      let remaining = imgH;
-      let srcY = 0;
-      
-      // FIX 3: Solved infinite single-page overdraw logic
-      let isFirstPage = true;
-
-      while (remaining > 0) {
-        if (!isFirstPage) {
-          pdf.addPage();
-        }
-        isFirstPage = false;
-
-        const pageSlice = Math.min(remaining, pageH - margin * 2);
-        const sliceCanvas = document.createElement("canvas");
-        sliceCanvas.width = canvas.width;
-        // FIX 4: Ensure pixel boundaries are integers to avoid Canvas API execution crash
-        sliceCanvas.height = Math.ceil((pageSlice * canvas.width) / imgW);
-        
-        const ctx = sliceCanvas.getContext("2d");
-        if (!ctx) throw new Error("Canvas context failed");
-
-        ctx.drawImage(
-          canvas,
-          0,
-          srcY,
-          canvas.width,
-          sliceCanvas.height,
-          0,
-          0,
-          canvas.width,
-          sliceCanvas.height
-        );
-        
-        pdf.addImage(sliceCanvas.toDataURL("image/png", 1.0), "PNG", margin, margin, imgW, pageSlice);
-        
-        srcY += sliceCanvas.height;
-        remaining -= pageSlice;
-      }
-
-      pdf.save(`job-card-${job.orderId || job.workflowTrackingId}.pdf`);
-      showToast.success("PDF downloaded successfully");
-    } catch (error) {
-      console.error("PDF ERROR:", error);
+      await exportJobCardToPdf(job);
+      showToast.dismiss(loadingToastId);
+      showToast.success("PDF downloaded");
+    } catch (err) {
+      console.error("PDF export error:", err);
+      showToast.dismiss(loadingToastId);
       showToast.error("PDF export failed");
     }
   };
