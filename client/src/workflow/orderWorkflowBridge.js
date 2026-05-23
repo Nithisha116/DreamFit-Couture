@@ -58,6 +58,7 @@ export function registerWorkflowJobsFromOrder(order, works = []) {
   const orderId = order.orderId || order.orderNumber || "";
   const customerName = resolveCustomerName(order);
   const dueDate = order.deliveryDate || order.estimatedDelivery || null;
+  const workflowStages = order.workflowStages || null;
   const existing = loadWorkflowJobs();
   const created = [];
 
@@ -65,10 +66,17 @@ export function registerWorkflowJobsFromOrder(order, works = []) {
     for (const work of works) {
       const normalized = {
         ...work,
+        workflowStages: work.workflowStages || workflowStages,
         order:
           typeof work.order === "object"
-            ? work.order
-            : { _id: orderMongoId, orderId, customer: order.customer, deliveryDate: dueDate },
+            ? { ...work.order, workflowStages: work.order?.workflowStages || workflowStages }
+            : {
+                _id: orderMongoId,
+                orderId,
+                customer: order.customer,
+                deliveryDate: dueDate,
+                workflowStages,
+              },
       };
       const prev = findExistingJobForSlot(existing, {
         workMongoId: work._id,
@@ -102,6 +110,7 @@ export function registerWorkflowJobsFromOrder(order, works = []) {
       dueDate: g.estimatedDelivery || dueDate,
       workCode,
       workMongoId: null,
+      workflowStages,
     };
 
     const job = createJobFromOrderPayload(fields, prev);
@@ -117,6 +126,7 @@ export function registerWorkflowJobsFromOrder(order, works = []) {
         garmentName: "Garment — pending sync",
         dueDate,
         workCode: orderId || undefined,
+        workflowStages,
       }),
     );
   }

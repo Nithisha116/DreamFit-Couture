@@ -4,22 +4,12 @@ import { Search, SlidersHorizontal } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import TasksHeader from "../../components/tasks/TasksHeader";
 import TaskViewToggle from "../../components/tasks/TaskViewToggle";
-import DepartmentTabs from "../../components/tasks/DepartmentTabs";
-import WorkloadPanel from "../../components/tasks/WorkloadPanel";
 import UnassignedTaskCards from "../../components/workflow/UnassignedTaskCards";
 import AssignedTaskCards from "../../components/workflow/AssignedTaskCards";
 import AssignWorkerModal from "../../components/workflow/AssignWorkerModal";
-import {
-  TAB_TO_KEY,
-  EMPLOYEES_BY_DEPARTMENT,
-} from "../../components/tasks/taskConstants";
-import { fetchWorkflowJobs } from "../../features/work/workSlice";
 import useWorkflowJobs from "../../hooks/useWorkflowJobs";
-import { STAGE_TO_DEPARTMENT } from "../../workflow/workflowConstants";
-import { getActiveStageKey } from "../../workflow/workflowEngine";
 import {
   filterAssignedJobs,
-  filterJobsByDepartment,
   filterUnassignedJobs,
   sortJobsForDisplay,
 } from "../../workflow/workflowSelectors";
@@ -34,12 +24,8 @@ export default function TasksPage() {
   const { jobs, refresh } = useWorkflowJobs();
 
   const [view, setView] = useState(location.state?.view || "unassigned");
-  const [activeDept, setActiveDept] = useState("ALL");
   const [search, setSearch] = useState("");
   const [assignJob, setAssignJob] = useState(null);
-
-  const deptKey = TAB_TO_KEY[activeDept];
-  const departmentEmployees = EMPLOYEES_BY_DEPARTMENT[deptKey] || [];
 
   useEffect(() => {
     if (location.state?.view) setView(location.state.view);
@@ -61,26 +47,9 @@ export default function TasksPage() {
     if (view === "unassigned") list = filterUnassignedJobs(jobs);
     else list = filterAssignedJobs(jobs);
 
-    list = filterJobsByDepartment(list, deptKey);
     list = sortJobsForDisplay(list);
     return list.filter(matchesSearch);
-  }, [jobs, view, deptKey, search]);
-
-  const workloadTasks = useMemo(() => {
-    return jobs
-      .filter((j) => j.lifecycleStatus === "open")
-      .filter((j) => !deptKey || deptKey === "all" || STAGE_TO_DEPARTMENT[getActiveStageKey(j)] === deptKey)
-      .map((j) => {
-        const assignee = j.stages?.[getActiveStageKey(j)]?.assignedTo;
-        return {
-          id: j.workflowTrackingId,
-          departmentKey: deptKey || STAGE_TO_DEPARTMENT[getActiveStageKey(j)],
-          completed: false,
-          assignedTo: assignee?.name?.toLowerCase() || "",
-          estimatedHours: 2,
-        };
-      });
-  }, [jobs, deptKey]);
+  }, [jobs, view, search]);
 
   const onAssigned = () => {
     refresh();
@@ -94,8 +63,6 @@ export default function TasksPage() {
         <TasksHeader />
 
         <TaskViewToggle view={view} setView={setView} />
-
-        <DepartmentTabs activeDept={activeDept} setActiveDept={setActiveDept} />
 
         <div className="flex flex-col sm:flex-row gap-3 mb-5">
           <div className="relative flex-1">
@@ -114,24 +81,17 @@ export default function TasksPage() {
           </div>
         </div>
 
-        <div className="flex flex-col xl:flex-row gap-6 items-start">
-          <div className="flex-1 min-w-0 w-full">
-            {view === "unassigned" && (
-              <UnassignedTaskCards
-                jobs={filteredJobs}
-                basePath={basePath}
-                onAssign={(job) => setAssignJob(job)}
-              />
-            )}
-            {view === "assigned" && (
-              <AssignedTaskCards jobs={filteredJobs} basePath={basePath} />
-            )}
-          </div>
-          <WorkloadPanel
-            departmentKey={deptKey || "all"}
-            employees={departmentEmployees}
-            tasks={workloadTasks}
-          />
+        <div className="w-full">
+          {view === "unassigned" && (
+            <UnassignedTaskCards
+              jobs={filteredJobs}
+              basePath={basePath}
+              onAssign={(job) => setAssignJob(job)}
+            />
+          )}
+          {view === "assigned" && (
+            <AssignedTaskCards jobs={filteredJobs} basePath={basePath} />
+          )}
         </div>
       </div>
 

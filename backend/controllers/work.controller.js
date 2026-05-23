@@ -6935,7 +6935,7 @@ export const getWorks = async (req, res) => {
     const works = await Work.find(filter)
       .populate({
         path: 'order',
-        select: 'orderId customer deliveryDate',
+        select: 'orderId customer deliveryDate workflowStages',
         populate: {
           path: 'customer',
           select: 'name'
@@ -8480,7 +8480,7 @@ export const getRecentWorks = async (req, res) => {
     const recentWorks = await Work.find(dateFilter)
       .populate({
         path: 'order',
-        select: 'orderId customer',
+        select: 'orderId customer deliveryDate workflowStages',
         populate: {
           path: 'customer',
           select: 'name phone'

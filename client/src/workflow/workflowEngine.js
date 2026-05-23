@@ -69,12 +69,13 @@ export function recomputeJobMeta(job) {
 
 function workToJobFields(work) {
   const garment = work?.garment;
+  const order = work?.order;
   return {
     workMongoId: work._id,
     workCode: work.workId,
-    orderId: work?.order?.orderId || "",
-    orderMongoId: work?.order?._id || work?.order,
-    customerName: work?.order?.customer?.name || "Customer",
+    orderId: order?.orderId || "",
+    orderMongoId: order?._id || order,
+    customerName: order?.customer?.name || "Customer",
     garmentName: (typeof garment === "object" ? garment?.name : work?.garmentName) || "Garment",
     garmentId: typeof garment === "object" ? garment?.garmentId : "",
     categoryName:
@@ -83,9 +84,27 @@ function workToJobFields(work) {
         : "",
     itemName: typeof garment === "object" ? garment?.itemName || garment?.item?.name : "",
     priority: (typeof garment === "object" ? garment?.priority : work?.priority) || "normal",
-    dueDate: work?.estimatedDelivery || work?.order?.deliveryDate || null,
+    dueDate: work?.estimatedDelivery || order?.deliveryDate || null,
     workStatus: work?.status || "pending",
+    workflowStages: order?.workflowStages || work?.workflowStages || null,
     garment,
+  };
+}
+
+function pruneStagesObject(stages, stageKeys) {
+  const next = {};
+  stageKeys.forEach((k) => {
+    next[k] = stages?.[k] || emptyStage();
+  });
+  return next;
+}
+
+function withWorkflowStages(job, stageKeys) {
+  return {
+    ...job,
+    workflowStages: stageKeys,
+    stageKeys,
+    stages: pruneStagesObject(job.stages, stageKeys),
   };
 }
 
@@ -122,16 +141,20 @@ export function createJobFromWork(work, boutiqueTasks = [], source = "work-sync"
     stages[firstPending] = { ...stages[firstPending], state: "active" };
   }
 
-  const job = recomputeJobMeta({
-    id: existingJob?.id || newId(),
-    workflowTrackingId: existingJob?.workflowTrackingId || newId(),
-    ...fields,
-    stageKeys,
-    stages,
-    source: existingJob?.source || source,
-    createdAt: existingJob?.createdAt || Date.now(),
-    updatedAt: Date.now(),
-  });
+  const job = recomputeJobMeta(
+    withWorkflowStages(
+      {
+        id: existingJob?.id || newId(),
+        workflowTrackingId: existingJob?.workflowTrackingId || newId(),
+        ...fields,
+        stages,
+        source: existingJob?.source || source,
+        createdAt: existingJob?.createdAt || Date.now(),
+        updatedAt: Date.now(),
+      },
+      stageKeys,
+    ),
+  );
 
   return job;
 }
@@ -203,6 +226,7 @@ export function createJobFromOrderPayload(
     dueDate,
     workMongoId,
     workCode,
+    workflowStages,
   },
   existingJob = null,
 ) {
@@ -219,6 +243,7 @@ export function createJobFromOrderPayload(
     workMongoId: workMongoId || null,
     workCode: workCode || null,
     workStatus: "pending",
+    workflowStages: workflowStages || existingJob?.workflowStages,
   };
   const stageKeys = resolveStageKeysForJob({ ...existingJob, ...fields });
   let stages = existingJob?.stages ? { ...existingJob.stages } : initStages(stageKeys);
@@ -231,16 +256,20 @@ export function createJobFromOrderPayload(
     if (stageKeys[0]) stages[stageKeys[0]].state = "active";
   }
 
-  const job = recomputeJobMeta({
-    id: existingJob?.id || newId(),
-    workflowTrackingId: existingJob?.workflowTrackingId || newId(),
-    ...fields,
-    stageKeys,
-    stages,
-    source: existingJob?.source || "order",
-    createdAt: existingJob?.createdAt || Date.now(),
-    updatedAt: Date.now(),
-  });
+  const job = recomputeJobMeta(
+    withWorkflowStages(
+      {
+        id: existingJob?.id || newId(),
+        workflowTrackingId: existingJob?.workflowTrackingId || newId(),
+        ...fields,
+        stages,
+        source: existingJob?.source || "order",
+        createdAt: existingJob?.createdAt || Date.now(),
+        updatedAt: Date.now(),
+      },
+      stageKeys,
+    ),
+  );
   upsertWorkflowJob(job);
   return job;
 }

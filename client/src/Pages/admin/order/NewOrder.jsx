@@ -3953,6 +3953,12 @@ import showToast from "../../../utils/toast";
 import { registerWorkflowJobsFromOrder } from "../../../workflow/orderWorkflowBridge";
 import { fetchWorks } from "../../../features/work/workSlice";
 import { syncWorksToWorkflowJobs } from "../../../workflow/workflowEngine";
+import ProductionWorkflowBuilder from "../../../components/workflow/ProductionWorkflowBuilder";
+import {
+  DEFAULT_WORKFLOW_STAGES,
+  isValidWorkflowStages,
+  normalizeWorkflowStages,
+} from "../../../workflow/workflowStageUtils";
 
 export default function NewOrder() {
   const dispatch = useDispatch();
@@ -4022,6 +4028,9 @@ export default function NewOrder() {
   
   // 🔥 NEW: Track current order ID for payments after creation
   const [currentOrderId, setCurrentOrderId] = useState("temp");
+
+  // 🧵 Per-order production workflow (SSOT for tasks, QR, pipeline)
+  const [workflowStages, setWorkflowStages] = useState([...DEFAULT_WORKFLOW_STAGES]);
 
   // 👕 Garments management
   const [garments, setGarments] = useState([]);
@@ -5167,10 +5176,18 @@ const renderDayContents = useCallback((day, date) => {
       
       console.log("💰 Price summary:", { safeTotalMin, safeTotalMax, safeTotalPayments });
       
+      if (!isValidWorkflowStages(workflowStages)) {
+        showToast.error("Add at least one production workflow stage");
+        isSubmittingRef.current = false;
+        setIsSubmitting(false);
+        return;
+      }
+
       const orderData = {
         customer: formData.customer,
         deliveryDate: formData.deliveryDate,
         specialNotes: formData.specialNotes || "",
+        workflowStages: normalizeWorkflowStages(workflowStages),
         payments: mappedPayments,
         // NOTE: advancePayment is derived from payments[] on the backend.
         // Do NOT send it separately to avoid duplicate entries.
@@ -5366,6 +5383,7 @@ const renderDayContents = useCallback((day, date) => {
             : { name: selectedCustomerDisplay || "Customer" },
           deliveryDate: apiOrder.deliveryDate || orderData.deliveryDate,
           garments: orderData.garments,
+          workflowStages: apiOrder.workflowStages || orderData.workflowStages,
         };
         registerWorkflowJobsFromOrder(orderPayload, []);
 
@@ -5570,6 +5588,13 @@ const renderDayContents = useCallback((day, date) => {
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
               />
             </div>
+          </div>
+
+          <div className="mb-6">
+            <ProductionWorkflowBuilder
+              stages={workflowStages}
+              onChange={setWorkflowStages}
+            />
           </div>
 
           {/* 🔥 GARMENTS SECTION - WITH UPDATED IMAGE LAYOUT */}

@@ -36,6 +36,11 @@ const orderSchema = new mongoose.Schema({
     index: true
   },
   garments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Garment" }],
+  /** Per-order production pipeline — SSOT for workflow / QR / tasks */
+  workflowStages: {
+    type: [String],
+    default: () => ["cutting", "stitching", "ironing", "packed"],
+  },
   specialNotes: { type: String, default: "" },
   priceSummary: { type: priceSummarySchema, default: () => ({ totalMin: 0, totalMax: 0 }) },
   // NOTE: payments are stored in the separate Payment collection — NOT embedded here

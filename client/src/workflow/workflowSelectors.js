@@ -1,6 +1,3 @@
-import { STAGE_TO_DEPARTMENT } from "./workflowConstants";
-import { getActiveStageKey } from "./workflowEngine";
-
 export function filterUnassignedJobs(jobs) {
   return jobs.filter(
     (j) => j.lifecycleStatus === "open" && j.assignmentStatus === "unassigned",
@@ -15,11 +12,6 @@ export function filterAssignedJobs(jobs) {
 
 export function filterCompletedJobs(jobs) {
   return jobs.filter((j) => j.lifecycleStatus === "completed");
-}
-
-export function filterJobsByDepartment(jobs, departmentKey) {
-  if (!departmentKey || departmentKey === "all") return jobs;
-  return jobs.filter((j) => STAGE_TO_DEPARTMENT[getActiveStageKey(j)] === departmentKey);
 }
 
 export function sortJobsForDisplay(jobs) {
