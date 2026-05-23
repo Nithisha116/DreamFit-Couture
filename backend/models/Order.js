@@ -38,8 +38,18 @@ const orderSchema = new mongoose.Schema({
   garments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Garment" }],
   /** Per-order production pipeline — SSOT for workflow / QR / tasks */
   workflowStages: {
-    type: [String],
-    default: () => ["cutting", "stitching", "ironing", "packed"],
+    type: [{
+      key: { type: String, required: true },
+      label: { type: String, required: true },
+      order: { type: Number, required: true },
+      status: { type: String, enum: ["pending", "active", "completed"], default: "pending" }
+    }],
+    default: () => [
+      { key: "cutting", label: "Cutting", order: 1, status: "active" },
+      { key: "stitching", label: "Stitching", order: 2, status: "pending" },
+      { key: "ironing", label: "Ironing", order: 3, status: "pending" },
+      { key: "packed", label: "Packed / Ready", order: 4, status: "pending" }
+    ],
   },
   specialNotes: { type: String, default: "" },
   priceSummary: { type: priceSummarySchema, default: () => ({ totalMin: 0, totalMax: 0 }) },

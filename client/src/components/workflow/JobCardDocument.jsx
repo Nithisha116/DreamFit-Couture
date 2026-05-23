@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
 import { format } from "date-fns";
 import WorkflowStageTimeline from "./WorkflowStageTimeline";
-import { PIPELINE_STAGE_DEFS } from "../../workflow/workflowConstants";
+import { PIPELINE_STAGE_DEFS, getStageLabelFromDef } from "../../workflow/workflowConstants";
 
 /* ── Print-safe CSS injected once ─────────────────────────────── */
 const PRINT_STYLES = `
@@ -122,7 +122,7 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
       if (!s?.completedAt && s?.state !== "active") return null;
       return {
         key,
-        label: PIPELINE_STAGE_DEFS[key]?.label || key,
+        label: getStageLabelFromDef(key, job?.workflowStages),
         state: s.state,
         at: s.completedAt,
         by: s.completedBy,
@@ -205,7 +205,7 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
               const s = job.stages?.[key];
               const workerName = s?.assignedTo?.name || "Unassigned";
               const workerRole = s?.assignedTo?.role || "Pending";
-              const label = PIPELINE_STAGE_DEFS[key]?.label || key;
+              const label = getStageLabelFromDef(key, job?.workflowStages);
               return (
                 <div key={key} className="rounded-lg bg-slate-50 border border-slate-100 p-2.5">
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>

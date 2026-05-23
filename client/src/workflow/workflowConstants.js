@@ -4,12 +4,14 @@ export const WORKFLOW_LS_KEY = "dreamfit_workflow_jobs_v1";
 export const WORKFLOW_CHANGED_EVENT = "dreamfit-workflow-changed";
 
 export const PIPELINE_STAGE_DEFS = {
-  cutting: { key: "cutting", label: "Cutting", shortLabel: "Cut" },
-  embroidery: { key: "embroidery", label: "Embroidery", shortLabel: "Emb" },
-  aari: { key: "aari", label: "Aari Work", shortLabel: "Aari" },
-  stitching: { key: "stitching", label: "Stitching", shortLabel: "Stitch" },
-  ironing: { key: "ironing", label: "Ironing", shortLabel: "Iron" },
-  packed: { key: "packed", label: "Packed / Ready", shortLabel: "Pack" },
+  cutting:    { key: "cutting",    label: "Cutting",        shortLabel: "Cut"    },
+  embroidery: { key: "embroidery", label: "Embroidery",     shortLabel: "Emb"    },
+  aari:       { key: "aari",       label: "Aari Work",      shortLabel: "Aari"   },
+  stitching:  { key: "stitching",  label: "Stitching",      shortLabel: "Stitch" },
+  ironing:    { key: "ironing",    label: "Ironing",        shortLabel: "Iron"   },
+  finishing:  { key: "finishing",  label: "Finishing & QC", shortLabel: "Fin"    },
+  packing:    { key: "packing",    label: "Packing",        shortLabel: "Pack"   },
+  packed:     { key: "packed",     label: "Packed / Ready", shortLabel: "Done"   },
 };
 
 const VALID_KEYS = new Set(Object.keys(PIPELINE_STAGE_DEFS));
@@ -28,14 +30,56 @@ export function normalizeStageKey(key) {
   return k;
 }
 
-/** Validate and dedupe workflow stage list (SSOT shape) */
+/**
+ * Resolve the human-readable label for a stage key.
+ * Checks a custom workflowStages array first (backend object format),
+ * then falls back to PIPELINE_STAGE_DEFS, then the key itself.
+ */
+export function getStageLabelFromDef(key, workflowStages) {
+  // Check the custom order-level workflowStages array first
+  if (Array.isArray(workflowStages)) {
+    const found = workflowStages.find(
+      s => (typeof s === "object" ? s.key : s) === key
+    );
+    if (found?.label) return found.label;
+  }
+  return PIPELINE_STAGE_DEFS[key]?.label || (key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " "));
+}
+
+/**
+ * Resolve the short label (for timeline bubbles) for a stage key.
+ */
+export function getStageShortLabel(key, workflowStages) {
+  if (Array.isArray(workflowStages)) {
+    const found = workflowStages.find(
+      s => (typeof s === "object" ? s.key : s) === key
+    );
+    if (found?.shortLabel) return found.shortLabel;
+    if (found?.label) return found.label.slice(0, 4);
+  }
+  return PIPELINE_STAGE_DEFS[key]?.shortLabel || key.slice(0, 4).toUpperCase();
+}
+
+/**
+ * Validate and dedupe workflow stage list (SSOT shape).
+ * Accepts either:
+ *   - string[]  e.g. ["cutting", "stitching"]
+ *   - object[]  e.g. [{ key, label, order, status }]  ← backend format
+ * Always returns string[] of canonical keys.
+ */
 export function normalizeWorkflowStages(stages) {
   if (!Array.isArray(stages)) return [];
   const seen = new Set();
   const out = [];
   for (const raw of stages) {
-    const key = normalizeStageKey(raw);
-    if (!VALID_KEYS.has(key) || seen.has(key)) continue;
+    // Support both string ("cutting") and object ({ key: "cutting", ... })
+    const rawKey = typeof raw === "object" && raw !== null
+      ? (raw.key || raw.stage || raw.id)
+      : raw;
+    const key = normalizeStageKey(rawKey);
+    // Allow any non-empty key — not just predefined keys —
+    // so custom stages ("embroidery", "finishing", "aari", etc.) pass through.
+    if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(key);
   }

@@ -34,6 +34,20 @@ const workSchema = new mongoose.Schema({
   qrCode: String,
   currentStage: String,
   overallStatus: String,
+  workflowStages: {
+    type: [{
+      key: { type: String, required: true },
+      label: { type: String, required: true },
+      order: { type: Number, required: true },
+      status: { type: String, enum: ["pending", "active", "completed"], default: "pending" }
+    }],
+    default: () => [
+      { key: "cutting", label: "Cutting", order: 1, status: "active" },
+      { key: "stitching", label: "Stitching", order: 2, status: "pending" },
+      { key: "ironing", label: "Ironing", order: 3, status: "pending" },
+      { key: "packed", label: "Packed / Ready", order: 4, status: "pending" }
+    ],
+  },
 
   scanLogs: [{
     scannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -54,18 +68,6 @@ const workSchema = new mongoose.Schema({
   
   status: {
     type: String,
-    enum: [
-      'pending',
-      'accepted',
-      'in-progress',
-      'cutting-started',
-      'cutting-completed',
-      'sewing-started',
-      'sewing-completed',
-      'ironing',
-      'ready-to-deliver',
-      'completed'
-    ],
     default: 'pending'
   },
   

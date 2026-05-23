@@ -5694,6 +5694,7 @@ const createWorksFromGarments = async (orderId, garmentIds, creatorId) => {
         createdBy: creatorId,
         status: "pending",
         cuttingMaster: null,
+        workflowStages: order.workflowStages || [],
         estimatedDelivery: garment.estimatedDelivery || new Date(Date.now() + 7*24*60*60*1000)
       });
       
@@ -5910,6 +5911,27 @@ export const createOrder = async (req, res) => {
     if (!workflowStages.length) {
       workflowStages = ['cutting', 'stitching', 'ironing', 'packed'];
     }
+
+    const PIPELINE_STAGE_DEFS_MAP = {
+      cutting:    { label: 'Cutting' },
+      stitching:  { label: 'Stitching' },
+      embroidery: { label: 'Embroidery' },
+      aari:       { label: 'Aari Work' },
+      ironing:    { label: 'Ironing' },
+      finishing:  { label: 'Finishing & QC' },
+      packing:    { label: 'Packing' },
+      packed:     { label: 'Packed / Ready' }
+    };
+
+    workflowStages = workflowStages.map((key, index) => {
+      const def = PIPELINE_STAGE_DEFS_MAP[key] || {};
+      return {
+        key,
+        label: def.label || (key.charAt(0).toUpperCase() + key.slice(1)),
+        order: index + 1,
+        status: index === 0 ? 'active' : 'pending'
+      };
+    });
 
     const creatorId = req.user?._id || req.user?.id;
     if (!creatorId) {

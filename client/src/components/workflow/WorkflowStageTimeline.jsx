@@ -1,5 +1,8 @@
 import { Check } from "lucide-react";
-import { PIPELINE_STAGE_DEFS } from "../../workflow/workflowConstants";
+import {
+  getStageLabelFromDef,
+  getStageShortLabel,
+} from "../../workflow/workflowConstants";
 
 export default function WorkflowStageTimeline({ job, compact = false }) {
   const keys = job?.stageKeys || [];
@@ -8,7 +11,8 @@ export default function WorkflowStageTimeline({ job, compact = false }) {
     <div className={`flex items-start ${compact ? "gap-0" : "gap-1"} overflow-x-auto pb-1`}>
       {keys.map((key, i) => {
         const stage = job.stages?.[key];
-        const def = PIPELINE_STAGE_DEFS[key];
+        const label = getStageLabelFromDef(key, job?.workflowStages);
+        const shortLabel = getStageShortLabel(key, job?.workflowStages);
         const isCompleted = stage?.state === "completed";
         const isActive = stage?.state === "active";
         const isLast = i === keys.length - 1;
@@ -26,7 +30,7 @@ export default function WorkflowStageTimeline({ job, compact = false }) {
                       : "border-slate-200 bg-slate-50 text-slate-400",
                 ].join(" ")}
               >
-                {isCompleted ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : def?.shortLabel}
+                {isCompleted ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : shortLabel}
               </div>
               {!compact && (
                 <span
@@ -35,7 +39,7 @@ export default function WorkflowStageTimeline({ job, compact = false }) {
                     isCompleted ? "text-emerald-700" : isActive ? "text-violet-700" : "text-slate-400",
                   ].join(" ")}
                 >
-                  {def?.label}
+                  {label}
                 </span>
               )}
             </div>

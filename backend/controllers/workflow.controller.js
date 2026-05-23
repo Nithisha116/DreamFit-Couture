@@ -14,12 +14,33 @@ const PIPELINE_STAGE_DEFS = {
   ironing:    { id: 'ironing',    label: 'Ironing',        department: 'ironing'    },
   finishing:  { id: 'finishing',  label: 'Finishing & QC', department: 'finishing'  },
   packing:    { id: 'packing',    label: 'Packing',        department: 'packing'    },
+  packed:     { id: 'packed',     label: 'Packed / Ready',  department: 'packing'    },
 };
+
+// Helper: Get workflow stages array of objects
+function getWorkflowStages(work) {
+  if (work.workflowStages && work.workflowStages.length > 0) {
+    return [...work.workflowStages].sort((a, b) => a.order - b.order);
+  }
+  if (work.order?.workflowStages && work.order.workflowStages.length > 0) {
+    return [...work.order.workflowStages].sort((a, b) => a.order - b.order);
+  }
+  const defaultKeys = ['cutting', 'stitching', 'ironing', 'packed'];
+  return defaultKeys.map((key, i) => {
+    const def = PIPELINE_STAGE_DEFS[key] || { label: key.charAt(0).toUpperCase() + key.slice(1) };
+    return {
+      key,
+      label: def.label || key,
+      order: i + 1,
+      status: i === 0 ? 'active' : 'pending'
+    };
+  });
+}
 
 // Helper: Determine stages based on garment/work
 function resolveStageKeysForJob(work) {
-  // Default pipeline — can be extended based on garment category later
-  return ['cutting', 'stitching', 'ironing', 'packing'];
+  const stages = getWorkflowStages(work);
+  return stages.map(s => s.key);
 }
 
 // Helper: Get active stage key
@@ -50,11 +71,16 @@ export const getWorkflowJobs = async (req, res) => {
 
     const jobs = works.map(work => {
       const garment   = work.garment;
-      const stageKeys = resolveStageKeysForJob(work);
+      const workflowStages = getWorkflowStages(work);
+      const stageKeys = workflowStages.map(s => s.key);
 
       const stages = {};
-      stageKeys.forEach(k => {
-        stages[k] = { state: 'pending', assignedTo: null, completedAt: null };
+      workflowStages.forEach(s => {
+        stages[s.key] = { 
+          state: s.status || 'pending', 
+          assignedTo: null, 
+          completedAt: null 
+        };
       });
 
       // Populate from work.assignments
@@ -79,10 +105,14 @@ export const getWorkflowJobs = async (req, res) => {
       if (stageKeys[0] && !Object.values(stages).some(s => s.state === 'active')) {
         const firstPending =
           stageKeys.find(k => stages[k].state !== 'completed') || stageKeys[0];
-        stages[firstPending].state = 'active';
+        if (stages[firstPending]) {
+          stages[firstPending].state = 'active';
+        }
       }
 
       const activeKey        = getActiveStageKey(stages);
+      const activeStageObj   = workflowStages.find(s => s.key === activeKey);
+      const currentStageLabel = activeStageObj?.label || PIPELINE_STAGE_DEFS[activeKey]?.label || activeKey;
       const assignmentStatus = stages[activeKey]?.assignedTo ? 'assigned' : 'unassigned';
       const lifecycleStatus  = stageKeys.every(k => stages[k].state === 'completed')
         ? 'completed'
@@ -103,10 +133,11 @@ export const getWorkflowJobs = async (req, res) => {
         stageKeys,
         stages,
         currentStageKey:     activeKey,
-        currentStageLabel:   PIPELINE_STAGE_DEFS[activeKey]?.label || 'In progress',
+        currentStageLabel,
         priority:            garment?.priority || work.priority || 'normal',
         assignmentStatus,
         lifecycleStatus,
+        workflowStages,
         // ── Measurements ──────────────────────────────
         measurements:        garment?.measurements || [],
         measurementSource:   garment?.measurementSource || 'template',
@@ -261,29 +292,38 @@ export const processQrScan = async (req, res) => {
 
     const stageKeys = resolveStageKeysForJob(work);
 
-    // Reconstruct stage states
-    const stages = {};
-    stageKeys.forEach(key => {
-      stages[key] = { state: 'pending' };
-      const assignment = work.assignments.find(a => a.stage === key);
-      if (assignment) {
-        stages[key].state = assignment.status === 'completed' ? 'completed' : 'active';
-      }
-    });
-
-    // Promote first pending if none is active
-    if (!Object.values(stages).some(s => s.state === 'active')) {
-      const firstPending = stageKeys.find(k => stages[k].state !== 'completed');
-      if (firstPending) stages[firstPending].state = 'active';
+    // Ensure workflowStages array is initialized
+    if (!work.workflowStages || work.workflowStages.length === 0) {
+      work.workflowStages = stageKeys.map((key, i) => {
+        const def = PIPELINE_STAGE_DEFS[key] || {};
+        return {
+          key,
+          label: def.label || (key.charAt(0).toUpperCase() + key.slice(1)),
+          order: i + 1,
+          status: i === 0 ? 'active' : 'pending'
+        };
+      });
     }
 
-    const activeKey = getActiveStageKey(stages);
+    // Find the current active stage in work.workflowStages
+    let activeStage = work.workflowStages.find(s => s.status === 'active');
+    if (!activeStage) {
+      activeStage = work.workflowStages.find(s => s.status === 'pending');
+      if (activeStage) {
+        activeStage.status = 'active';
+      }
+    }
 
-    if (!activeKey) {
+    if (!activeStage) {
       return res.status(400).json({ success: false, message: 'Workflow is already completed' });
     }
 
-    // Mark active stage completed
+    const activeKey = activeStage.key;
+
+    // Mark active stage completed in work.workflowStages
+    activeStage.status = 'completed';
+
+    // Mark active stage completed in assignments
     const activeAssignmentIndex = work.assignments.findIndex(a => a.stage === activeKey);
     let completedWorkerName = 'Unknown Worker';
 
@@ -304,7 +344,7 @@ export const processQrScan = async (req, res) => {
       completedWorkerName = req.user?.name || 'System';
     }
 
-    const currentStageLabel = PIPELINE_STAGE_DEFS[activeKey]?.label || activeKey;
+    const currentStageLabel = activeStage.label;
 
     // Scan log
     work.scanLogs.push({
@@ -324,26 +364,22 @@ export const processQrScan = async (req, res) => {
       actorName: req.user?.name || 'System',
     });
 
-    // Advance to next stage
-    const nextStageIndex = stageKeys.indexOf(activeKey) + 1;
+    // Advance to next stage dynamically
+    const currentOrder = activeStage.order;
+    const nextStage = [...work.workflowStages]
+      .sort((a, b) => a.order - b.order)
+      .find(s => s.order > currentOrder);
+
     let nextStageKey   = null;
     let nextStageLabel = null;
 
-    if (nextStageIndex < stageKeys.length) {
-      nextStageKey   = stageKeys[nextStageIndex];
-      nextStageLabel = PIPELINE_STAGE_DEFS[nextStageKey]?.label || nextStageKey;
+    if (nextStage) {
+      nextStage.status = 'active';
+      nextStageKey = nextStage.key;
+      nextStageLabel = nextStage.label;
       work.currentStage   = nextStageKey;
       work.overallStatus  = 'in-progress';
-
-      const statusMapping = {
-        cutting:   'cutting-completed',
-        stitching: 'sewing-completed',
-        ironing:   'ironing',
-        packing:   'ready-to-deliver',
-      };
-      if (statusMapping[activeKey]) {
-        work.status = statusMapping[activeKey];
-      }
+      work.status         = `${activeKey}-completed`;
     } else {
       work.currentStage  = 'completed';
       work.overallStatus = 'completed';

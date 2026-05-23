@@ -2,7 +2,8 @@ import {
   PIPELINE_STAGE_DEFS,
   DEFAULT_WORKFLOW_STAGES,
   normalizeStageKey,
-  normalizeWorkflowStages 
+  normalizeWorkflowStages,
+  getStageLabelFromDef
 } from "./workflowConstants";
 
 /** Selectable blocks for order workflow builder */
@@ -18,8 +19,8 @@ export const AVAILABLE_WORKFLOW_BLOCKS = [
 // Re-exporting if other parts of your app imported it from here previously
 export { DEFAULT_WORKFLOW_STAGES, normalizeStageKey, normalizeWorkflowStages };
 
-export function getStageLabel(key) {
-  return PIPELINE_STAGE_DEFS[normalizeStageKey(key)]?.label || key;
+export function getStageLabel(key, workflowStages) {
+  return getStageLabelFromDef(normalizeStageKey(key), workflowStages);
 }
 
 export function isValidWorkflowStages(stages) {

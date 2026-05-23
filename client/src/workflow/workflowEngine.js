@@ -2,6 +2,7 @@ import {
   PIPELINE_STAGE_DEFS,
   STAGE_TO_WORKER_ROLE,
   resolveStageKeysForJob,
+  getStageLabelFromDef,
 } from "./workflowConstants";
 import {
   emitWorkflowChanged,
@@ -57,18 +58,20 @@ export function deriveLifecycleStatus(job) {
 }
 
 export function recomputeJobMeta(job) {
+  const activeKey = getActiveStageKey(job);
   return {
     ...job,
     assignmentStatus: deriveAssignmentStatus(job),
     lifecycleStatus: deriveLifecycleStatus(job),
-    currentStageKey: getActiveStageKey(job),
+    currentStageKey: activeKey,
     currentStageLabel:
-      PIPELINE_STAGE_DEFS[getActiveStageKey(job)]?.label || "In progress",
+      getStageLabelFromDef(activeKey, job?.workflowStages) || "In progress",
   };
 }
 
 function workToJobFields(work) {
   const order = work?.order;
+  const garment = work?.garment;
   const garmentObj = typeof garment === "object" ? garment : null;
   return {
     workMongoId: work._id,

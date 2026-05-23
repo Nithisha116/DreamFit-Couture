@@ -2,7 +2,11 @@
  * Delivery pipeline — reads WorkflowJob SSOT; falls back to Work when no job exists.
  */
 
-import { PIPELINE_STAGE_DEFS } from "../workflow/workflowConstants";
+import {
+  PIPELINE_STAGE_DEFS,
+  getStageLabelFromDef,
+  getStageShortLabel
+} from "../workflow/workflowConstants";
 import { normalizeWorkflowStages } from "../workflow/workflowStageUtils";
 import { getActiveStageKey } from "../workflow/workflowEngine";
 import { getWorkflowJobByWorkMongoId } from "../workflow/workflowStorage";
@@ -26,7 +30,9 @@ export function loadBoutiqueTasks() {
 export function buildPipelineViewModelFromJob(job) {
   const stageKeys = normalizeWorkflowStages(job.workflowStages || job.stageKeys);
   const stages = stageKeys.map((key) => ({
-    ...PIPELINE_STAGE_DEFS[key],
+    key,
+    label: getStageLabelFromDef(key, job.workflowStages),
+    shortLabel: getStageShortLabel(key, job.workflowStages),
     state: job.stages?.[key]?.state || "pending",
   }));
 
@@ -42,6 +48,7 @@ export function buildPipelineViewModelFromJob(job) {
     delayDays = Math.max(1, Math.ceil(ms / (1000 * 60 * 60 * 24)));
   }
 
+  const activeKey = getActiveStageKey(job);
   return {
     workId: job.workMongoId || job.id,
     workflowTrackingId: job.workflowTrackingId,
@@ -51,7 +58,7 @@ export function buildPipelineViewModelFromJob(job) {
     productName: job.garmentName || "Garment",
     deliveryDate,
     workStatus: job.workStatus,
-    currentStageLabel: job.currentStageLabel || PIPELINE_STAGE_DEFS[getActiveStageKey(job)]?.label,
+    currentStageLabel: job.currentStageLabel || getStageLabelFromDef(activeKey, job.workflowStages),
     stages,
     priority: job.priority || "normal",
     isHighPriority: job.priority === "high",
@@ -135,7 +142,12 @@ function legacyBuildFromWork(work, boutiqueTasks) {
     if (status === "ready-to-deliver") state = "completed";
     else if (idx < activeIdx) state = "completed";
     else if (idx === activeIdx) state = "active";
-    return { ...PIPELINE_STAGE_DEFS[key], state };
+    return {
+      key,
+      label: getStageLabelFromDef(key, work.workflowStages),
+      shortLabel: getStageShortLabel(key, work.workflowStages),
+      state
+    };
   });
 
   const garment = work?.garment;
@@ -161,7 +173,7 @@ function legacyBuildFromWork(work, boutiqueTasks) {
     productName: (typeof garment === "object" ? garment?.name : work?.garmentName) || "Garment",
     deliveryDate,
     workStatus: status,
-    currentStageLabel: PIPELINE_STAGE_DEFS[stageKeys[activeIdx]]?.label || "In progress",
+    currentStageLabel: getStageLabelFromDef(stageKeys[activeIdx], work.workflowStages) || "In progress",
     stages,
     priority,
     isHighPriority: priority === "high",
