@@ -6302,13 +6302,20 @@ export const getAllOrders = async (req, res) => {
       const customerIds = await Customer.find({
         $or: [
           { name: { $regex: search, $options: 'i' } },
+          { customerId: { $regex: search, $options: 'i' } },
           { phone: { $regex: search, $options: 'i' } }
         ]
       }).distinct('_id');
       
+      const garmentIds = await Garment.find({
+        name: { $regex: search, $options: 'i' }
+      }).distinct('_id');
+
       query.$or = [
         { orderId: { $regex: search, $options: 'i' } },
-        { customer: { $in: customerIds } }
+        { customer: { $in: customerIds } },
+        { garments: { $in: garmentIds } },
+        { status: { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -6933,102 +6940,145 @@ export const getIncomeByOrder = async (req, res) => {
 // ============================================
 export const getOrderStatsForDashboard = async (req, res) => {
   try {
-    const { startDate, endDate, period } = req.query;
-    
-    let dateFilter = { isActive: true };
-    
-    if (period === 'today') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+    const {
+      search = "",
+      paymentStatus,
+      timeFilter = "all",
+      startDate,
+      endDate,
+    } = req.query;
+
+    let query = { isActive: true };
+
+    if (search) {
+      const customerIds = await Customer.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { customerId: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } }
+        ]
+      }).distinct('_id');
       
-      dateFilter.orderDate = {
-        $gte: today,
-        $lt: tomorrow
-      };
-    } 
-    else if (period === 'week') {
-      const today = new Date();
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - today.getDay());
-      startOfWeek.setHours(0, 0, 0, 0);
-      
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 7);
-      
-      dateFilter.orderDate = {
-        $gte: startOfWeek,
-        $lt: endOfWeek
-      };
-    }
-    else if (period === 'month') {
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      endOfMonth.setHours(23, 59, 59, 999);
-      
-      dateFilter.orderDate = {
-        $gte: startOfMonth,
-        $lte: endOfMonth
-      };
-    }
-    else if (startDate && endDate) {
-      dateFilter.orderDate = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate + 'T23:59:59.999Z')
-      };
+      const garmentIds = await Garment.find({
+        name: { $regex: search, $options: 'i' }
+      }).distinct('_id');
+
+      query.$or = [
+        { orderId: { $regex: search, $options: 'i' } },
+        { customer: { $in: customerIds } },
+        { garments: { $in: garmentIds } },
+        { status: { $regex: search, $options: 'i' } }
+      ];
     }
 
-    const totalOrdersInRange = await Order.countDocuments(dateFilter);
+    if (paymentStatus && paymentStatus !== "all") {
+      query['paymentSummary.paymentStatus'] = paymentStatus;
+    }
 
-    const pendingOrders = await Order.countDocuments({ 
-      ...dateFilter,
-      status: 'confirmed'
-    });
-    
-    const cuttingOrders = await Order.countDocuments({ 
-      ...dateFilter,
-      status: 'in-progress'
-    });
-    
-    const readyOrders = await Order.countDocuments({ 
-      ...dateFilter,
-      status: 'ready-to-delivery'
-    });
-    
-    const deliveredOrders = await Order.countDocuments({ 
-      ...dateFilter,
-      status: 'delivered'
-    });
+    const now = new Date();
+    if (timeFilter !== "all") {
+      let filterDate = new Date();
+      if (timeFilter === "week") filterDate.setDate(now.getDate() - 7);
+      else if (timeFilter === "month") filterDate.setMonth(now.getMonth() - 1);
+      else if (timeFilter === "3m") filterDate.setMonth(now.getMonth() - 3);
+      else if (timeFilter === "6m") filterDate.setMonth(now.getMonth() - 6);
+      else if (timeFilter === "1y") filterDate.setFullYear(now.getFullYear() - 1);
+      
+      query.createdAt = { $gte: filterDate };
+    }
 
-    const cancelledOrders = await Order.countDocuments({ 
-      ...dateFilter,
-      status: 'cancelled'
-    });
+    if (startDate && endDate) {
+      query.createdAt = { 
+        $gte: new Date(startDate), 
+        $lte: new Date(endDate) 
+      };
+    }
 
-    const draftOrders = await Order.countDocuments({ 
-      ...dateFilter,
-      status: 'draft'
-    });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    const stats = {
-      total: totalOrdersInRange,
-      pending: pendingOrders,
-      cutting: cuttingOrders,
-      stitching: cuttingOrders,
-      ready: readyOrders,
-      delivered: deliveredOrders,
-      cancelled: cancelledOrders,
-      draft: draftOrders,
-      confirmed: pendingOrders,
-      'in-progress': cuttingOrders,
-      'ready-to-delivery': readyOrders
-    };
+    const [
+      totalOrders,
+      draftOrders,
+      confirmedOrders,
+      inProgressOrders,
+      cuttingOrders,
+      stitchingOrders,
+      trialOrders,
+      readyOrders,
+      deliveredOrders,
+      cancelledOrders,
+      overdueOrders,
+      revenueResult
+    ] = await Promise.all([
+      // totalOrders
+      Order.countDocuments(query),
+      // draftOrders
+      Order.countDocuments({ ...query, status: 'draft' }),
+      // confirmedOrders
+      Order.countDocuments({ ...query, status: 'confirmed' }),
+      // inProgressOrders
+      Order.countDocuments({ ...query, status: 'in-progress' }),
+      // cuttingOrders
+      Order.countDocuments({ ...query, status: 'cutting' }),
+      // stitchingOrders
+      Order.countDocuments({ ...query, status: 'stitching' }),
+      // trialOrders
+      Order.countDocuments({ ...query, status: 'trial' }),
+      // readyOrders
+      Order.countDocuments({ ...query, status: 'ready-to-delivery' }),
+      // deliveredOrders
+      Order.countDocuments({ ...query, status: 'delivered' }),
+      // cancelledOrders
+      Order.countDocuments({ ...query, status: 'cancelled' }),
+      // overdueOrders
+      Order.countDocuments({ 
+        ...query, 
+        deliveryDate: { $lt: today }, 
+        status: { $nin: ['delivered', 'cancelled'] } 
+      }),
+      // totalRevenue
+      Order.aggregate([
+        { $match: query },
+        { $group: { _id: null, total: { $sum: "$paymentSummary.totalPaid" } } }
+      ])
+    ]);
+
+    const totalRevenue = revenueResult[0]?.total || 0;
+    const pendingOrders = draftOrders + confirmedOrders;
+    const inProductionOrders = inProgressOrders + cuttingOrders + stitchingOrders + trialOrders;
 
     res.status(200).json({
       success: true,
-      data: stats
+      data: {
+        totalOrders,
+        draftOrders,
+        confirmedOrders,
+        inProgressOrders,
+        cuttingOrders,
+        stitchingOrders,
+        trialOrders,
+        readyOrders,
+        deliveredOrders,
+        cancelledOrders,
+        overdueOrders,
+        pendingOrders,
+        inProductionOrders,
+        total: totalOrders,
+        draft: draftOrders,
+        confirmed: confirmedOrders,
+        'in-progress': inProgressOrders,
+        cutting: cuttingOrders,
+        stitching: stitchingOrders,
+        trial: trialOrders,
+        ready: readyOrders,
+        'ready-to-delivery': readyOrders,
+        delivered: deliveredOrders,
+        cancelled: cancelledOrders,
+        overdue: overdueOrders,
+        revenue: totalRevenue,
+        totalRevenue
+      }
     });
 
   } catch (error) {

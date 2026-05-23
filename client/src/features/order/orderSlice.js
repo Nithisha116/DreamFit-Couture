@@ -9765,26 +9765,31 @@ const orderSlice = createSlice({
         console.log('✅ [Reducer] Payload:', action.payload);
         state.loading = false;
         
+        const payloadData = action.payload || {};
+        
         // Merge with existing stats
         state.stats = {
           ...state.stats,
-          ...action.payload,
+          ...payloadData,
           // Ensure all required fields exist
-          total: action.payload.total || 0,
-          pending: action.payload.pending || 0,
-          cutting: action.payload.cutting || 0,
-          stitching: action.payload.stitching || 0,
-          ready: action.payload.ready || 0,
-          delivered: action.payload.delivered || 0,
-          cancelled: action.payload.cancelled || 0,
-          draft: action.payload.draft || 0,
-          confirmed: action.payload.confirmed || 0,
-          'in-progress': action.payload['in-progress'] || 0,
-          'ready-to-delivery': action.payload['ready-to-delivery'] || 0,
-          today: action.payload.today || 0,
-          thisWeek: action.payload.thisWeek || 0,
-          thisMonth: action.payload.thisMonth || 0,
-          inProgress: action.payload.inProgress || action.payload.cutting || 0
+          total: payloadData.total || payloadData.totalOrders || 0,
+          pending: payloadData.pending || payloadData.pendingOrders || 0,
+          cutting: payloadData.cutting || 0,
+          stitching: payloadData.stitching || 0,
+          ready: payloadData.ready || payloadData.readyOrders || 0,
+          delivered: payloadData.delivered || payloadData.deliveredOrders || 0,
+          cancelled: payloadData.cancelled || 0,
+          draft: payloadData.draft || 0,
+          trial: payloadData.trial || 0,
+          confirmed: payloadData.confirmed || payloadData.confirmedOrders || 0,
+          'in-progress': payloadData['in-progress'] || payloadData.inProductionOrders || 0,
+          'ready-to-delivery': payloadData['ready-to-delivery'] || payloadData.readyOrders || 0,
+          today: payloadData.today || 0,
+          thisWeek: payloadData.thisWeek || 0,
+          thisMonth: payloadData.thisMonth || 0,
+          inProgress: payloadData.inProgress || payloadData.inProductionOrders || payloadData.cutting || 0,
+          overdue: payloadData.overdue || payloadData.overdueOrders || 0,
+          revenue: payloadData.revenue || payloadData.totalRevenue || 0
         };
         
         console.log('📊 [Reducer] Updated stats:', state.stats);

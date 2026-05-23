@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Search, Plus, ChevronLeft, ChevronRight, X, SlidersHorizontal, LayoutList, Columns } from "lucide-react";
 import {
   fetchOrders,
+  fetchOrderStats,
   deleteExistingOrder,
   updateOrderStatusThunk,
   clearOrderError,
@@ -74,13 +75,14 @@ export default function Orders() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const { orders, pagination, loading, error } = useSelector((state) => {
+  const { orders, pagination, loading, error, stats } = useSelector((state) => {
     const s = state.orders || state.order || {};
     return {
       orders:     s.orders     || s.items || [],
       pagination: s.pagination || { page: 1, pages: 1, total: 0, limit: 10 },
       loading:    s.loading    || false,
       error:      s.error      || null,
+      stats:      s.stats      || null,
     };
   });
 
@@ -95,25 +97,50 @@ export default function Orders() {
     return '/cuttingmaster';
   }, [isAdmin, isStoreKeeper]);
 
-  // ── state ──
-  const [searchTerm, setSearchTerm]         = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [activeTab, setActiveTab]           = useState('all');
-  const [payFilter, setPayFilter]           = useState('all');
-  const [timeFilter, setTimeFilter]         = useState('all');
-  const [currentPage, setCurrentPage]       = useState(1);
+  // ── URL Query Sync ──
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const initialSearch = searchParams.get("search") || "";
+  const initialStatus = searchParams.get("status") || "all";
+  const initialPaymentStatus = searchParams.get("paymentStatus") || "all";
+  const initialTimeFilter = searchParams.get("timeFilter") || "all";
+  const initialPage = parseInt(searchParams.get("page") || "1", 10);
+
+  const [searchTerm, setSearchTerm]         = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
+  const [activeTab, setActiveTab]           = useState(initialStatus);
+  const [payFilter, setPayFilter]           = useState(initialPaymentStatus);
+  const [timeFilter, setTimeFilter]         = useState(initialTimeFilter);
+  const [currentPage, setCurrentPage]       = useState(initialPage);
   const [deleteLoading, setDeleteLoading]   = useState({});
   const [showFilters, setShowFilters]       = useState(false);
 
   // ── debounce search ──
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(searchTerm); setCurrentPage(1); }, 400);
+    const t = setTimeout(() => { 
+      setDebouncedSearch(searchTerm); 
+      setCurrentPage(1); 
+    }, 400);
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  // ── fetch ──
+  // ── Sync states to URL search parameters ──
   useEffect(() => {
+    const params = {};
+    if (debouncedSearch) params.search = debouncedSearch;
+    if (activeTab !== "all") params.status = activeTab;
+    if (payFilter !== "all") params.paymentStatus = payFilter;
+    if (timeFilter !== "all") params.timeFilter = timeFilter;
+    if (currentPage > 1) params.page = currentPage;
+
+    setSearchParams(params, { replace: true });
+  }, [debouncedSearch, activeTab, payFilter, timeFilter, currentPage, setSearchParams]);
+
+  // ── fetch data from backend ──
+  const fetchData = useCallback(() => {
     const statusParam = (activeTab === 'all' || activeTab === '__overdue') ? '' : activeTab;
+    
+    // Fetch paginated orders
     dispatch(fetchOrders({
       page: currentPage,
       limit: pagination?.limit || 10,
@@ -122,7 +149,18 @@ export default function Orders() {
       paymentStatus: payFilter !== 'all' ? payFilter : '',
       timeFilter,
     }));
-  }, [dispatch, currentPage, debouncedSearch, activeTab, payFilter, timeFilter]);
+
+    // Fetch full statistics matching search/filters (ignoring page/limit and status tab)
+    dispatch(fetchOrderStats({
+      search: debouncedSearch,
+      paymentStatus: payFilter !== 'all' ? payFilter : '',
+      timeFilter,
+    }));
+  }, [dispatch, currentPage, pagination?.limit, debouncedSearch, activeTab, payFilter, timeFilter]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   useEffect(() => () => dispatch(clearOrderError()), [dispatch]);
 
@@ -143,12 +181,13 @@ export default function Orders() {
     try {
       await dispatch(deleteExistingOrder(id)).unwrap();
       showToast.success("Order deleted");
+      fetchData();
     } catch (e) {
       showToast.error(e?.message || "Delete failed");
     } finally {
       setDeleteLoading(p => ({ ...p, [id]: false }));
     }
-  }, [canEdit, dispatch]);
+  }, [canEdit, dispatch, fetchData]);
 
   const onMarkReady = useCallback(async (id, orderId) => {
     if (!canEdit) return;
@@ -156,8 +195,9 @@ export default function Orders() {
     try {
       await dispatch(updateOrderStatusThunk({ id, status: 'ready-to-delivery' })).unwrap();
       showToast.success("Marked as Ready");
+      fetchData();
     } catch (e) { showToast.error(e?.message || "Failed"); }
-  }, [canEdit, dispatch]);
+  }, [canEdit, dispatch, fetchData]);
 
   const onMarkDelivered = useCallback(async (id, orderId) => {
     if (!canEdit) return;
@@ -165,8 +205,9 @@ export default function Orders() {
     try {
       await dispatch(updateOrderStatusThunk({ id, status: 'delivered' })).unwrap();
       showToast.success("Marked as Delivered");
+      fetchData();
     } catch (e) { showToast.error(e?.message || "Failed"); }
-  }, [canEdit, dispatch]);
+  }, [canEdit, dispatch, fetchData]);
 
   const clearFilters = () => {
     setSearchTerm(''); setPayFilter('all'); setTimeFilter('all');
@@ -189,7 +230,11 @@ export default function Orders() {
 
   return (
     <div style={{ fontFamily: 'Inter, system-ui, sans-serif', color: '#111827' }}>
-      <style>{`@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.5} }`}</style>
+      <style>{`
+        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.5} }
+        @keyframes spin { 0% { transform: translateY(-50%) rotate(0deg); } 100% { transform: translateY(-50%) rotate(360deg); } }
+        @keyframes progressShift { 0% { left: -40%; } 100% { left: 100%; } }
+      `}</style>
 
       {/* ── Header toolbar ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
@@ -203,7 +248,15 @@ export default function Orders() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Search */}
           <div style={{ position: 'relative' }}>
-            <Search size={15} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+            {loading ? (
+              <div style={{
+                position: 'absolute', left: 11, top: '50%',
+                width: 14, height: 14, border: '2px solid #2563eb', borderTopColor: 'transparent',
+                borderRadius: '50%', animation: 'spin 0.6s linear infinite',
+              }} />
+            ) : (
+              <Search size={15} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+            )}
             <input
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -275,29 +328,58 @@ export default function Orders() {
       )}
 
       {/* ── KPI Cards ── */}
-      <OrdersKPI orders={orders} />
+      <OrdersKPI stats={stats} />
 
       {/* ── Workflow Filter Tabs ── */}
-      <OrderFilterTabs orders={orders} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setCurrentPage(1); }} />
+      <OrderFilterTabs stats={stats} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setCurrentPage(1); }} />
 
       {/* ── Table card ── */}
-      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-        {loading ? (
+      <div style={{ 
+        background: '#fff', 
+        border: '1px solid #e5e7eb', 
+        borderRadius: 14, 
+        boxShadow: '0 1px 6px rgba(0,0,0,0.06)', 
+        overflow: 'hidden',
+        position: 'relative'
+      }}>
+        {/* Infinite Progress Bar Loader */}
+        {loading && (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+            background: '#e0f2fe', overflow: 'hidden', zIndex: 10
+          }}>
+            <div style={{
+              position: 'absolute', top: 0, bottom: 0, width: '40%',
+              background: '#2563eb', borderRadius: 4,
+              animation: 'progressShift 1.2s infinite ease-in-out'
+            }} />
+          </div>
+        )}
+
+        {(loading && orders.length === 0) ? (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <tbody>{Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}</tbody>
           </table>
         ) : (
-          <OrdersTable
-            orders={displayedOrders}
-            canEdit={canEdit}
-            isAdmin={isAdmin}
-            deleteLoading={deleteLoading}
-            onView={onView}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onMarkReady={onMarkReady}
-            onMarkDelivered={onMarkDelivered}
-          />
+          <div style={{
+            opacity: loading ? 0.6 : 1,
+            pointerEvents: loading ? 'none' : 'auto',
+            transition: 'opacity 0.2s ease',
+          }}>
+            <OrdersTable
+              orders={displayedOrders}
+              canEdit={canEdit}
+              isAdmin={isAdmin}
+              deleteLoading={deleteLoading}
+              onView={onView}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onMarkReady={onMarkReady}
+              onMarkDelivered={onMarkDelivered}
+              onClearSearch={clearFilters}
+              hasActiveFilters={hasActiveFilters}
+            />
+          </div>
         )}
         <Pagination pagination={pagination} currentPage={currentPage} onPageChange={setCurrentPage} />
       </div>
