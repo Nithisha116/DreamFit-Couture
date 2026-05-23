@@ -14,20 +14,23 @@ const TABS = [
   { key: '__overdue',         label: 'Overdue'          },
 ];
 
-export default function OrderFilterTabs({ orders, activeTab, onTabChange }) {
+export default function OrderFilterTabs({ stats, activeTab, onTabChange }) {
   const counts = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const c = { all: orders?.length || 0, __overdue: 0 };
-    (orders || []).forEach(o => {
-      const s = o.status || 'draft';
-      c[s] = (c[s] || 0) + 1;
-      if (o.deliveryDate) {
-        const due = new Date(o.deliveryDate); due.setHours(0, 0, 0, 0);
-        if (due < today && !['delivered', 'cancelled'].includes(s)) c.__overdue++;
-      }
-    });
-    return c;
-  }, [orders]);
+    if (!stats) return { all: 0, __overdue: 0 };
+    return {
+      all: stats.total || stats.totalOrders || 0,
+      draft: stats.draft || 0,
+      confirmed: stats.confirmed || 0,
+      'in-progress': stats['in-progress'] || 0,
+      cutting: stats.cutting || 0,
+      stitching: stats.stitching || 0,
+      trial: stats.trial || 0,
+      'ready-to-delivery': stats['ready-to-delivery'] || stats.ready || 0,
+      delivered: stats.delivered || 0,
+      cancelled: stats.cancelled || 0,
+      __overdue: stats.overdue || 0
+    };
+  }, [stats]);
 
   return (
     <div style={{

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, memo } from 'react';
-import { Eye, Edit, Trash2, MoreVertical, CheckCircle, Truck, MessageCircle, AlertTriangle, Clock } from 'lucide-react';
+import { Eye, Edit, Trash2, MoreVertical, CheckCircle, Truck, MessageCircle, AlertTriangle, Clock, Search } from 'lucide-react';
 import { OrderStatusBadge, PaymentStatusBadge, DeliveryBadge } from './OrderStatusBadge';
 import OrderProductImage from './OrderProductImage';
 
@@ -268,13 +268,68 @@ const TH = ({ children, style }) => (
 
 // ─── OrdersTable (main export) ────────────────────────────────────────────────
 
-export default function OrdersTable({ orders, canEdit, isAdmin, deleteLoading, onView, onEdit, onDelete, onMarkReady, onMarkDelivered }) {
+export default function OrdersTable({ 
+  orders, 
+  canEdit, 
+  isAdmin, 
+  deleteLoading, 
+  onView, 
+  onEdit, 
+  onDelete, 
+  onMarkReady, 
+  onMarkDelivered,
+  onClearSearch,
+  hasActiveFilters 
+}) {
   if (!orders?.length) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9ca3af' }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: '#6b7280' }}>No orders found</div>
-        <div style={{ fontSize: 13, marginTop: 4 }}>Try adjusting your filters or create a new order</div>
+      <div style={{ 
+        textAlign: 'center', 
+        padding: '60px 40px', 
+        color: '#4b5563',
+        background: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '340px'
+      }}>
+        {/* Beautiful empty state graphic */}
+        <div style={{ 
+          width: 72, height: 72, borderRadius: '50%', background: '#f3f4f6',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18,
+          color: '#9ca3af', border: '1px dashed #d1d5db',
+        }}>
+          <Search size={32} style={{ opacity: 0.6 }} />
+        </div>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '0 0 6px 0' }}>
+          No matching orders found
+        </h3>
+        <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 20px 0', maxWidth: 360, lineHeight: 1.5 }}>
+          Your search or active status filters returned zero results from the database. Try refining your filters or reset search parameters.
+        </p>
+        
+        {hasActiveFilters && onClearSearch && (
+          <button 
+            onClick={onClearSearch}
+            style={{
+              padding: '9px 18px',
+              borderRadius: 8,
+              background: '#2563eb',
+              color: '#fff',
+              fontSize: 13,
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(37,99,235,0.25)',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
+            onMouseLeave={e => e.currentTarget.style.background = '#2563eb'}
+          >
+            Reset Search & Filters
+          </button>
+        )}
       </div>
     );
   }

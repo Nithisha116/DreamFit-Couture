@@ -34,47 +34,30 @@ function KPICard({ icon: Icon, label, value, color, bg, border, sub }) {
   );
 }
 
-export default function OrdersKPI({ orders }) {
-  const stats = useMemo(() => {
-    if (!orders?.length) return { total: 0, pending: 0, inProgress: 0, ready: 0, overdue: 0, revenue: 0 };
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    let revenue = 0;
-
-    const counts = orders.reduce((acc, o) => {
-      const status = o.status || 'draft';
-      if (status === 'draft' || status === 'confirmed') acc.pending++;
-      if (['in-progress', 'cutting', 'stitching', 'trial', 'finishing'].includes(status)) acc.inProgress++;
-      if (status === 'ready-to-delivery') acc.ready++;
-
-      if (o.deliveryDate) {
-        const due = new Date(o.deliveryDate);
-        due.setHours(0, 0, 0, 0);
-        if (due < today && !['delivered', 'cancelled'].includes(status)) acc.overdue++;
-      }
-
-      // sum revenue from paid orders
-      const paid = o.paymentSummary?.totalPaid || 0;
-      revenue += paid;
-
-      return acc;
-    }, { pending: 0, inProgress: 0, ready: 0, overdue: 0 });
-
-    return { total: orders.length, revenue, ...counts };
-  }, [orders]);
+export default function OrdersKPI({ stats }) {
+  const displayStats = useMemo(() => {
+    if (!stats) return { total: 0, pending: 0, inProgress: 0, ready: 0, overdue: 0, revenue: 0 };
+    return {
+      total: stats.total || stats.totalOrders || 0,
+      pending: stats.pending || stats.pendingOrders || 0,
+      inProgress: stats.inProgress || stats.inProductionOrders || 0,
+      ready: stats.ready || stats.readyOrders || 0,
+      overdue: stats.overdue || stats.overdueOrders || 0,
+      revenue: stats.revenue || stats.totalRevenue || 0,
+    };
+  }, [stats]);
 
   const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
 
   return (
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-      <KPICard icon={ShoppingBag} label="Total Orders"    value={stats.total}               color="#2563eb" bg="#eff6ff" border="#dbeafe" />
-      <KPICard icon={Clock}       label="Pending"          value={stats.pending}             color="#d97706" bg="#fffbeb" border="#fde68a" />
-      <KPICard icon={Scissors}    label="In Production"    value={stats.inProgress}          color="#7c3aed" bg="#f5f3ff" border="#ddd6fe" />
-      <KPICard icon={Package}     label="Ready to Deliver" value={stats.ready}               color="#059669" bg="#ecfdf5" border="#a7f3d0" />
-      <KPICard icon={AlertTriangle} label="Overdue"        value={stats.overdue}             color="#dc2626" bg="#fef2f2" border="#fecaca"
-        sub={stats.overdue > 0 ? 'Needs attention' : undefined} />
-      <KPICard icon={IndianRupee} label="Revenue Collected" value={fmt(stats.revenue)}       color="#0891b2" bg="#ecfeff" border="#a5f3fc" />
+      <KPICard icon={ShoppingBag} label="Total Orders"    value={displayStats.total}               color="#2563eb" bg="#eff6ff" border="#dbeafe" />
+      <KPICard icon={Clock}       label="Pending"          value={displayStats.pending}             color="#d97706" bg="#fffbeb" border="#fde68a" />
+      <KPICard icon={Scissors}    label="In Production"    value={displayStats.inProgress}          color="#7c3aed" bg="#f5f3ff" border="#ddd6fe" />
+      <KPICard icon={Package}     label="Ready to Deliver" value={displayStats.ready}               color="#059669" bg="#ecfdf5" border="#a7f3d0" />
+      <KPICard icon={AlertTriangle} label="Overdue"        value={displayStats.overdue}             color="#dc2626" bg="#fef2f2" border="#fecaca"
+        sub={displayStats.overdue > 0 ? 'Needs attention' : undefined} />
+      <KPICard icon={IndianRupee} label="Revenue Collected" value={fmt(displayStats.revenue)}       color="#0891b2" bg="#ecfeff" border="#a5f3fc" />
     </div>
   );
 }

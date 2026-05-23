@@ -328,6 +328,12 @@ orderSchema.statics.isDateAvailable = async function(date, maxOrdersPerDay = 10)
   }
 };
 
+// Indexes for performance
+orderSchema.index({ status: 1 });
+orderSchema.index({ orderId: 1 });
+orderSchema.index({ customer: 1 });
+orderSchema.index({ garments: 1 });
+
 // ============================================
 // ✅ EXPORT MODEL
 // ============================================
