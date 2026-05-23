@@ -1731,10 +1731,12 @@ import {
   deletePayment,
   clearPayments
 } from "../../../features/payment/paymentSlice";
+import { useReactToPrint } from "react-to-print";
 import OrderInvoice from "../../../components/OrderInvoice";
 import PaymentReceipt from "../../../components/PaymentReceipt";
 import AddPaymentModal from "../../../components/AddPaymentModal";
 import showToast from "../../../utils/toast";
+import { calculatePaymentSummary } from "../../../utils/paymentUtils";
 
 // ==================== IMAGE MODAL COMPONENT ====================
 const ImageModal = ({ isOpen, image, imageType, onClose }) => {
@@ -1917,6 +1919,22 @@ export default function OrderDetails() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showMobileActions, setShowMobileActions] = useState(false);
 
+  // Non-blocking print implementation refs & hook
+  const printableInvoiceRef = useRef(null);
+
+  const triggerPrint = useReactToPrint({
+    contentRef: printableInvoiceRef,
+    documentTitle: `Dreamfit-Invoice-${currentOrder?.orderId || "Order"}`,
+    onAfterPrint: () => {
+      setPrinting(false);
+    },
+    onPrintError: (errorLocation, error) => {
+      console.error("Print error in react-to-print:", errorLocation, error);
+      showToast.error("Failed to open print dialog");
+      setPrinting(false);
+    },
+  });
+
   const isAdmin = user?.role === "ADMIN";
   const isStoreKeeper = user?.role === "STORE_KEEPER";
   const canEdit = isAdmin || isStoreKeeper;
@@ -2001,32 +2019,33 @@ export default function OrderDetails() {
   // Calculate payment statistics
   const displayPayments = currentPayments?.length > 0 ? currentPayments : payments;
 
+  // Calculate payment summary using centralized payment helper
+  const summary = calculatePaymentSummary(currentOrder, garments, displayPayments);
+
   // Check if a full payment has already been recorded — no more payments needed
-  const hasFullPayment = 
-    displayPayments?.some(p => p.type === 'full') || 
-    currentOrder?.paymentSummary?.paymentStatus === 'paid' || 
-    (currentOrder?.balanceAmount !== undefined && currentOrder.balanceAmount <= 0) || 
-    false;
+  const hasFullPayment = summary.isFullyPaid || (summary.balanceDue <= 0 && summary.totalAmount > 0);
 
   console.log("💰 Display payments:", {
     currentPaymentsCount: currentPayments?.length,
     paymentsCount: payments?.length,
-    displayCount: displayPayments?.length
+    displayCount: displayPayments?.length,
+    isFullyPaid: summary.isFullyPaid,
+    balanceDue: summary.balanceDue
   });
 
   const paymentStats = {
-    totalPaid: displayPayments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
-    totalPayments: displayPayments?.length || 0,
-    lastPayment: displayPayments?.length > 0 ? displayPayments[displayPayments.length - 1] : null,
-    advanceTotal: displayPayments?.filter(p => p.type === 'advance').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
-    fullTotal: displayPayments?.filter(p => p.type === 'full').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
-    partialTotal: displayPayments?.filter(p => p.type === 'partial').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
-    extraTotal: displayPayments?.filter(p => p.type === 'extra').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    totalPaid: summary.totalPaid,
+    totalPayments: summary.payments.length,
+    lastPayment: summary.payments.length > 0 ? summary.payments[summary.payments.length - 1] : null,
+    advanceTotal: summary.payments.filter(p => p.type === 'advance').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    fullTotal: summary.payments.filter(p => p.type === 'full').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    partialTotal: summary.payments.filter(p => p.type === 'partial').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    extraTotal: summary.payments.filter(p => p.type === 'extra').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     byMethod: {
-      cash: displayPayments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
-      upi: displayPayments?.filter(p => p.method === 'upi').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
-      'bank-transfer': displayPayments?.filter(p => p.method === 'bank-transfer').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
-      card: displayPayments?.filter(p => p.method === 'card').reduce((sum, p) => sum + (p.amount || 0), 0) || 0
+      cash: summary.payments.filter(p => p.method === 'cash').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      upi: summary.payments.filter(p => p.method === 'upi').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      'bank-transfer': summary.payments.filter(p => p.method === 'bank-transfer').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      card: summary.payments.filter(p => p.method === 'card').reduce((sum, p) => sum + (p.amount || 0), 0) || 0
     }
   };
 
@@ -2037,21 +2056,15 @@ export default function OrderDetails() {
     return { min, max };
   }, [garments]);
 
-  const finalizedAmount = useMemo(() => {
-    return garments.reduce((sum, g) => {
-      const hasFinalized = g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== "";
-      const val = hasFinalized ? g.finalizedPrice : (g.priceRange?.max || 0);
-      return sum + Number(val);
-    }, 0);
-  }, [garments]);
+  const finalizedAmount = summary.totalAmount;
 
   // Calculate price summary from currentOrder
   const priceSummary = currentOrder?.priceSummary || { totalMin: 0, totalMax: 0 };
 
-  // Calculate balance with finalizedAmount
+  // Calculate balance using the centralized payment helper
   const balanceAmount = {
-    min: (currentOrder?.finalizedAmount || finalizedAmount) - paymentStats.totalPaid,
-    max: (currentOrder?.finalizedAmount || finalizedAmount) - paymentStats.totalPaid
+    min: summary.balanceDue,
+    max: summary.balanceDue
   };
 
   // Handle Back
@@ -2410,102 +2423,19 @@ const handleSavePayment = async (paymentData) => {
   };
 
   // Handle Print
-  const handlePrint = async () => {
-    try {
-      setPrinting(true);
-      
-      if (!fullInvoiceRef.current) {
-        showToast.error("Invoice not ready - please wait");
-        setPrinting(false);
-        return;
-      }
-      
-      const element = fullInvoiceRef.current.getInvoiceElement 
-        ? fullInvoiceRef.current.getInvoiceElement() 
-        : null;
-      
-      if (!element) {
-        console.error("Invoice element not found");
-        showToast.error("Invoice content not ready");
-        setPrinting(false);
-        return;
-      }
-      
-      const cloneElement = element.cloneNode(true);
-      
-      const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
-      let stylesHTML = '';
-      
-      styles.forEach(style => {
-        if (style.tagName === 'STYLE') {
-          stylesHTML += style.outerHTML;
-        } else if (style.tagName === 'LINK') {
-          stylesHTML += style.outerHTML;
-        }
-      });
-
-      const printWindow = window.open('', '_blank');
-      
-      if (!printWindow) {
-        showToast.error("Please allow pop-ups to print");
-        setPrinting(false);
-        return;
-      }
-      
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Dreamfit Invoice - ${currentOrder?.orderId}</title>
-            ${stylesHTML}
-            <style>
-              @media print {
-                @page {
-                  size: A4;
-                  margin: 10mm;
-                }
-                body {
-                  margin: 0;
-                  padding: 0;
-                  background: white;
-                  -webkit-print-color-adjust: exact;
-                  print-color-adjust: exact;
-                }
-                .no-print {
-                  display: none !important;
-                }
-                div[data-invoice="true"] {
-                  width: 100% !important;
-                  max-width: 210mm !important;
-                  margin: 0 auto !important;
-                  box-shadow: none !important;
-                }
-              }
-            </style>
-          </head>
-          <body>
-            ${cloneElement.outerHTML}
-            <script>
-              window.onload = function() {
-                setTimeout(function() {
-                  window.print();
-                  setTimeout(function() { window.close(); }, 500);
-                }, 500);
-              };
-            </script>
-          </body>
-        </html>
-      `);
-      
-      printWindow.document.close();
-      showToast.success("Printing invoice...");
-      
-    } catch (error) {
-      console.error("Print error:", error);
-      showToast.error("Failed to print invoice");
-    } finally {
-      setPrinting(false);
+  const handlePrint = () => {
+    if (!printableInvoiceRef.current) {
+      showToast.error("Invoice not ready - please wait");
+      return;
     }
+    
+    setPrinting(true);
+    showToast.success("Preparing invoice print layout...");
+    
+    // Non-blocking timeout allows React state updates and Toast display before print dialog blocks the UI
+    setTimeout(() => {
+      triggerPrint();
+    }, 150);
   };
 
   // Handle Ready for Pickup
@@ -2873,11 +2803,14 @@ const handleSavePayment = async (paymentData) => {
 
         {/* Hidden Full Invoice Component */}
         <div className="fixed left-[-9999px] top-0">
-          <OrderInvoice 
-            ref={fullInvoiceRef}
-            order={currentOrder}
-            garments={garments}
-          />
+          <div ref={printableInvoiceRef} className="print-container">
+            <OrderInvoice 
+              ref={fullInvoiceRef}
+              order={currentOrder}
+              garments={garments}
+              payments={displayPayments}
+            />
+          </div>
         </div>
 
         {/* Hidden Payment Receipts - One for each payment */}

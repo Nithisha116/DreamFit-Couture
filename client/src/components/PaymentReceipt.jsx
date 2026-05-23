@@ -2,6 +2,7 @@ import React, { forwardRef, useImperativeHandle, useRef } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas-pro";
 import logo from "../assets/logo.png";
+import { calculatePaymentSummary } from "../utils/paymentUtils";
 
 const PaymentReceipt = forwardRef(({ 
   order,                    // Order details
@@ -72,9 +73,8 @@ const PaymentReceipt = forwardRef(({
   };
 
   // ===== CALCULATIONS =====
-  // Order total from garments
-  const orderTotalMin = garments.reduce((sum, g) => sum + (g.priceRange?.min || 0) * (g.quantity || 1), 0);
-  const orderTotalMax = garments.reduce((sum, g) => sum + (g.priceRange?.max || 0) * (g.quantity || 1), 0);
+  const summary = calculatePaymentSummary(order, garments, allPayments);
+  const orderTotal = summary.totalAmount;
 
   // Sort payments by date (oldest first)
   const sortedPayments = [...allPayments].sort((a, b) => 
@@ -93,12 +93,12 @@ const PaymentReceipt = forwardRef(({
 
   // Running totals after this payment
   const totalPaidAfterThis = previousTotal + currentAmount;
-  const balanceMin = Math.max(0, orderTotalMin - totalPaidAfterThis);
-  const balanceMax = Math.max(0, orderTotalMax - totalPaidAfterThis);
+  const balance = Math.max(0, orderTotal - totalPaidAfterThis);
+  const isReceiptFullyPaid = balance <= 0;
 
   // Payment status
   const getPaymentStatus = () => {
-    if (balanceMin <= 0 && balanceMax <= 0) return "FULLY PAID";
+    if (isReceiptFullyPaid) return "FULLY PAID";
     if (currentPayment.type === 'advance') return "ADVANCE PAYMENT";
     if (currentPayment.type === 'full') return "FULL PAYMENT";
     if (currentPayment.type === 'partial') return "PARTIAL PAYMENT";
@@ -267,9 +267,9 @@ const PaymentReceipt = forwardRef(({
             </thead>
             <tbody>
               <tr style={{ borderBottom: "1px solid #fbcfe8" }}>
-                <td style={{ padding: "12px 14px" }}>Order Total (Range)</td>
+                <td style={{ padding: "12px 14px" }}>Order Total</td>
                 <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: "600" }}>
-                  {formatCurrency(orderTotalMin)} - {formatCurrency(orderTotalMax)}
+                  {formatCurrency(orderTotal)}
                 </td>
               </tr>
               
@@ -332,24 +332,24 @@ const PaymentReceipt = forwardRef(({
             BALANCE AFTER THIS PAYMENT
           </h3>
           
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", justifycontent: "space-between", alignItems: "center" }}>
             <div>
               <p style={{ fontSize: "13px", color: "#9a3412", margin: "0 0 5px 0" }}>Remaining Balance</p>
               <p style={{ fontSize: "28px", fontWeight: "800", color: "#be185d", margin: 0 }}>
-                {formatCurrency(balanceMin)} - {formatCurrency(balanceMax)}
+                {formatCurrency(balance)}
               </p>
             </div>
             
             <div style={{ textAlign: "right" }}>
               <span style={{ 
-                backgroundColor: balanceMin <= 0 && balanceMax <= 0 ? "#dcfce7" : "#fed7aa",
-                color: balanceMin <= 0 && balanceMax <= 0 ? "#166534" : "#9a3412",
+                backgroundColor: isReceiptFullyPaid ? "#dcfce7" : "#fed7aa",
+                color: isReceiptFullyPaid ? "#166534" : "#9a3412",
                 padding: "6px 15px",
                 borderRadius: "25px",
                 fontSize: "13px",
                 fontWeight: "600"
               }}>
-                {balanceMin <= 0 && balanceMax <= 0 ? "✓ FULLY PAID" : "⏳ BALANCE PENDING"}
+                {isReceiptFullyPaid ? "✓ FULLY PAID" : "⏳ BALANCE PENDING"}
               </span>
             </div>
           </div>
