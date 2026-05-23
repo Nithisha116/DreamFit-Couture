@@ -359,8 +359,9 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas-pro";
 import pdfBg from "../assets/Pdfbg.png";
 import logo from "../assets/logo.png";
+import { calculatePaymentSummary } from "../utils/paymentUtils";
 
-const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
+const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) => {
   const invoiceRef = useRef();
 
   // ✅ EXPOSE BOTH handleDownload AND getInvoiceElement for printing
@@ -415,17 +416,10 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
     return finalized * qty;
   };
 
-  // Calculate finalized subtotal
-  const finalizedSubtotal = garments.reduce((sum, g) => {
-    const qty = getQuantity(g);
-    const finalized = g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
-      ? Number(g.finalizedPrice)
-      : (g.priceRange?.max || 0);
-    return sum + finalized * qty;
-  }, 0);
-
-  const advance = order.advancePayment?.amount || 0;
-  const balanceDue = Math.max(0, finalizedSubtotal - advance);
+  const summary = calculatePaymentSummary(order, garments, payments);
+  const finalizedSubtotal = summary.totalAmount;
+  const advance = summary.totalPaid;
+  const balanceDue = summary.balanceDue;
 
   const getGarmentId = (garment, index) => {
     if (garment.garmentId) return garment.garmentId;
@@ -509,7 +503,7 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
                 margin: "4px 0 0 0",
               }}
             >
-              Advance Payment Received
+              {summary.isFullyPaid ? "Full Payment Completed" : "Advance / Partial Payment Received"}
             </p>
           </div>
         </div>
@@ -894,9 +888,11 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
                   alignItems: "center",
                 }}
               >
-                <span style={{ color: "#475569" }}>Advance Paid</span>
+                <span style={{ color: "#475569" }}>
+                  {summary.isFullyPaid ? "Fully Paid" : "Total Paid"}
+                </span>
                 <span style={{ fontWeight: "600", color: "#059669" }}>
-                  ₹{advance}
+                  ₹{summary.totalPaid.toLocaleString('en-IN')}
                 </span>
               </div>
               <div
@@ -907,8 +903,8 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
                 }}
               >
                 <span style={{ color: "#475569" }}>Payment Mode</span>
-                <span style={{ fontWeight: "500", color: "#334155" }}>
-                  {order.advancePayment?.method || "UPI"}
+                <span style={{ fontWeight: "500", color: "#334155", textTransform: "capitalize" }}>
+                  {summary.paymentModes}
                 </span>
               </div>
               <div
@@ -925,17 +921,17 @@ const OrderInvoice = forwardRef(({ order, garments = [] }, ref) => {
                   alignItems: "center",
                 }}
               >
-                <span style={{ fontWeight: "600", color: "#be185d" }}>
+                <span style={{ fontWeight: "600", color: summary.isFullyPaid ? "#059669" : "#be185d" }}>
                   Balance Due
                 </span>
                 <span
                   style={{
                     fontWeight: "700",
-                    color: "#be185d",
+                    color: summary.isFullyPaid ? "#059669" : "#be185d",
                     fontSize: "18px",
                   }}
                 >
-                  ₹{balanceDue.toLocaleString('en-IN')}
+                  {summary.isFullyPaid ? "Paid" : `₹${summary.balanceDue.toLocaleString('en-IN')}`}
                 </span>
               </div>
             </div>

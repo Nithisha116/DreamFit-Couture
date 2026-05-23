@@ -27,3 +27,21 @@
     padding: 1rem !important;
   }
 }
+
+/* Print-specific overrides to avoid dashboard/sidebar printing and ensure high-fidelity layouts */
+@media print {
+  body {
+    background: white !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-container {
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    background: white !important;
+  }
+}
