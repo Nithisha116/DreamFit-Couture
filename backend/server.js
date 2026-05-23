@@ -486,6 +486,8 @@ import morgan from "morgan";
 import compression from "compression";
 import rateLimit from "express-rate-limit";
 import connectDB from "./config/db.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 // Import Routes
 import authRoutes from "./routes/auth.routes.js";
@@ -892,6 +894,25 @@ app.use("/api/invoices", invoiceRoutes);
 // ====================================================
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/leaves", leaveRoutes);
+
+// ==================== FRONTEND STATIC SERVING ====================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const clientDistPath = path.join(__dirname, "../client/dist");
+
+app.use(express.static(clientDistPath));
+
+app.use((req, res, next) => {
+  // If the path starts with /api/, bypass and pass to error handling (api not found)
+  if (req.url.startsWith("/api/")) {
+    return next();
+  }
+  // Only serve index.html for GET requests
+  if (req.method === "GET") {
+    return res.sendFile(path.join(clientDistPath, "index.html"));
+  }
+  next();
+});
 
 // ==================== ERROR HANDLING MIDDLEWARE ====================
 app.use(notFound);

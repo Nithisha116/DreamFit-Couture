@@ -710,7 +710,7 @@ import React, {
   useEffect,
 } from "react";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import html2canvas from "html2canvas-pro";
 import logo from "../assets/logo.png";
 
 // Enhanced Base64 helper with cache buster

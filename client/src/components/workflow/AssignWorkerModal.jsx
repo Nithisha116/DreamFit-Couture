@@ -67,16 +67,23 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
   const handleAssign = async () => {
     if (!selectedWorker) return;
 
+    const jobId = job._id || job.id || job.workMongoId;
+    if (!jobId) {
+      showToast.error("Job ID is missing. Please close and reopen the modal.");
+      console.error("❌ Job object has no _id, id, or workMongoId:", job);
+      return;
+    }
+
     try {
-      await API.post(`/api/workflow/works/${job._id}/assign-worker`, {
+      await API.post(`/workflow/works/${jobId}/assign-worker`, {
         stage: activeKey,
         role: roleId,
         workerId: selectedWorker._id,
-        workerName: selectedWorker.name,
+        workerName: selectedWorker.fullName || selectedWorker.name,
       });
 
       showToast.success(`Worker assigned successfully`);
-      onAssigned?.({ ...job, workerName: selectedWorker.name, workerId: selectedWorker._id, role: roleId });
+      onAssigned?.({ ...job, workerName: selectedWorker.fullName || selectedWorker.name, workerId: selectedWorker._id, role: roleId });
       onClose();
     } catch (err) {
       console.error("❌ Worker assignment failed:", err);
@@ -210,11 +217,11 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
                         <span className="text-xs font-bold text-violet-700 capitalize">
-                          {w.name.charAt(0)}
+                          {(w.fullName || w.name).charAt(0)}
                         </span>
                       </div>
                       <div className="min-w-0">
-                        <p className="font-bold text-slate-800 text-sm truncate">{w.name}</p>
+                        <p className="font-bold text-slate-800 text-sm truncate">{w.fullName || w.name}</p>
                         <p className="text-[10px] text-slate-500 font-mono capitalize">
                           {w.role.replace('_', ' ')} · {w.status}
                         </p>

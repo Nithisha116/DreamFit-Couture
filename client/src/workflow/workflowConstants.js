@@ -15,6 +15,8 @@ export const PIPELINE_STAGE_DEFS = {
 export const WORKER_ROLES = [
   { id: "cutting", label: "Cutting master" },
   { id: "tailor", label: "Tailor" },
+  { id: "store_keeper", label: "Store Keeper" },
+  { id: "staff", label: "General Staff" },
   { id: "embroidery", label: "Embroidery worker" },
   { id: "aari", label: "Aari worker" },
   { id: "helper", label: "Helper" },

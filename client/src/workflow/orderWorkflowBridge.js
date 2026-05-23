@@ -27,6 +27,13 @@ function resolveGarmentList(order) {
         itemName: g.itemName || g.item?.name || "",
         priority: g.priority || "normal",
         estimatedDelivery: g.estimatedDelivery || g.deliveryDate,
+        measurements: g.measurements || [],
+        measurementSource: g.measurementSource || "template",
+        measurementTemplate: g.measurementTemplate || null,
+        measurementTemplateName: g.measurementTemplateName || (g.measurementTemplate?.name) || null,
+        additionalInfo: g.additionalInfo || "",
+        cuttingNotes: g.cuttingNotes || "",
+        tailorNotes: g.tailorNotes || "",
       };
     }
     return { name: `Garment ${index + 1}`, garmentId: String(g), priority: "normal" };
@@ -102,6 +109,13 @@ export function registerWorkflowJobsFromOrder(order, works = []) {
       dueDate: g.estimatedDelivery || dueDate,
       workCode,
       workMongoId: null,
+      measurements: g.measurements || [],
+      measurementSource: g.measurementSource || "template",
+      measurementTemplate: g.measurementTemplate || null,
+      measurementTemplateName: g.measurementTemplateName || null,
+      additionalInfo: g.additionalInfo || "",
+      cuttingNotes: g.cuttingNotes || "",
+      tailorNotes: g.tailorNotes || "",
     };
 
     const job = createJobFromOrderPayload(fields, prev);

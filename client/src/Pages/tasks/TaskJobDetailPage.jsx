@@ -1,15 +1,16 @@
 import { useEffect, useMemo } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { ArrowLeft, Download, Printer, QrCode, ScanLine } from "lucide-react";
-import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
 import JobCardDocument from "../../components/workflow/JobCardDocument";
+import { exportJobCardToPdf } from "../../components/workflow/JobCardPDFExport";
 import WorkflowStageTimeline from "../../components/workflow/WorkflowStageTimeline";
 import useWorkflowJobs from "../../hooks/useWorkflowJobs";
 import { advanceStageByTrackingId } from "../../workflow/workflowEngine";
 import { fetchWorkById } from "../../features/work/workSlice";
 import showToast from "../../utils/toast";
+
+
 
 export default function TaskJobDetailPage() {
   const { trackingId } = useParams();
@@ -18,6 +19,8 @@ export default function TaskJobDetailPage() {
   const { user } = useSelector((state) => state.auth);
   const { currentWork, loading } = useSelector((state) => state.work);
   const basePath = user?.role === "STORE_KEEPER" ? "/storekeeper" : "/admin";
+
+  const location = useLocation();
 
   const { jobs, refresh } = useWorkflowJobs();
   const job = useMemo(() => {
@@ -32,62 +35,112 @@ export default function TaskJobDetailPage() {
 
   const workRecord = job?.workMongoId && currentWork?._id === job.workMongoId ? currentWork : null;
 
+  // Wait for the DOM to render the JobCardDocument before capturing
+  useEffect(() => {
+    if (!job || !workRecord) return;
+    const params = new URLSearchParams(location.search);
+    const action = params.get("action");
+    if (action) {
+      // Clear the query string so it doesn't run again on refresh
+      navigate(location.pathname, { replace: true });
+      
+      // Delay slightly to ensure fonts/images in DOM are loaded
+      setTimeout(() => {
+        if (action === "print") handlePrint();
+        if (action === "pdf") handlePdf();
+      }, 500);
+    }
+  }, [job, workRecord, location.search, navigate]);
+
   const handlePrint = () => {
     const el = document.getElementById("job-card-print");
     if (!el) return;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(
-      `<html><head><title>Job Card ${job?.orderId}</title><style>body{font-family:system-ui,sans-serif;margin:0;padding:16px;}</style></head><body>${el.outerHTML}</body></html>`,
-    );
-    w.document.close();
-    w.print();
+
+    // Remove any existing print iframe
+    const oldFrame = document.getElementById("print-iframe");
+    if (oldFrame) oldFrame.remove();
+
+    // Create a new iframe
+    const iframe = document.createElement("iframe");
+    iframe.id = "print-iframe";
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+    // Copy stylesheets from main page to print iframe
+    let stylesHtml = "";
+    for (const sheet of document.styleSheets) {
+      try {
+        if (sheet.href) {
+          stylesHtml += `<link rel="stylesheet" href="${sheet.href}">`;
+        } else {
+          const rules = Array.from(sheet.cssRules).map(rule => rule.cssText).join("\n");
+          stylesHtml += `<style>${rules}</style>`;
+        }
+      } catch (e) {
+        // Ignore CORS issues with external stylesheets
+      }
+    }
+
+    doc.write(`
+      <html>
+        <head>
+          <title>Job Card ${job?.orderId || ""}</title>
+          ${stylesHtml}
+          <style>
+            body {
+              font-family: system-ui, sans-serif;
+              margin: 0;
+              padding: 16px;
+              background-color: white !important;
+              color: black !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-container">
+            ${el.innerHTML}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    // Wait for images (like QR code) and styles to load in the iframe
+    iframe.contentWindow.focus();
+
+    const images = doc.getElementsByTagName("img");
+    const imagePromises = Array.from(images).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(resolve => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
+    });
+
+    Promise.all(imagePromises).then(() => {
+      setTimeout(() => {
+        iframe.contentWindow.print();
+      }, 300);
+    });
   };
 
   const handlePdf = async () => {
-    const el = document.getElementById("job-card-print");
-    if (!el || !job) return;
+    if (!job) return;
+    const loadingToastId = showToast.loading("Preparing PDF...");
     try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-      const img = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const margin = 24;
-      const imgW = pageW - margin * 2;
-      const imgH = (canvas.height * imgW) / canvas.width;
-      let y = margin;
-      let remaining = imgH;
-      let srcY = 0;
-      const sliceH = ((pageH - margin * 2) * canvas.width) / imgW;
-
-      while (remaining > 0) {
-        if (y > margin) pdf.addPage();
-        const pageSlice = Math.min(remaining, pageH - margin * 2);
-        const sliceCanvas = document.createElement("canvas");
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = (pageSlice * canvas.width) / imgW;
-        const ctx = sliceCanvas.getContext("2d");
-        ctx.drawImage(
-          canvas,
-          0,
-          srcY,
-          canvas.width,
-          sliceCanvas.height,
-          0,
-          0,
-          canvas.width,
-          sliceCanvas.height,
-        );
-        pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", margin, margin, imgW, pageSlice);
-        srcY += sliceCanvas.height;
-        remaining -= pageSlice;
-        y = margin;
-      }
-
-      pdf.save(`job-card-${job.orderId || job.workflowTrackingId}.pdf`);
+      await exportJobCardToPdf(job);
+      showToast.dismiss(loadingToastId);
       showToast.success("PDF downloaded");
-    } catch {
+    } catch (err) {
+      console.error("PDF export error:", err);
+      showToast.dismiss(loadingToastId);
       showToast.error("PDF export failed");
     }
   };

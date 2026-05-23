@@ -53,7 +53,7 @@ const workerSlice = createSlice({
       })
       .addCase(fetchWorkers.fulfilled, (state, action) => {
         state.loading = false;
-        state.list = action.payload.data || [];
+        state.list = action.payload.workers || action.payload.data || [];
       })
       .addCase(fetchWorkers.rejected, (state, action) => {
         state.loading = false;
@@ -65,7 +65,7 @@ const workerSlice = createSlice({
       })
       .addCase(fetchWorkersByRole.fulfilled, (state, action) => {
         state.loading = false;
-        state.list = action.payload.data || [];
+        state.list = action.payload.workers || action.payload.data || [];
       })
       .addCase(fetchWorkersByRole.rejected, (state, action) => {
         state.loading = false;

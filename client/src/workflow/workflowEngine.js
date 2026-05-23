@@ -69,23 +69,33 @@ export function recomputeJobMeta(job) {
 
 function workToJobFields(work) {
   const garment = work?.garment;
+  const garmentObj = typeof garment === "object" ? garment : null;
   return {
     workMongoId: work._id,
     workCode: work.workId,
     orderId: work?.order?.orderId || "",
     orderMongoId: work?.order?._id || work?.order,
     customerName: work?.order?.customer?.name || "Customer",
-    garmentName: (typeof garment === "object" ? garment?.name : work?.garmentName) || "Garment",
-    garmentId: typeof garment === "object" ? garment?.garmentId : "",
-    categoryName:
-      typeof garment === "object"
-        ? garment?.categoryName || garment?.category?.name
-        : "",
-    itemName: typeof garment === "object" ? garment?.itemName || garment?.item?.name : "",
-    priority: (typeof garment === "object" ? garment?.priority : work?.priority) || "normal",
+    garmentName: (garmentObj?.name ?? work?.garmentName) || "Garment",
+    garmentId: garmentObj?.garmentId || "",
+    categoryName: garmentObj?.categoryName || garmentObj?.category?.name || "",
+    itemName: garmentObj?.itemName || garmentObj?.item?.name || "",
+    priority: garmentObj?.priority || work?.priority || "normal",
     dueDate: work?.estimatedDelivery || work?.order?.deliveryDate || null,
     workStatus: work?.status || "pending",
     garment,
+    // ── Measurements ──────────────────────────────
+    measurements: garmentObj?.measurements || [],
+    measurementSource: garmentObj?.measurementSource || "template",
+    measurementTemplate: garmentObj?.measurementTemplate || null,
+    measurementTemplateName:
+      typeof garmentObj?.measurementTemplate === "object"
+        ? garmentObj.measurementTemplate?.name
+        : null,
+    // ── Notes / Instructions ──────────────────────
+    additionalInfo: garmentObj?.additionalInfo || "",
+    cuttingNotes: work?.cuttingNotes || "",
+    tailorNotes: work?.tailorNotes || "",
   };
 }
 
@@ -203,6 +213,14 @@ export function createJobFromOrderPayload(
     dueDate,
     workMongoId,
     workCode,
+    // ── Measurements & Notes ──
+    measurements,
+    measurementSource,
+    measurementTemplate,
+    measurementTemplateName,
+    additionalInfo,
+    cuttingNotes,
+    tailorNotes,
   },
   existingJob = null,
 ) {
@@ -219,6 +237,15 @@ export function createJobFromOrderPayload(
     workMongoId: workMongoId || null,
     workCode: workCode || null,
     workStatus: "pending",
+    // ── Measurements ──
+    measurements: measurements || [],
+    measurementSource: measurementSource || "template",
+    measurementTemplate: measurementTemplate || null,
+    measurementTemplateName: measurementTemplateName || null,
+    // ── Notes ──
+    additionalInfo: additionalInfo || "",
+    cuttingNotes: cuttingNotes || "",
+    tailorNotes: tailorNotes || "",
   };
   const stageKeys = resolveStageKeysForJob({ ...existingJob, ...fields });
   let stages = existingJob?.stages ? { ...existingJob.stages } : initStages(stageKeys);
