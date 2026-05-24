@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   ArrowLeft, Save, User, Calendar, CreditCard,
@@ -18,6 +18,8 @@ import {
 import {
   fetchGarmentsByOrder,
   deleteGarment,
+  createGarment,
+  updateGarment,
 } from "../../../features/garment/garmentSlice";
 
 import {
@@ -100,8 +102,15 @@ export default function EditOrder() {
     status: "draft",
   });
 
+  const [searchParams] = useSearchParams();
   const [showGarmentModal, setShowGarmentModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("addGarment") === "true") {
+      setShowGarmentModal(true);
+    }
+  }, [searchParams]);
   const [editingPayment, setEditingPayment] = useState(null);
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [editingGarment, setEditingGarment] = useState(null);
@@ -263,10 +272,38 @@ export default function EditOrder() {
     }
   };
 
-  const handleSaveGarment = () => {
-    setShowGarmentModal(false);
-    dispatch(fetchGarmentsByOrder(id));
-    showToast.success("Garment updated");
+  const handleSaveGarment = async (garmentData) => {
+    const isEditing = !!editingGarment;
+    const toastId = showToast.loading(isEditing ? "Updating garment in database..." : "Creating garment sub-order & workflow...");
+
+    try {
+      if (isEditing) {
+        // Dispatch update API
+        await dispatch(updateGarment({ id: editingGarment._id, garmentData })).unwrap();
+        showToast.dismiss(toastId);
+        showToast.success("Garment updated successfully!");
+      } else {
+        // Dispatch create API
+        await dispatch(createGarment({ orderId: id, garmentData })).unwrap();
+        showToast.dismiss(toastId);
+        showToast.success("Garment sub-order & workflow created successfully!");
+        
+        // Strip the addGarment query parameter from the URL
+        navigate(`${basePath}/orders/edit/${id}`, { replace: true });
+      }
+
+      // Close the modal and clean up states
+      setShowGarmentModal(false);
+      setEditingGarment(null);
+
+      // Trigger immediate, real-time Redux state synchronization (Refetches everything optimistically)
+      dispatch(fetchGarmentsByOrder(id));
+      dispatch(fetchOrderById(id));
+    } catch (error) {
+      console.error("❌ Save garment error:", error);
+      showToast.dismiss(toastId);
+      showToast.error(error?.message || error || "Failed to save garment. Please try again.");
+    }
   };
 
   // ── Payment handlers ───────────────────────────────────────────────────────

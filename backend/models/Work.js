@@ -1,5 +1,14 @@
 import mongoose from 'mongoose';
 
+const workflowStageSchema = new mongoose.Schema({
+  completed: {
+    type: Boolean,
+    default: false,
+  },
+  completedAt: Date,
+  assignedTo: String,
+}, { _id: false });
+
 const workSchema = new mongoose.Schema({
   // Note: Removed index: true from here to prevent duplicate index warnings
   workId: { 
@@ -32,21 +41,27 @@ const workSchema = new mongoose.Schema({
   }],
   
   qrCode: String,
-  currentStage: String,
+  currentStage: {
+    type: String,
+    enum: [
+      "new",
+      "cutting",
+      "stitching",
+      "trial",
+      "packing",
+      "delivered",
+    ],
+    default: "new",
+  },
   overallStatus: String,
   workflowStages: {
-    type: [{
-      key: { type: String, required: true },
-      label: { type: String, required: true },
-      order: { type: Number, required: true },
-      status: { type: String, enum: ["pending", "active", "completed"], default: "pending" }
-    }],
-    default: () => [
-      { key: "cutting", label: "Cutting", order: 1, status: "active" },
-      { key: "stitching", label: "Stitching", order: 2, status: "pending" },
-      { key: "ironing", label: "Ironing", order: 3, status: "pending" },
-      { key: "packed", label: "Packed / Ready", order: 4, status: "pending" }
-    ],
+    type: mongoose.Schema.Types.Mixed,
+    default: () => ({
+      cutting: { completed: false, completedAt: null, assignedTo: null },
+      stitching: { completed: false, completedAt: null, assignedTo: null },
+      trial: { completed: false, completedAt: null, assignedTo: null },
+      packing: { completed: false, completedAt: null, assignedTo: null }
+    })
   },
 
   scanLogs: [{

@@ -5694,7 +5694,13 @@ const createWorksFromGarments = async (orderId, garmentIds, creatorId) => {
         createdBy: creatorId,
         status: "pending",
         cuttingMaster: null,
-        workflowStages: order.workflowStages || [],
+        currentStage: order.currentStage || "new",
+        workflowStages: order.workflowStages || {
+          cutting: { completed: false },
+          stitching: { completed: false },
+          trial: { completed: false },
+          packing: { completed: false }
+        },
         estimatedDelivery: garment.estimatedDelivery || new Date(Date.now() + 7*24*60*60*1000)
       });
       
@@ -5904,34 +5910,22 @@ export const createOrder = async (req, res) => {
       if (k === 'pack' || k === 'ready') return 'packed';
       return k;
     };
-    let workflowStages = Array.isArray(rawWorkflowStages) ? rawWorkflowStages : [];
-    workflowStages = workflowStages
+    let stageKeys = Array.isArray(rawWorkflowStages) ? rawWorkflowStages : [];
+    stageKeys = stageKeys
       .map(normalizeStageKey)
       .filter((k, i, arr) => VALID_STAGE_KEYS.has(k) && arr.indexOf(k) === i);
-    if (!workflowStages.length) {
-      workflowStages = ['cutting', 'stitching', 'ironing', 'packed'];
+    if (!stageKeys.length) {
+      stageKeys = ['cutting', 'stitching', 'trial', 'packing'];
     }
 
-    const PIPELINE_STAGE_DEFS_MAP = {
-      cutting:    { label: 'Cutting' },
-      stitching:  { label: 'Stitching' },
-      embroidery: { label: 'Embroidery' },
-      aari:       { label: 'Aari Work' },
-      ironing:    { label: 'Ironing' },
-      finishing:  { label: 'Finishing & QC' },
-      packing:    { label: 'Packing' },
-      packed:     { label: 'Packed / Ready' }
-    };
+    const activeStage = stageKeys[0] || 'cutting';
 
-    workflowStages = workflowStages.map((key, index) => {
-      const def = PIPELINE_STAGE_DEFS_MAP[key] || {};
-      return {
-        key,
-        label: def.label || (key.charAt(0).toUpperCase() + key.slice(1)),
-        order: index + 1,
-        status: index === 0 ? 'active' : 'pending'
-      };
-    });
+    const workflowStagesObj = {
+      cutting: { completed: false, completedAt: null, assignedTo: null },
+      stitching: { completed: false, completedAt: null, assignedTo: null },
+      trial: { completed: false, completedAt: null, assignedTo: null },
+      packing: { completed: false, completedAt: null, assignedTo: null }
+    };
 
     const creatorId = req.user?._id || req.user?.id;
     if (!creatorId) {
@@ -6014,8 +6008,8 @@ export const createOrder = async (req, res) => {
       orderId,
       customer,
       deliveryDate,
-      garments: [],
-      workflowStages,
+      currentStage: activeStage,
+      workflowStages: workflowStagesObj,
       specialNotes,
       advancePayment: {
         amount: allPayments.find(p => p.type === 'advance')?.amount || 0,
@@ -6234,6 +6228,13 @@ export const createOrder = async (req, res) => {
       console.log('⚠️ Could not send WhatsApp confirmation:', waErr.message);
     }
 
+    try {
+      const { syncOrderInvoice } = await import('../services/invoice.service.js');
+      await syncOrderInvoice(order._id);
+    } catch (syncErr) {
+      console.error('⚠️ Failed to sync order invoice during creation:', syncErr.message);
+    }
+
     res.status(201).json({ 
       success: true, 
       message: "Order created successfully",
@@ -6429,7 +6430,9 @@ export const updateOrder = async (req, res) => {
       advancePayment,
       priceSummary,
       status,
-      newGarments
+      newGarments,
+      currentStage,
+      workflowStages
     } = req.body;
 
     const order = await Order.findById(id);
@@ -6440,6 +6443,22 @@ export const updateOrder = async (req, res) => {
     if (deliveryDate) order.deliveryDate = deliveryDate;
     if (specialNotes !== undefined) order.specialNotes = specialNotes;
     
+    if (currentStage) order.currentStage = currentStage;
+    if (workflowStages) {
+      ['cutting', 'stitching', 'trial', 'packing'].forEach(key => {
+        if (workflowStages[key]) {
+          const currentStageVal = order.workflowStages?.[key];
+          const currentStageObj = currentStageVal && typeof currentStageVal === 'object'
+            ? (typeof currentStageVal.toObject === 'function' ? currentStageVal.toObject() : currentStageVal)
+            : {};
+          order.workflowStages[key] = {
+            ...currentStageObj,
+            ...workflowStages[key]
+          };
+        }
+      });
+      order.markModified('workflowStages');
+    }
     if (advancePayment) {
       order.advancePayment = {
         amount: advancePayment.amount !== undefined ? advancePayment.amount : order.advancePayment.amount,
@@ -6466,6 +6485,13 @@ export const updateOrder = async (req, res) => {
 
     await order.save();
     await updateOrderPaymentSummary(order._id);
+
+    try {
+      const { syncOrderInvoice } = await import('../services/invoice.service.js');
+      await syncOrderInvoice(order._id);
+    } catch (syncErr) {
+      console.error('⚠️ Failed to sync order invoice during updateOrder:', syncErr.message);
+    }
     
     res.json({ success: true, message: "Order updated successfully", order });
   } catch (error) {
@@ -6555,6 +6581,18 @@ export const updateOrderStatus = async (req, res) => {
     
     const oldStatus = order.status;
     order.status = status;
+    
+    // Sync currentStage with status transition
+    if (status === 'delivered') {
+      order.currentStage = 'delivered';
+      if (order.workflowStages?.packing) {
+        order.workflowStages.packing.completed = true;
+        order.workflowStages.packing.completedAt = new Date();
+      }
+    } else if (status === 'ready-to-delivery') {
+      order.currentStage = 'packing';
+    }
+    
     await order.save();
     
     console.log(`✅ Status updated: ${oldStatus} → ${status}`);
@@ -6624,6 +6662,13 @@ export const updateOrderStatus = async (req, res) => {
     const updatedOrder = await Order.findById(id)
       .populate('customer', 'name phone customerId')
       .populate('garments');
+
+    try {
+      const { syncOrderInvoice } = await import('../services/invoice.service.js');
+      await syncOrderInvoice(updatedOrder._id);
+    } catch (syncErr) {
+      console.error('⚠️ Failed to sync order invoice during updateOrderStatus:', syncErr.message);
+    }
     
     res.json({ 
       success: true, 

@@ -68,6 +68,10 @@ export function getStageShortLabel(key, workflowStages) {
  * Always returns string[] of canonical keys.
  */
 export function normalizeWorkflowStages(stages) {
+  if (stages && typeof stages === "object" && !Array.isArray(stages)) {
+    const keys = ['cutting', 'stitching', 'trial', 'packing'];
+    return keys.filter(k => stages[k] !== undefined);
+  }
   if (!Array.isArray(stages)) return [];
   const seen = new Set();
   const out = [];

@@ -7,7 +7,9 @@ import {
   getInvoiceByOrderId,
   getAllInvoices,
   getBillingStats,
-  deleteInvoice
+  deleteInvoice,
+  createManualInvoice,
+  updateInvoice
 } from "../controllers/invoice.controller.js";
 import { protect, authorize } from "../middleware/auth.middleware.js";
 
@@ -65,11 +67,8 @@ router.post("/:id/cancel", authorize("ADMIN"), cancelInvoice);
  */
 router.get("/", authorize("ADMIN", "STORE_KEEPER"), getAllInvoices);
 
-/**
- * @route   DELETE /api/invoices/:id
- * @desc    Soft-delete an invoice document
- * @access  Admin ONLY
- */
 router.delete("/:id", authorize("ADMIN"), deleteInvoice);
+router.post("/", authorize("ADMIN", "STORE_KEEPER"), createManualInvoice);
+router.patch("/:id", authorize("ADMIN", "STORE_KEEPER"), updateInvoice);
 
 export default router;

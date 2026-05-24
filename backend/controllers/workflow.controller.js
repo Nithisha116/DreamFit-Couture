@@ -1,13 +1,10 @@
+import mongoose from 'mongoose';
 import Work from '../models/Work.js';
-
+import Order from '../models/Order.js';
 import Worker from '../models/Worker.js';
-
 import Tailor from '../models/Tailor.js';
-
 import CuttingMaster from '../models/CuttingMaster.js';
-
 import StoreKeeper from '../models/StoreKeeper.js';
-
 import User from '../models/User.js';
 
 
@@ -39,39 +36,42 @@ const PIPELINE_STAGE_DEFS = {
 // Helper: Get workflow stages array of objects
 
 function getWorkflowStages(work) {
+  const defaultKeys = ['cutting', 'stitching', 'trial', 'packing'];
 
-  if (work.workflowStages && work.workflowStages.length > 0) {
+  if (work.workflowStages && typeof work.workflowStages === 'object' && !Array.isArray(work.workflowStages)) {
+    return defaultKeys.map((key, i) => {
+      const stageData = work.workflowStages[key] || {};
+      const def = PIPELINE_STAGE_DEFS[key] || {};
+      const status = stageData.completed 
+        ? 'completed' 
+        : (work.currentStage === key ? 'active' : 'pending');
+      
+      return {
+        key,
+        label: def.label || (key.charAt(0).toUpperCase() + key.slice(1)),
+        order: i + 1,
+        status: status
+      };
+    });
+  }
 
+  if (Array.isArray(work.workflowStages) && work.workflowStages.length > 0) {
     return [...work.workflowStages].sort((a, b) => a.order - b.order);
-
   }
 
-  if (work.order?.workflowStages && work.order.workflowStages.length > 0) {
-
+  if (Array.isArray(work.order?.workflowStages) && work.order.workflowStages.length > 0) {
     return [...work.order.workflowStages].sort((a, b) => a.order - b.order);
-
   }
-
-  const defaultKeys = ['cutting', 'stitching', 'ironing', 'packed'];
 
   return defaultKeys.map((key, i) => {
-
-    const def = PIPELINE_STAGE_DEFS[key] || { label: key.charAt(0).toUpperCase() + key.slice(1) };
-
+    const def = PIPELINE_STAGE_DEFS[key] || {};
     return {
-
       key,
-
-      label: def.label || key,
-
+      label: def.label || (key.charAt(0).toUpperCase() + key.slice(1)),
       order: i + 1,
-
       status: i === 0 ? 'active' : 'pending'
-
     };
-
   });
-
 }
 
 
@@ -540,14 +540,12 @@ export const processQrScan = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1. Fetch document using .lean() to get a read-only JS object.
-    // This prevents Mongoose tracking and allows us to calculate the atomic payload.
     const work = await Work.findOne({
       $or: [
         { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null },
         { workId: id },
       ],
-    }).lean();
+    }).populate('order').lean();
 
     if (!work) {
       return res.status(404).json({ success: false, message: 'Work not found' });
@@ -556,48 +554,17 @@ export const processQrScan = async (req, res) => {
     const updateDoc = { $set: {}, $push: {} };
     const now = new Date();
 
-    // 2. Evaluate workflowStages
-    let stagesArray = work.workflowStages && work.workflowStages.length > 0 
-      ? [...work.workflowStages] 
-      : [];
-    let isInitializingStages = false;
+    const pipelineKeys = ['cutting', 'stitching', 'trial', 'packing'];
+    const activeKey = work.currentStage && pipelineKeys.includes(work.currentStage) 
+      ? work.currentStage 
+      : 'cutting';
+    
+    const activeIndex = pipelineKeys.indexOf(activeKey);
+    const currentStageLabel = activeKey.charAt(0).toUpperCase() + activeKey.slice(1);
 
-    // Initialize if empty
-    if (stagesArray.length === 0) {
-      isInitializingStages = true;
-      const stageKeys = resolveStageKeysForJob(work);
-      stagesArray = stageKeys.map((key, i) => {
-        const def = PIPELINE_STAGE_DEFS[key] || {};
-        return {
-          key,
-          label: def.label || (key.charAt(0).toUpperCase() + key.slice(1)),
-          order: i + 1,
-          status: i === 0 ? 'active' : 'pending'
-        };
-      });
-    }
-
-    // 3. Find active stage by index (vital for targeted $set operations)
-    let activeStageIndex = stagesArray.findIndex(s => s.status === 'active');
-    if (activeStageIndex === -1) {
-      activeStageIndex = stagesArray.findIndex(s => s.status === 'pending');
-    }
-
-    if (activeStageIndex === -1) {
-      return res.status(400).json({ success: false, message: 'Workflow is already completed' });
-    }
-
-    const activeStage = stagesArray[activeStageIndex];
-    const activeKey = activeStage.key;
-    const currentStageLabel = activeStage.label;
-
-    // 4. Update workflow stages state
-    if (isInitializingStages) {
-      stagesArray[activeStageIndex].status = 'completed';
-    } else {
-      // Use dot notation to atomically update only the specific array element
-      updateDoc.$set[`workflowStages.${activeStageIndex}.status`] = 'completed';
-    }
+    // 4. Update active stage as completed
+    updateDoc.$set[`workflowStages.${activeKey}.completed`] = true;
+    updateDoc.$set[`workflowStages.${activeKey}.completedAt`] = now;
 
     // 5. Handle Assignments atomically
     const assignments = work.assignments || [];
@@ -622,44 +589,20 @@ export const processQrScan = async (req, res) => {
     }
 
     // 6. Identify the next stage dynamically
-    const currentOrder = activeStage.order;
-    let nextStageIndex = -1;
-    let minHigherOrder = Infinity;
+    const nextStageKey = pipelineKeys[activeIndex + 1] || null;
+    const nextStageLabel = nextStageKey ? (nextStageKey.charAt(0).toUpperCase() + nextStageKey.slice(1)) : null;
 
-    // Find the next consecutive order without resorting the original array layout
-    for (let i = 0; i < stagesArray.length; i++) {
-      if (stagesArray[i].order > currentOrder && stagesArray[i].order < minHigherOrder) {
-        minHigherOrder = stagesArray[i].order;
-        nextStageIndex = i;
-      }
-    }
-
-    let nextStageKey = null;
-    let nextStageLabel = null;
-
-    if (nextStageIndex !== -1) {
-      const nextStage = stagesArray[nextStageIndex];
-      nextStageKey = nextStage.key;
-      nextStageLabel = nextStage.label;
-
-      if (isInitializingStages) {
-        stagesArray[nextStageIndex].status = 'active';
-      } else {
-        updateDoc.$set[`workflowStages.${nextStageIndex}.status`] = 'active';
-      }
-
+    if (nextStageKey) {
       updateDoc.$set.currentStage = nextStageKey;
       updateDoc.$set.overallStatus = 'in-progress';
       updateDoc.$set.status = `${activeKey}-completed`;
+      
+      // Initialize next stage settings
+      updateDoc.$set[`workflowStages.${nextStageKey}.completed`] = false;
     } else {
-      updateDoc.$set.currentStage = 'completed';
+      updateDoc.$set.currentStage = 'delivered';
       updateDoc.$set.overallStatus = 'completed';
       updateDoc.$set.status = 'ready-to-deliver';
-    }
-
-    if (isInitializingStages) {
-      // If we completely rebuilt the array, we must push the entire array via $set
-      updateDoc.$set.workflowStages = stagesArray;
     }
 
     // 7. Push Scan Logs and History (Grouped safely under one $push object)
@@ -684,7 +627,6 @@ export const processQrScan = async (req, res) => {
     if (Object.keys(updateDoc.$push).length === 0) delete updateDoc.$push;
 
     // 8. Execute Atomic DB Operation
-    // This executes entirely at the database level, avoiding VersionError conflicts completely
     const updatedWork = await Work.findOneAndUpdate(
       { _id: work._id },
       updateDoc,
@@ -693,6 +635,24 @@ export const processQrScan = async (req, res) => {
 
     if (!updatedWork) {
       return res.status(500).json({ success: false, message: 'Failed to apply update to database.' });
+    }
+
+    // Sync active stage on the parent Order document too!
+    if (work.order?._id) {
+      const orderUpdate = {
+        currentStage: updatedWork.currentStage,
+      };
+      orderUpdate[`workflowStages.${activeKey}`] = {
+        completed: true,
+        completedAt: now,
+        assignedTo: completedWorkerName
+      };
+      if (nextStageKey) {
+        orderUpdate[`workflowStages.${nextStageKey}`] = {
+          completed: false
+        };
+      }
+      await Order.findByIdAndUpdate(work.order._id, { $set: orderUpdate });
     }
 
     let message = `${currentStageLabel} completed successfully.`;

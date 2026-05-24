@@ -19,6 +19,16 @@ const paymentSummarySchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+// ✅ WORKFLOW STAGE NESTED SCHEMA
+const workflowStageSchema = new mongoose.Schema({
+  completed: {
+    type: Boolean,
+    default: false,
+  },
+  completedAt: Date,
+  assignedTo: String,
+}, { _id: false });
+
 // ✅ MAIN ORDER SCHEMA
 const orderSchema = new mongoose.Schema({
   customer: {
@@ -36,20 +46,28 @@ const orderSchema = new mongoose.Schema({
     index: true
   },
   garments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Garment" }],
-  /** Per-order production pipeline — SSOT for workflow / QR / tasks */
-  workflowStages: {
-    type: [{
-      key: { type: String, required: true },
-      label: { type: String, required: true },
-      order: { type: Number, required: true },
-      status: { type: String, enum: ["pending", "active", "completed"], default: "pending" }
-    }],
-    default: () => [
-      { key: "cutting", label: "Cutting", order: 1, status: "active" },
-      { key: "stitching", label: "Stitching", order: 2, status: "pending" },
-      { key: "ironing", label: "Ironing", order: 3, status: "pending" },
-      { key: "packed", label: "Packed / Ready", order: 4, status: "pending" }
+  
+  currentStage: {
+    type: String,
+    enum: [
+      "new",
+      "cutting",
+      "stitching",
+      "trial",
+      "packing",
+      "delivered",
     ],
+    default: "new",
+  },
+
+  workflowStages: {
+    type: mongoose.Schema.Types.Mixed,
+    default: () => ({
+      cutting: { completed: false, completedAt: null, assignedTo: null },
+      stitching: { completed: false, completedAt: null, assignedTo: null },
+      trial: { completed: false, completedAt: null, assignedTo: null },
+      packing: { completed: false, completedAt: null, assignedTo: null }
+    })
   },
   specialNotes: { type: String, default: "" },
   priceSummary: { type: priceSummarySchema, default: () => ({ totalMin: 0, totalMax: 0 }) },

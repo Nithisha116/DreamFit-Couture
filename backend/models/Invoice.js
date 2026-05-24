@@ -24,11 +24,28 @@ const invoiceItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const invoiceSchema = new mongoose.Schema({
+  invoiceId: {
+    type: String,
+    unique: true,
+    required: true,
+    index: true
+  },
   invoiceNumber: { 
     type: String, 
     unique: true, 
     required: true, 
     index: true 
+  },
+  orderId: {
+    type: String,
+    required: true,
+    index: true
+  },
+  orderRef: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Order",
+    required: true,
+    index: true
   },
   order: { 
     type: mongoose.Schema.Types.ObjectId, 
@@ -41,6 +58,42 @@ const invoiceSchema = new mongoose.Schema({
     ref: "Customer", 
     required: true, 
     index: true 
+  },
+  customerName: {
+    type: String,
+    trim: true
+  },
+  phone: {
+    type: String,
+    trim: true
+  },
+  invoiceType: {
+    type: String,
+    enum: ["Advance", "Partial", "Final"],
+    default: "Final",
+    index: true
+  },
+  totalAmount: {
+    type: Number,
+    default: 0
+  },
+  paidAmount: {
+    type: Number,
+    default: 0
+  },
+  balanceAmount: {
+    type: Number,
+    default: 0
+  },
+  paymentStatus: {
+    type: String,
+    enum: ["Pending", "Partial", "Paid", "Pending", "Partial", "Paid", "pending", "partial", "paid", "refunded"],
+    default: "Pending",
+    index: true
+  },
+  notes: {
+    type: String,
+    default: ""
   },
   
   items: [invoiceItemSchema],

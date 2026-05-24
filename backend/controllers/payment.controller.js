@@ -211,6 +211,13 @@ async function updateOrderPaymentSummary(orderId) {
     console.log(
       `✅ Order payment summary updated — paid: ₹${totalPaid}, balance: ₹${balanceAmount}, status: ${paymentStatus}`
     );
+
+    try {
+      const { syncOrderInvoice } = await import('../services/invoice.service.js');
+      await syncOrderInvoice(orderId);
+    } catch (syncErr) {
+      console.error('⚠️ Failed to sync order invoice during updateOrderPaymentSummary:', syncErr.message);
+    }
   } catch (error) {
     console.error('❌ Error updating order payment summary:', error);
     throw error;

@@ -44,10 +44,16 @@ const InvoiceList = () => {
 
   // Filters
   const filteredInvoices = invoices.filter(inv => {
+    const term = searchTerm.toLowerCase();
     const matchesSearch = 
-      inv.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.order?.orderId?.toLowerCase().includes(searchTerm.toLowerCase());
+      inv.invoiceNumber?.toLowerCase().includes(term) ||
+      inv.invoiceId?.toLowerCase().includes(term) ||
+      inv.customer?.name?.toLowerCase().includes(term) ||
+      inv.customerName?.toLowerCase().includes(term) ||
+      inv.order?.orderId?.toLowerCase().includes(term) ||
+      inv.orderId?.toLowerCase().includes(term) ||
+      inv.customer?.phone?.includes(searchTerm) ||
+      inv.phone?.includes(searchTerm);
 
     const matchesStatus = statusFilter === "all" || inv.status === statusFilter;
     const matchesPayment = paymentFilter === "all" || inv.paymentStatus === paymentFilter;

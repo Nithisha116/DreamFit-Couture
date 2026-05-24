@@ -1731,6 +1731,7 @@ import {
   deletePayment,
   clearPayments
 } from "../../../features/payment/paymentSlice";
+import { fetchInvoiceByOrderId } from "../../../features/invoice/invoiceSlice";
 import { useReactToPrint } from "react-to-print";
 import OrderInvoice from "../../../components/OrderInvoice";
 import PaymentReceipt from "../../../components/PaymentReceipt";
@@ -1900,6 +1901,12 @@ export default function OrderDetails() {
   // Get auth state
   const user = useSelector((state) => state.auth?.user || null);
 
+  // Get invoices state and normalize to safe array
+  const invoices = useSelector((state) => {
+    const rawInv = state.invoice?.currentInvoice;
+    return Array.isArray(rawInv) ? rawInv : (rawInv ? [rawInv] : []);
+  });
+
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
@@ -1975,6 +1982,9 @@ export default function OrderDetails() {
           console.log("💰 Fetching payments...");
           const paymentsResult = await dispatch(fetchOrderPayments(id)).unwrap();
           console.log("✅ Payments fetched:", paymentsResult);
+
+          console.log("🧾 Fetching invoices...");
+          dispatch(fetchInvoiceByOrderId(id));
 
           console.log("🎉 All data fetched successfully!");
 
@@ -3040,7 +3050,7 @@ const handleSavePayment = async (paymentData) => {
                 </h2>
                 {canEdit && (
                   <button
-                    onClick={() => navigate(`${basePath}/orders/${id}/add-garment`)}
+                    onClick={() => navigate(`${basePath}/orders/edit/${id}?addGarment=true`)}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg font-bold text-xs sm:text-sm flex items-center gap-2 self-start"
                   >
                     <Plus size={14} />
@@ -3507,6 +3517,61 @@ const handleSavePayment = async (paymentData) => {
                     </div>
                   </div>
                 )}
+
+                {/* 🧾 LINKED SALES INVOICES */}
+                <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl space-y-3">
+                  <p className="text-[10px] sm:text-xs font-black uppercase text-slate-500">Linked Sales Invoices</p>
+                  
+                  {invoices.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">No invoices linked to this order.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {invoices.map((inv) => (
+                        <div key={inv._id} className="bg-white p-2.5 sm:p-3 rounded-lg border border-slate-200 hover:shadow-sm transition-all animate-in fade-in-50 duration-150">
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <Link 
+                                to={`/admin/billing/invoices/${inv._id}`}
+                                className="text-xs sm:text-sm font-bold text-indigo-600 hover:underline"
+                              >
+                                {inv.invoiceNumber || inv.invoiceId}
+                              </Link>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
+                                  inv.invoiceType === 'Advance' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                                  inv.invoiceType === 'Partial' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                  'bg-purple-50 text-purple-600 border border-purple-100'
+                                }`}>
+                                  {inv.invoiceType || "Final"}
+                                </span>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
+                                  inv.paymentStatus?.toLowerCase() === 'paid' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                  inv.paymentStatus?.toLowerCase() === 'partial' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                  'bg-rose-50 text-rose-600 border border-rose-100'
+                                }`}>
+                                  {inv.paymentStatus || "Pending"}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 mt-1 font-medium">
+                                Date: {new Date(inv.createdAt).toLocaleDateString("en-IN")}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs sm:text-sm font-extrabold text-slate-800">
+                                Total: ₹{(inv.totalAmount || inv.summary?.grandTotal || 0).toLocaleString("en-IN")}
+                              </p>
+                              {inv.balanceAmount > 0 && (
+                                <p className="text-[10px] font-bold text-rose-500 mt-0.5">
+                                  Due: ₹{inv.balanceAmount.toLocaleString("en-IN")}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
                   <p className="text-[10px] sm:text-xs font-black uppercase text-slate-500 mb-2">Order Timeline</p>

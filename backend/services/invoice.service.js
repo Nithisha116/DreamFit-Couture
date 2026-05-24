@@ -346,3 +346,144 @@ export const getBillingStatsService = async () => {
     }
   };
 };
+
+/**
+ * Automatically synchronizes an Order's financial states to its linked Invoice.
+ * Creates a new Invoice if it doesn't exist, otherwise updates the existing Invoice.
+ * Guaranteed 100% backward-compatible.
+ */
+export const syncOrderInvoice = async (orderId, session = null) => {
+  try {
+    console.log(`🔄 Syncing Invoices for Order ID: ${orderId}`);
+    
+    // 1. Fetch Order with populated customer reference
+    const order = await Order.findById(orderId).populate("customer").session(session);
+    if (!order) {
+      console.warn(`⚠️ Order ${orderId} not found, skipping sync.`);
+      return null;
+    }
+
+    // 2. Fetch all garments to populate item names in Invoice
+    const garments = await mongoose.model("Garment")
+      .find({ order: orderId, isActive: true })
+      .session(session);
+      
+    const invoiceItems = garments.map(g => ({
+      name: g.name || "Custom Garment",
+      qty: 1,
+      price: g.finalizedAmount || g.maxPrice || g.priceRange?.max || 0,
+      total: g.finalizedAmount || g.maxPrice || g.priceRange?.max || 0
+    }));
+
+    if (invoiceItems.length === 0) {
+      invoiceItems.push({
+        name: "Custom Tailoring Services",
+        qty: 1,
+        price: order.finalizedAmount || order.priceSummary?.totalMax || 0,
+        total: order.finalizedAmount || order.priceSummary?.totalMax || 0
+      });
+    }
+
+    // 3. Extract customer billing details
+    const customerName = order.customer?.name || "Walk-in Customer";
+    const phone = order.customer?.phone || "";
+
+    // 4. Calculate dynamic pricing totals
+    const totalAmount = order.finalizedAmount || order.priceSummary?.totalMax || order.totalAmount || 0;
+    const paidAmount = order.paymentSummary?.totalPaid || 0;
+    const balanceAmount = Math.max(0, totalAmount - paidAmount);
+
+    // Map payment status casing
+    let paymentStatus = "Pending";
+    if (balanceAmount === 0 && paidAmount > 0) {
+      paymentStatus = "Paid";
+    } else if (paidAmount > 0) {
+      paymentStatus = "Partial";
+    }
+
+    // Resolve Invoice Type
+    let invoiceType = "Final";
+    if (paidAmount > 0 && balanceAmount > 0) {
+      invoiceType = "Advance";
+    } else if (paidAmount > 0 && balanceAmount === 0) {
+      invoiceType = "Final";
+    }
+
+    // 5. Look for any active Invoice linked to this order
+    let invoice = await Invoice.findOne({ order: orderId, isDeleted: false }).session(session);
+
+    if (invoice) {
+      // ✅ UPDATE EXISTING INVOICE
+      console.log(`📝 Found existing invoice ${invoice.invoiceNumber}. Updating...`);
+      invoice.customerName = customerName;
+      invoice.phone = phone;
+      invoice.totalAmount = totalAmount;
+      invoice.paidAmount = paidAmount;
+      invoice.balanceAmount = balanceAmount;
+      invoice.paymentStatus = paymentStatus;
+      invoice.invoiceType = invoiceType;
+      invoice.items = invoiceItems;
+      
+      invoice.summary = {
+        subtotal: totalAmount,
+        discountType: "none",
+        discountValue: 0,
+        discountAmount: 0,
+        taxPercentage: 0,
+        taxAmount: 0,
+        grandTotal: totalAmount,
+        paidAmount: paidAmount,
+        dueAmount: balanceAmount
+      };
+      
+      if (order.specialNotes) {
+        invoice.notes = order.specialNotes;
+      }
+      
+      await invoice.save({ session });
+      console.log(`✅ Invoice ${invoice.invoiceNumber} successfully updated.`);
+    } else {
+      // ✅ CREATE NEW INVOICE
+      const invoiceNumber = await generateInvoiceNumber();
+      console.log(`🆕 Creating new invoice ${invoiceNumber}...`);
+
+      invoice = await Invoice.create([{
+        invoiceId: invoiceNumber,
+        invoiceNumber,
+        orderId: order.orderId,
+        orderRef: orderId,
+        order: orderId,
+        customer: order.customer?._id,
+        customerName,
+        phone,
+        invoiceType,
+        totalAmount,
+        paidAmount,
+        balanceAmount,
+        paymentStatus,
+        items: invoiceItems,
+        summary: {
+          subtotal: totalAmount,
+          discountType: "none",
+          discountValue: 0,
+          discountAmount: 0,
+          taxPercentage: 0,
+          taxAmount: 0,
+          grandTotal: totalAmount,
+          paidAmount: paidAmount,
+          dueAmount: balanceAmount
+        },
+        notes: order.specialNotes || "Auto-generated invoice",
+        generatedBy: order.createdBy || orderId
+      }], { session });
+
+      invoice = invoice[0];
+      console.log(`✅ Invoice ${invoice.invoiceNumber} successfully created.`);
+    }
+
+    return invoice;
+  } catch (error) {
+    console.error("❌ Error inside syncOrderInvoice service helper:", error.message);
+    throw error;
+  }
+};
