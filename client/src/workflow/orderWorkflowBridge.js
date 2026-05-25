@@ -40,18 +40,50 @@ function resolveGarmentList(order) {
   });
 }
 
-function findExistingJobForSlot(jobs, { orderMongoId, workCode, workMongoId }) {
+function findExistingJobForSlot(
+  jobs,
+  {
+    orderMongoId,
+    orderId,
+    workCode,
+    workMongoId,
+    garmentName,
+  }
+) {
+  // 1. Strongest match
   if (workMongoId) {
     const byWork = jobs.find((j) => j.workMongoId === workMongoId);
     if (byWork) return byWork;
   }
+
+  // 2. Stable work code
   if (workCode) {
     const byCode = jobs.find((j) => j.workCode === workCode);
     if (byCode) return byCode;
   }
+
+  // 3. Stable order + work
   if (orderMongoId && workCode) {
-    return jobs.find((j) => j.orderMongoId === orderMongoId && j.workCode === workCode);
+    const byOrderWork = jobs.find(
+      (j) =>
+        j.orderMongoId === orderMongoId &&
+        j.workCode === workCode
+    );
+
+    if (byOrderWork) return byOrderWork;
   }
+
+  // 4. FALLBACK FIX — prevents QR IDs from regenerating
+  if (orderId && garmentName) {
+    const byOrderGarment = jobs.find(
+      (j) =>
+        j.orderId === orderId &&
+        j.garmentName === garmentName
+    );
+
+    if (byOrderGarment) return byOrderGarment;
+  }
+
   return null;
 }
 
@@ -86,10 +118,15 @@ export function registerWorkflowJobsFromOrder(order, works = []) {
               },
       };
       const prev = findExistingJobForSlot(existing, {
-        workMongoId: work._id,
-        workCode: work.workId,
-        orderMongoId,
-      });
+  orderMongoId,
+  orderId,
+  workCode: work.workId,
+  workMongoId: work._id,
+  garmentName:
+    work?.garment?.name ||
+    work?.garmentName ||
+    "",
+});
       const job = upsertJobFromWork(normalized, [], prev);
       created.push(job);
     }
@@ -103,7 +140,12 @@ export function registerWorkflowJobsFromOrder(order, works = []) {
   garments.forEach((g, index) => {
     const seq = String(index + 1).padStart(Math.max(seqWidth, 2), "0");
     const workCode = orderId ? `${orderId}.${seq}` : `ORD-${seq}`;
-    const prev = findExistingJobForSlot(existing, { orderMongoId, workCode });
+    const prev = findExistingJobForSlot(existing, {
+  orderMongoId,
+  orderId,
+  workCode,
+  garmentName: g.name,
+});
 
     const fields = {
       orderId,

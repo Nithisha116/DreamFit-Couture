@@ -21,7 +21,15 @@ export function emitWorkflowChanged() {
 }
 
 export function getWorkflowJobByTrackingId(trackingId) {
-  return loadWorkflowJobs().find((j) => j.workflowTrackingId === trackingId) || null;
+  const jobs = loadWorkflowJobs();
+
+  return (
+    jobs.find(
+      (j) =>
+        j.workflowTrackingId === trackingId ||
+        j.workCode === trackingId
+    ) || null
+  );
 }
 
 export function getWorkflowJobByWorkMongoId(workMongoId) {
