@@ -565,7 +565,8 @@ const allowedOrigins = [
   "http://127.0.0.1:5177",
   "http://localhost:5000",
   "https://dream-fitcouture-bnuc.vercel.app",
-  "https://dream-fitcouture.vercel.app"
+  "https://dream-fitcouture.vercel.app",
+  "https://dream-fit-couture.vercel.app",
 ];
 
 app.use(
