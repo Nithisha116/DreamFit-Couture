@@ -3946,6 +3946,7 @@ import { fetchAllCustomers } from "../../../features/customer/customerSlice";
 import { fetchDeliveryDates, selectDeliveryDates, selectDeliveryCalendarLoading } from "../../../features/order/orderSlice";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import Select from "react-select";
 import GarmentForm from "../garment/GarmentForm";
 import AddPaymentModal from "../../../components/AddPaymentModal";
 import ImagePreviewModal from "../../../components/ImagePreviewModal";
@@ -4152,6 +4153,88 @@ export default function NewOrder() {
     if (!customer) return 'No phone';
     return customer.phone || customer.whatsappNumber || 'No phone';
   };
+
+  // 🎨 React Select custom styling configuration to match the slate/blue theme
+  const reactSelectCustomStyles = useMemo(() => ({
+    control: (provided, state) => ({
+      ...provided,
+      backgroundColor: '#f8fafc', // slate-50
+      borderColor: state.isFocused ? '#3b82f6' : '#e2e8f0', // slate-200 / blue-500
+      borderRadius: '0.75rem', // rounded-xl
+      padding: '2px 4px',
+      minHeight: '48px', // match existing py-3 height
+      boxShadow: state.isFocused ? '0 0 0 2px rgba(59, 130, 246, 0.2)' : 'none',
+      '&:hover': {
+        borderColor: state.isFocused ? '#3b82f6' : '#cbd5e1',
+      },
+      fontFamily: 'inherit',
+      fontSize: '0.875rem',
+      transition: 'all 0.2s',
+    }),
+    valueContainer: (provided) => ({
+      ...provided,
+      padding: '0 12px',
+    }),
+    menu: (provided) => ({
+      ...provided,
+      borderRadius: '0.75rem',
+      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+      border: '1px solid #e2e8f0',
+      overflow: 'hidden',
+      zIndex: 50,
+      marginTop: '4px',
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected 
+        ? '#3b82f6' 
+        : state.isFocused 
+          ? '#f1f5f9' 
+          : 'transparent',
+      color: state.isSelected ? '#ffffff' : '#334155',
+      cursor: 'pointer',
+      padding: '10px 14px',
+      fontFamily: 'inherit',
+      fontSize: '0.875rem',
+      '&:active': {
+        backgroundColor: '#3b82f6',
+        color: '#ffffff',
+      },
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: '#94a3b8', // slate-400
+    }),
+    singleValue: (provided) => ({
+      ...provided,
+      color: '#1e293b', // slate-800
+      fontWeight: '500',
+    }),
+    input: (provided) => ({
+      ...provided,
+      color: '#1e293b',
+    }),
+  }), []);
+
+  // Map raw customer data to select option items
+  const customerOptions = useMemo(() => {
+    if (!customers || !Array.isArray(customers)) return [];
+    return customers.map(customer => {
+      const fullName = getCustomerFullName(customer);
+      const displayId = getCustomerDisplayId(customer);
+      const phone = getCustomerPhone(customer);
+      return {
+        value: customer._id,
+        label: `${fullName} (${displayId}) - ${phone}`,
+        customer
+      };
+    });
+  }, [customers]);
+
+  // Derived active option
+  const selectedOption = useMemo(() => {
+    return customerOptions.find(opt => opt.value === formData.customer) || null;
+  }, [customerOptions, formData.customer]);
 
   // Filter customers based on search term
   const filteredCustomers = useMemo(() => {
@@ -5510,65 +5593,40 @@ const renderDayContents = useCallback((day, date) => {
             </h2>
 
             <div className="relative">
-              <input
-                type="text"
+              <Select
+                options={customerOptions}
+                value={selectedOption}
+                onChange={(option) => {
+                  if (option) {
+                    handleCustomerSelect(option.customer);
+                  } else {
+                    setFormData(prev => ({ ...prev, customer: "" }));
+                    setSelectedCustomerDisplay("");
+                    setSearchTerm("");
+                  }
+                }}
+                isSearchable
+                isClearable
                 placeholder="Search customer by name, phone or ID..."
-                value={searchTerm}
-                onChange={handleSearchChange}
-                onFocus={() => setShowCustomerDropdown(true)}
-                onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                styles={reactSelectCustomStyles}
+                isLoading={customersLoading}
+                noOptionsMessage={({ inputValue }) => (
+                  <div className="text-center py-3 px-4">
+                    <p className="text-sm text-slate-500 mb-2">
+                      {inputValue ? `No customers found for "${inputValue}"` : "Search customer by name, phone or ID..."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`${basePath}/add-customer`)}
+                      className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-black uppercase tracking-wider transition-colors"
+                    >
+                      + Create new customer
+                    </button>
+                  </div>
+                )}
               />
 
-              {showCustomerDropdown && (
-                <>
-                  {customersLoading && (
-                    <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center">
-                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent"></div>
-                      <p className="text-sm text-slate-500 mt-2">Loading customers...</p>
-                    </div>
-                  )}
-
-                  {!customersLoading && filteredCustomers.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                      {filteredCustomers.map((customer) => {
-                        const fullName = getCustomerFullName(customer);
-                        const displayId = getCustomerDisplayId(customer);
-                        const phone = getCustomerPhone(customer);
-                        
-                        return (
-                          <button
-                            key={customer._id}
-                            type="button"
-                            onClick={() => handleCustomerSelect(customer)}
-                            className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-slate-100 last:border-0"
-                          >
-                            <p className="font-medium text-slate-800">{fullName}</p>
-                            <p className="text-xs text-slate-400">
-                              <span className="font-mono">{displayId}</span> • {phone}
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {!customersLoading && filteredCustomers.length === 0 && searchTerm && (
-                    <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center">
-                      <p className="text-slate-500">No customers found</p>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`${basePath}/add-customer`)}
-                        className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                      >
-                        + Create new customer
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {formData.customer && !showCustomerDropdown && (
+              {formData.customer && (
                 <div className="mt-2 text-xs text-green-600 font-medium">
                   ✓ Customer selected: {selectedCustomerDisplay}
                 </div>
