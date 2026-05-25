@@ -346,7 +346,10 @@ export function advanceStageByTrackingId(trackingId, completedBy = "qr") {
   }
 
   const updated = recomputeJobMeta({ ...job, stages });
-  upsertWorkflowJob(updated);
+
+upsertWorkflowJob(updated);
+
+emitWorkflowChanged();
 
   const completedKeys = keys.filter((k) => stages[k]?.state === "completed");
   const suggestedWorkStatus = workStatusForCompletedStages(keys, completedKeys);
