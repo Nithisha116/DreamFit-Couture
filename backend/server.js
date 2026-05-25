@@ -913,6 +913,16 @@ app.use((req, res, next) => {
   }
   next();
 });
+app.get("/", (req, res) => {
+  res.send("DreamFit Backend Running 🚀");
+});
+
+app.get("/ping", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Server alive 🚀",
+  });
+});
 
 // ==================== ERROR HANDLING MIDDLEWARE ====================
 app.use(notFound);
