@@ -7,6 +7,7 @@ import { exportJobCardToPdf } from "../../components/workflow/JobCardPDFExport";
 import WorkflowStageTimeline from "../../components/workflow/WorkflowStageTimeline";
 import useWorkflowJobs from "../../hooks/useWorkflowJobs";
 import { advanceStageByTrackingId } from "../../workflow/workflowEngine";
+import { findWorkflowJob } from "../../workflow/workflowStorage";
 import { fetchWorkById } from "../../features/work/workSlice";
 import showToast from "../../utils/toast";
 
@@ -24,7 +25,16 @@ export default function TaskJobDetailPage() {
 
   const { jobs, refresh } = useWorkflowJobs();
   const job = useMemo(() => {
-    return jobs.find((j) => j.workflowTrackingId === trackingId) || null;
+    return (
+      findWorkflowJob(trackingId) ||
+      jobs.find(
+        (j) =>
+          j.workflowTrackingId === trackingId ||
+          j.workCode === trackingId ||
+          j.orderId === trackingId,
+      ) ||
+      null
+    );
   }, [jobs, trackingId]);
 
   useEffect(() => {

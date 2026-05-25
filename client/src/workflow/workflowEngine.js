@@ -6,12 +6,14 @@ import {
 } from "./workflowConstants";
 import {
   emitWorkflowChanged,
+  findWorkflowJob,
   getWorkflowJobByTrackingId,
   getWorkflowJobByWorkMongoId,
   loadWorkflowJobs,
   saveWorkflowJobs,
   upsertWorkflowJob,
 } from "./workflowStorage";
+import { sanitizeWorkflowJob } from "./workflowSanitize";
 import {
   applyWorkStatusToStages,
   extractAssigneesFromWork,
@@ -30,14 +32,19 @@ function emptyStage() {
 
 function initStages(stageKeys) {
   const stages = {};
-  stageKeys.forEach((k) => {
-    stages[k] = emptyStage();
-  });
+  (stageKeys || [])
+    .filter((k) => k != null && String(k).trim() !== "")
+    .forEach((k) => {
+      stages[k] = emptyStage();
+    });
   return stages;
 }
 
 export function getActiveStageKey(job) {
-  const keys = job.stageKeys || [];
+  const keys = (job?.stageKeys || []).filter(
+    (k) => k != null && String(k).trim() !== "",
+  );
+  if (!keys.length) return null;
   const active = keys.find((k) => job.stages?.[k]?.state === "active");
   if (active) return active;
   const pending = keys.find((k) => job.stages?.[k]?.state === "pending");
@@ -51,21 +58,25 @@ export function deriveAssignmentStatus(job) {
 }
 
 export function deriveLifecycleStatus(job) {
-  const keys = job.stageKeys || [];
+  const keys = (job.stageKeys || []).filter(
+    (k) => k != null && String(k).trim() !== "",
+  );
   if (!keys.length) return "open";
   const allDone = keys.every((k) => job.stages?.[k]?.state === "completed");
   return allDone ? "completed" : "open";
 }
 
 export function recomputeJobMeta(job) {
-  const activeKey = getActiveStageKey(job);
+  const base = sanitizeWorkflowJob(job) || job;
+  const activeKey = getActiveStageKey(base);
   return {
-    ...job,
-    assignmentStatus: deriveAssignmentStatus(job),
-    lifecycleStatus: deriveLifecycleStatus(job),
+    ...base,
+    assignmentStatus: deriveAssignmentStatus(base),
+    lifecycleStatus: deriveLifecycleStatus(base),
     currentStageKey: activeKey,
-    currentStageLabel:
-      getStageLabelFromDef(activeKey, job?.workflowStages) || "In progress",
+    currentStageLabel: activeKey
+      ? getStageLabelFromDef(activeKey, base?.workflowStages)
+      : "In progress",
   };
 }
 
@@ -105,9 +116,11 @@ function workToJobFields(work) {
 
 function pruneStagesObject(stages, stageKeys) {
   const next = {};
-  stageKeys.forEach((k) => {
-    next[k] = stages?.[k] || emptyStage();
-  });
+  (stageKeys || [])
+    .filter((k) => k != null && String(k).trim() !== "")
+    .forEach((k) => {
+      next[k] = stages?.[k] || emptyStage();
+    });
   return next;
 }
 
@@ -157,7 +170,10 @@ export function createJobFromWork(work, boutiqueTasks = [], source = "work-sync"
     withWorkflowStages(
       {
         id: existingJob?.id || newId(),
-        workflowTrackingId: existingJob?.workflowTrackingId || newId(),
+        workflowTrackingId:
+          existingJob?.workflowTrackingId ||
+          (fields.workCode ? String(fields.workCode) : null) ||
+          newId(),
         ...fields,
         stages,
         source: existingJob?.source || source,
@@ -289,7 +305,10 @@ export function createJobFromOrderPayload(
     withWorkflowStages(
       {
         id: existingJob?.id || newId(),
-        workflowTrackingId: existingJob?.workflowTrackingId || newId(),
+        workflowTrackingId:
+          existingJob?.workflowTrackingId ||
+          (fields.workCode ? String(fields.workCode) : null) ||
+          newId(),
         ...fields,
         stages,
         source: existingJob?.source || "order",
@@ -305,10 +324,10 @@ export function createJobFromOrderPayload(
 
 /** QR / floor: complete active stage and activate next */
 export function advanceStageByTrackingId(trackingId, completedBy = "qr") {
-  const job = getWorkflowJobByTrackingId(trackingId);
+  const job = findWorkflowJob(trackingId);
   if (!job) return { ok: false, error: "Job not found" };
 
-  const keys = job.stageKeys || [];
+  const keys = (job.stageKeys || []).filter((k) => k != null && k !== "");
   const activeKey = getActiveStageKey(job);
   const activeIdx = keys.indexOf(activeKey);
   if (activeIdx < 0) return { ok: false, error: "No active stage" };
@@ -336,9 +355,10 @@ export function advanceStageByTrackingId(trackingId, completedBy = "qr") {
 }
 
 export function assignWorkerToActiveStage(trackingId, assignee) {
-  const job = getWorkflowJobByTrackingId(trackingId);
+  const job = findWorkflowJob(trackingId);
   if (!job) return null;
   const activeKey = getActiveStageKey(job);
+  if (!activeKey) return null;
   const stages = { ...job.stages };
   stages[activeKey] = {
     ...stages[activeKey],

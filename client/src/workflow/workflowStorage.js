@@ -1,64 +1,122 @@
 import { WORKFLOW_CHANGED_EVENT, WORKFLOW_LS_KEY } from "./workflowConstants";
+import { dedupeWorkflowJobs, sanitizeWorkflowJob } from "./workflowSanitize";
+
+function normRef(ref) {
+  return String(ref || "")
+    .trim()
+    .toLowerCase();
+}
 
 export function loadWorkflowJobs() {
   try {
     const raw = localStorage.getItem(WORKFLOW_LS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return dedupeWorkflowJobs(parsed);
   } catch {
     return [];
   }
 }
 
 export function saveWorkflowJobs(jobs) {
-  localStorage.setItem(WORKFLOW_LS_KEY, JSON.stringify(jobs));
+  const clean = dedupeWorkflowJobs(jobs);
+  localStorage.setItem(WORKFLOW_LS_KEY, JSON.stringify(clean));
   emitWorkflowChanged();
+  return clean;
 }
 
 export function emitWorkflowChanged() {
   window.dispatchEvent(new CustomEvent(WORKFLOW_CHANGED_EVENT));
 }
 
-export function getWorkflowJobByTrackingId(trackingId) {
+/** Resolve job by tracking id, work code, order id, or internal id */
+export function findWorkflowJob(ref) {
+  const needle = normRef(ref);
+  if (!needle) return null;
+
   const jobs = loadWorkflowJobs();
 
   return (
-    jobs.find(
-      (j) =>
-        j.workflowTrackingId === trackingId ||
-        j.workCode === trackingId
-    ) || null
+    jobs.find((j) => {
+      const candidates = [
+        j.workflowTrackingId,
+        j.workCode,
+        j.orderId,
+        j.id,
+        j.workMongoId,
+      ]
+        .filter((v) => v != null && String(v).trim() !== "")
+        .map((v) => normRef(v));
+
+      return candidates.includes(needle);
+    }) || null
   );
+}
+
+export function getWorkflowJobByTrackingId(trackingId) {
+  return findWorkflowJob(trackingId);
 }
 
 export function getWorkflowJobByWorkMongoId(workMongoId) {
   if (!workMongoId) return null;
-  return loadWorkflowJobs().find((j) => j.workMongoId === workMongoId) || null;
+  const id = String(workMongoId);
+  return loadWorkflowJobs().find((j) => j.workMongoId === id) || null;
+}
+
+function findJobIndex(jobs, job) {
+  return jobs.findIndex(
+    (j) =>
+      (job.workflowTrackingId &&
+        j.workflowTrackingId === job.workflowTrackingId) ||
+      (job.workMongoId && j.workMongoId && j.workMongoId === job.workMongoId) ||
+      (job.workCode && j.workCode && j.workCode === job.workCode),
+  );
 }
 
 export function upsertWorkflowJob(job) {
+  const incoming = sanitizeWorkflowJob(job);
+  if (!incoming) return null;
+
   const jobs = loadWorkflowJobs();
-  const idx = jobs.findIndex(
-    (j) =>
-      j.workflowTrackingId === job.workflowTrackingId ||
-      (job.workMongoId && j.workMongoId === job.workMongoId),
-  );
+  const idx = findJobIndex(jobs, incoming);
   const next = [...jobs];
-  if (idx >= 0) next[idx] = { ...next[idx], ...job, updatedAt: Date.now() };
-  else next.unshift({ ...job, updatedAt: Date.now() });
+
+  let saved;
+  if (idx >= 0) {
+    const prev = jobs[idx];
+    saved = sanitizeWorkflowJob({
+      ...prev,
+      ...incoming,
+      workflowTrackingId:
+        prev.workflowTrackingId || incoming.workflowTrackingId,
+      id: prev.id || incoming.id,
+      createdAt: prev.createdAt || incoming.createdAt,
+      updatedAt: Date.now(),
+    });
+    next[idx] = saved;
+  } else {
+    saved = { ...incoming, updatedAt: Date.now() };
+    next.unshift(saved);
+  }
+
   saveWorkflowJobs(next);
-  return job;
+  return saved;
 }
 
 export function updateWorkflowJob(trackingId, updater) {
   const jobs = loadWorkflowJobs();
-  const idx = jobs.findIndex((j) => j.workflowTrackingId === trackingId);
+  const existing = findWorkflowJob(trackingId);
+  if (!existing) return null;
+
+  const idx = findJobIndex(jobs, existing);
   if (idx < 0) return null;
-  const updated =
+
+  const merged =
     typeof updater === "function" ? updater(jobs[idx]) : { ...jobs[idx], ...updater };
+
   const next = [...jobs];
-  next[idx] = { ...updated, updatedAt: Date.now() };
+  next[idx] = sanitizeWorkflowJob({ ...merged, updatedAt: Date.now() });
   saveWorkflowJobs(next);
   return next[idx];
 }

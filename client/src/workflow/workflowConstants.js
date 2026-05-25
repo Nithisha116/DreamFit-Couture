@@ -36,28 +36,49 @@ export function normalizeStageKey(key) {
  * then falls back to PIPELINE_STAGE_DEFS, then the key itself.
  */
 export function getStageLabelFromDef(key, workflowStages) {
-  // Check the custom order-level workflowStages array first
+  if (key == null || key === "") return "Stage";
+  const safeKey = normalizeStageKey(key);
+  if (!safeKey) return "Stage";
+
   if (Array.isArray(workflowStages)) {
-    const found = workflowStages.find(
-      s => (typeof s === "object" ? s.key : s) === key
-    );
-    if (found?.label) return found.label;
+    const found = workflowStages.find((s) => {
+      if (s == null) return false;
+      const sk = typeof s === "object" ? normalizeStageKey(s.key || s.stage || s.id) : normalizeStageKey(s);
+      return sk === safeKey;
+    });
+    if (found && typeof found === "object" && found.label) return found.label;
   }
-  return PIPELINE_STAGE_DEFS[key]?.label || (key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " "));
+
+  const def = PIPELINE_STAGE_DEFS[safeKey];
+  if (def?.label) return def.label;
+
+  const s = String(safeKey);
+  return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
 }
 
 /**
  * Resolve the short label (for timeline bubbles) for a stage key.
  */
 export function getStageShortLabel(key, workflowStages) {
+  if (key == null || key === "") return "—";
+  const safeKey = normalizeStageKey(key);
+  if (!safeKey) return "—";
+
   if (Array.isArray(workflowStages)) {
-    const found = workflowStages.find(
-      s => (typeof s === "object" ? s.key : s) === key
-    );
-    if (found?.shortLabel) return found.shortLabel;
-    if (found?.label) return found.label.slice(0, 4);
+    const found = workflowStages.find((s) => {
+      if (s == null) return false;
+      const sk = typeof s === "object" ? normalizeStageKey(s.key || s.stage || s.id) : normalizeStageKey(s);
+      return sk === safeKey;
+    });
+    if (found && typeof found === "object") {
+      if (found.shortLabel) return found.shortLabel;
+      if (found.label) return String(found.label).slice(0, 4);
+    }
   }
-  return PIPELINE_STAGE_DEFS[key]?.shortLabel || key.slice(0, 4).toUpperCase();
+
+  const def = PIPELINE_STAGE_DEFS[safeKey];
+  if (def?.shortLabel) return def.shortLabel;
+  return String(safeKey).slice(0, 4).toUpperCase();
 }
 
 /**
@@ -69,20 +90,25 @@ export function getStageShortLabel(key, workflowStages) {
  */
 export function normalizeWorkflowStages(stages) {
   if (stages && typeof stages === "object" && !Array.isArray(stages)) {
-    const keys = ['cutting', 'stitching', 'trial', 'packing'];
-    return keys.filter(k => stages[k] !== undefined);
+    const seen = new Set();
+    const out = [];
+    for (const rawKey of Object.keys(stages)) {
+      const key = normalizeStageKey(rawKey);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(key);
+    }
+    return out.length ? out : [...DEFAULT_WORKFLOW_STAGES];
   }
   if (!Array.isArray(stages)) return [];
   const seen = new Set();
   const out = [];
   for (const raw of stages) {
-    // Support both string ("cutting") and object ({ key: "cutting", ... })
-    const rawKey = typeof raw === "object" && raw !== null
-      ? (raw.key || raw.stage || raw.id)
-      : raw;
+    if (raw == null) continue;
+    const rawKey =
+      typeof raw === "object" ? raw.key || raw.stage || raw.id : raw;
+    if (rawKey == null) continue;
     const key = normalizeStageKey(rawKey);
-    // Allow any non-empty key — not just predefined keys —
-    // so custom stages ("embroidery", "finishing", "aari", etc.) pass through.
     if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(key);

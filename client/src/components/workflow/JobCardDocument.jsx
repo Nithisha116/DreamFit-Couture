@@ -117,6 +117,7 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
 
   // ── Stage History ──
   const stageHistory = (job.stageKeys || [])
+    .filter((key) => key != null && String(key).trim() !== "")
     .map((key) => {
       const s = job.stages?.[key];
       if (!s?.completedAt && s?.state !== "active") return null;
@@ -201,13 +202,15 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
             Worker Responsibilities
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
-            {job.stageKeys?.map((key) => {
+            {(job.stageKeys || [])
+              .filter((key) => key != null && String(key).trim() !== "")
+              .map((key) => {
               const s = job.stages?.[key];
               const workerName = s?.assignedTo?.name || "Unassigned";
               const workerRole = s?.assignedTo?.role || "Pending";
               const label = getStageLabelFromDef(key, job?.workflowStages);
               return (
-                <div key={key} className="rounded-lg bg-slate-50 border border-slate-100 p-2.5">
+                <div key={String(key)} className="rounded-lg bg-slate-50 border border-slate-100 p-2.5">
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
                   <p className="font-semibold text-slate-800 mt-0.5 truncate text-xs">{workerName}</p>
                   <p className="text-[9px] text-slate-500 capitalize">{workerRole}</p>

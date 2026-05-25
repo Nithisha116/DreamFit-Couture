@@ -67,12 +67,13 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
   const handleAssign = async () => {
     if (!selectedWorker) return;
 
-    const jobId = job._id || job.id || job.workMongoId;
-    if (!jobId) {
-      showToast.error("Job ID is missing. Please close and reopen the modal.");
-      console.error("❌ Job object has no _id, id, or workMongoId:", job);
-      return;
-    }
+    const jobId = job.workMongoId || job._id;
+
+if (!jobId) {
+  showToast.error("Valid Mongo Job ID is missing.");
+  console.error("❌ Missing Mongo ObjectId:", job);
+  return;
+}
 
     try {
       await API.post(`/workflow/works/${jobId}/assign-worker`, {

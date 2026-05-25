@@ -1,30 +1,50 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  fetchWorkflowJobs,
-  selectWorkflowJobs,
-  selectWorkflowJobsLoading,
-} from "../features/work/workSlice";
+import { WORKFLOW_CHANGED_EVENT } from "../workflow/workflowConstants";
+import { fetchWorkflowJobs } from "../features/work/workSlice";
+import { loadWorkflowJobs, upsertWorkflowJob } from "../workflow/workflowStorage";
 
 /**
- * Reactive workflow job list — backed by Redux + backend API.
- * Replaces the old localStorage-based engine with a single fetch from
- * GET /api/workflow/jobs which synthesises jobs server-side.
+ * Workflow jobs: localStorage is the live SSOT for QR/assign/advance.
+ * API jobs are merged into localStorage on refresh (no wipe of local progress).
  */
 export function useWorkflowJobs() {
   const dispatch = useDispatch();
-  const jobs = useSelector(selectWorkflowJobs);
-  const loading = useSelector(selectWorkflowJobsLoading);
+  const apiLoading = useSelector((state) => state.work?.workflowJobsLoading);
+  const [jobs, setJobs] = useState(() => loadWorkflowJobs());
+  const [version, setVersion] = useState(0);
+
+  const reloadFromStorage = useCallback(() => {
+    const next = loadWorkflowJobs();
+    setJobs(next);
+    setVersion((v) => v + 1);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    try {
+      const apiJobs = await dispatch(fetchWorkflowJobs()).unwrap();
+      if (Array.isArray(apiJobs)) {
+        for (const raw of apiJobs) {
+          upsertWorkflowJob(raw);
+        }
+      }
+    } catch {
+      /* keep local jobs when API unavailable */
+    }
+    reloadFromStorage();
+  }, [dispatch, reloadFromStorage]);
 
   useEffect(() => {
-    dispatch(fetchWorkflowJobs());
-  }, [dispatch]);
+    refresh();
+  }, [refresh]);
 
-  const refresh = useCallback(() => {
-    dispatch(fetchWorkflowJobs());
-  }, [dispatch]);
+  useEffect(() => {
+    const onChange = () => reloadFromStorage();
+    window.addEventListener(WORKFLOW_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(WORKFLOW_CHANGED_EVENT, onChange);
+  }, [reloadFromStorage]);
 
-  return { jobs, refresh, loading };
+  return { jobs, refresh, loading: apiLoading, version };
 }
 
 export default useWorkflowJobs;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { format } from "date-fns";
@@ -20,7 +20,8 @@ import {
   WORKFLOW_CHANGED_EVENT,
   getStageLabelFromDef,
 } from "../../workflow/workflowConstants";
-import { getWorkflowJobByTrackingId } from "../../workflow/workflowStorage";
+import { findWorkflowJob } from "../../workflow/workflowStorage";
+import useWorkflowJobs from "../../hooks/useWorkflowJobs";
 import WorkflowStageTimeline from "../../components/workflow/WorkflowStageTimeline";
 import showToast from "../../utils/toast";
 
@@ -72,10 +73,12 @@ export default function WorkflowScanPage() {
   const wfParam = searchParams.get("wf") || paramId;
   const trackingId = useMemo(() => resolveTrackingId(wfParam), [wfParam]);
 
+  const { jobs: workflowJobs, refresh: refreshWorkflowJobs, version } = useWorkflowJobs();
   const [job, setJob] = useState(null);
   const [loadState, setLoadState] = useState("loading");
   const [completing, setCompleting] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
+  const retriedLoadRef = useRef(false);
 
   const reloadJob = useCallback(() => {
     if (!trackingId) {
@@ -83,27 +86,34 @@ export default function WorkflowScanPage() {
       return;
     }
     const found =
-  getWorkflowJobByTrackingId(trackingId) ||
-  JSON.parse(localStorage.getItem("dreamfit_workflow_jobs_v1") || "[]").find(
-    (job) =>
-      job.workflowTrackingId === trackingId ||
-      job.workCode === trackingId ||
-      job.orderId === trackingId
-  );
-
-if (found) {
-  setJob(found);
-  setLoadState("ready");
-} else {
-  setJob(null);
-  setLoadState("not_found");
-}
-  }, [trackingId]);
+      findWorkflowJob(trackingId) ||
+      workflowJobs.find(
+        (j) =>
+          j.workflowTrackingId === trackingId ||
+          j.workCode === trackingId ||
+          j.orderId === trackingId,
+      ) ||
+      null;
+    if (found) {
+      setJob(found);
+      setLoadState("ready");
+    } else {
+      setJob(null);
+      setLoadState("not_found");
+    }
+  }, [trackingId, workflowJobs]);
 
   useEffect(() => {
     setJustCompleted(false);
     reloadJob();
-  }, [reloadJob]);
+  }, [reloadJob, version]);
+
+  useEffect(() => {
+    if (trackingId && loadState === "not_found" && !retriedLoadRef.current) {
+      retriedLoadRef.current = true;
+      refreshWorkflowJobs();
+    }
+  }, [trackingId, loadState, refreshWorkflowJobs]);
 
   useEffect(() => {
     const onChange = () => reloadJob();
@@ -122,8 +132,8 @@ if (found) {
   }, [job, activeKey, isWorkflowComplete]);
 
   const completedHistory = useMemo(() => {
-    if (!job?.stageKeys?.length && !job?.workflowStages?.length) return [];
-    const keys = job.stageKeys || [];
+    if (!job) return [];
+    const keys = (job.stageKeys || []).filter((k) => k != null && k !== "");
     return keys
       .filter((k) => job.stages?.[k]?.state === "completed" && job.stages[k].completedAt)
       .map((k) => ({
