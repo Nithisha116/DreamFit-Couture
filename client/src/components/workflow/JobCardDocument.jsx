@@ -24,7 +24,7 @@ function imageUrl(img) {
   if (!img) return null;
   const backendUrl = window.location.hostname === "localhost"
     ? "http://localhost:5000"
-    : "https://dreamfitcouture-1.onrender.com";
+    : "https://dreamfit-couture.onrender.com";
 
   if (typeof img === "string") {
     if (img.startsWith("http")) return img;
