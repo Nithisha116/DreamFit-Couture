@@ -4,31 +4,35 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart,
+  ShoppingBag,
+  Clock,
+  CheckCircle,
   IndianRupee,
+  Layers,
+  Search,
+  Calendar,
+  ChevronDown,
+  Filter,
+  X,
+  AlertCircle,
   Truck,
   Landmark,
   Scissors,
   TrendingUp,
-  Clock,
   ArrowRight,
   RefreshCw,
   Eye,
   Package,
-  AlertCircle,
-  Filter,
-  Calendar,
   UserCheck,
   UserX,
   Award,
-  Layers,
-  CheckCircle,
+  Users,
   XCircle,
   Loader,
   Plus,
   UserPlus,
   Receipt,
   DollarSign,
-  Users,
   HardHat,
   Store,
   Briefcase,
@@ -47,8 +51,6 @@ import {
   ChevronsRight,
   User as UserIcon,
   Bell,
-  Search,
-  X,
   UserCheck as UserCheckIcon,
   Menu,
   ChevronLeft
@@ -1506,36 +1508,24 @@ const displayPerformers = (isAdmin || isStoreKeeper)
             </div>
           </StatCard>
 
-          {/* Card 3 - Total Works */}
+          {/* Card 3 - Overdue Orders */}
           <StatCard
-            title="Total Works"
-            value={<CountUp end={workStats?.totalWorks || workStats?.total || recentWorks?.length || 0} separator="," duration={1.5} />}
-            icon={<Layers className="text-purple-600" size={20} />}
-            bgColor="bg-purple-50"
-            borderColor="border-purple-200"
-            onClick={() => navigate(`${basePath}/orders?filter=active`)}
+            title="Overdue Orders"
+            value={<CountUp end={orderStats?.overdueOrders || 0} separator="," duration={1.5} />}
+            icon={<AlertCircle className="text-red-600" size={20} />}
+            bgColor="bg-red-50"
+            borderColor="border-red-200"
+            onClick={() => navigate(`${basePath}/orders?status=__overdue`)}
             className="cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
           >
-            <div className="mt-2 sm:mt-3 grid grid-cols-4 gap-1 text-[8px] sm:text-xs">
-              <div className="bg-white p-1 rounded-lg text-center">
-                <span className="text-slate-500 block">⏳</span>
-                <p className="font-bold text-orange-600 text-xs">{workStats?.pending || 0}</p>
+            <div className="flex gap-2 text-[10px] sm:text-xs">
+              <div className="bg-white p-1 rounded-lg text-center flex-1">
+                <span className="text-slate-500 block">Status</span>
+                <p className="font-bold text-red-600 text-xs">⚠️ High Priority</p>
               </div>
-              <div className="bg-white p-1 rounded-lg text-center">
-                <span className="text-slate-500 block">✅</span>
-                <p className="font-bold text-blue-600 text-xs">{workStats?.accepted || 0}</p>
-              </div>
-              <div className="bg-white p-1 rounded-lg text-center">
-                <span className="text-slate-500 block">✂️</span>
-                <p className="font-bold text-purple-600 text-xs">
-                  {(workStats?.cuttingStarted || 0) + (workStats?.cuttingCompleted || 0)}
-                </p>
-              </div>
-              <div className="bg-white p-1 rounded-lg text-center">
-                <span className="text-slate-500 block">🧵</span>
-                <p className="font-bold text-pink-600 text-xs">
-                  {(workStats?.sewingStarted || 0) + (workStats?.sewingCompleted || 0)}
-                </p>
+              <div className="bg-white p-1 rounded-lg text-center flex-1">
+                <span className="text-slate-500 block">Action</span>
+                <p className="font-bold text-red-600 text-xs">Needs Attention</p>
               </div>
             </div>
           </StatCard>

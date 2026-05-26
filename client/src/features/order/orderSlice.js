@@ -9788,7 +9788,7 @@ const orderSlice = createSlice({
           thisWeek: payloadData.thisWeek || 0,
           thisMonth: payloadData.thisMonth || 0,
           inProgress: payloadData.inProgress || payloadData.inProductionOrders || payloadData.cutting || 0,
-          overdue: payloadData.overdue || payloadData.overdueOrders || 0,
+          overdueOrders: payloadData.overdueOrders || payloadData.overdue || 0,
           revenue: payloadData.revenue || payloadData.totalRevenue || 0
         };
         
@@ -10310,6 +10310,7 @@ export const selectOrderStats = (state) => {
     thisWeek: stats.thisWeek || 0,
     thisMonth: stats.thisMonth || 0,
     inProgress: stats.inProgress || stats.cutting || 0,
+    overdueOrders: stats.overdueOrders || 0,
     deliveries: stats.deliveries || {
       today: 0,
       tomorrow: 0,
