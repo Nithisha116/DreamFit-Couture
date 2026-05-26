@@ -7,30 +7,35 @@ export function calculatePaymentSummary(order, garments = [], payments = []) {
   if (!order) {
     return {
       totalAmount: 0,
+      totalAmountMin: 0,
+      totalAmountMax: 0,
       totalPaid: 0,
       balanceDue: 0,
+      balanceDueMin: 0,
+      balanceDueMax: 0,
       isFullyPaid: false,
       paymentModes: "N/A",
       payments: []
     };
   }
 
-  // 1. Calculate order total amount
-  let totalAmount = 0;
-  if (order.finalizedAmount !== undefined && order.finalizedAmount !== null && order.finalizedAmount !== "") {
-    totalAmount = Number(order.finalizedAmount) || 0;
-  } else if (Array.isArray(garments) && garments.length > 0) {
-    totalAmount = garments.reduce((sum, g) => {
-      const qty = g.quantity || g.qty || g.Quantity || 1;
-      const finalized = g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
-        ? Number(g.finalizedPrice)
-        : (g.priceRange?.max || 0);
-      return sum + finalized * qty;
-    }, 0);
-  } else if (order.priceSummary?.totalMax) {
-    totalAmount = Number(order.priceSummary.totalMax) || 0;
-  } else if (order.minPrice !== undefined && order.minPrice !== null) {
-    totalAmount = Number(order.minPrice) || 0;
+  // 1. Calculate order total amount range
+  let totalAmountMin = 0;
+  let totalAmountMax = 0;
+  
+  if (Array.isArray(garments) && garments.length > 0) {
+    const activeGarments = garments.filter(g => g && g.isActive !== false);
+    totalAmountMin = activeGarments.reduce((sum, g) => sum + (Number(g.minPrice || g.priceRange?.min) || 0), 0);
+    totalAmountMax = activeGarments.reduce((sum, g) => sum + (Number(g.maxPrice || g.priceRange?.max) || 0), 0);
+  } else if (order.minPrice !== undefined && order.minPrice !== null && order.minPrice !== 0) {
+    totalAmountMin = Number(order.minPrice) || 0;
+    totalAmountMax = Number(order.maxPrice) || 0;
+  } else if (order.priceSummary?.totalMin !== undefined) {
+    totalAmountMin = Number(order.priceSummary.totalMin) || 0;
+    totalAmountMax = Number(order.priceSummary.totalMax) || 0;
+  } else if (order.finalizedAmount !== undefined && order.finalizedAmount !== null && order.finalizedAmount !== "") {
+    totalAmountMin = Number(order.finalizedAmount) || 0;
+    totalAmountMax = Number(order.finalizedAmount) || 0;
   }
 
   // 2. Aggregate payments list
@@ -58,11 +63,36 @@ export function calculatePaymentSummary(order, garments = [], payments = []) {
     totalPaid = Number(order.paymentSummary.totalPaid) || 0;
   }
 
-  // 4. Compute balance
-  const balanceDue = Math.max(0, totalAmount - totalPaid);
+  // 4. Compute balances
+  let balanceDueMin = 0;
+  let balanceDueMax = 0;
+  let isFullyPaid = false;
 
-  // 5. Check fully paid
-  const isFullyPaid = totalAmount > 0 && totalPaid >= totalAmount;
+  if (totalAmountMin > 0) {
+    if (totalPaid >= totalAmountMin) {
+      balanceDueMin = 0;
+      balanceDueMax = 0;
+      isFullyPaid = true;
+    } else {
+      balanceDueMin = Math.max(0, totalAmountMin - totalPaid);
+      balanceDueMax = Math.max(0, totalAmountMax - totalPaid);
+      isFullyPaid = false;
+    }
+  } else if (totalAmountMax > 0) {
+    if (totalPaid >= totalAmountMax) {
+      balanceDueMin = 0;
+      balanceDueMax = 0;
+      isFullyPaid = true;
+    } else {
+      balanceDueMin = 0;
+      balanceDueMax = Math.max(0, totalAmountMax - totalPaid);
+      isFullyPaid = false;
+    }
+  } else {
+    balanceDueMin = 0;
+    balanceDueMax = 0;
+    isFullyPaid = true;
+  }
 
   // 6. Extract unique payment modes
   const uniqueModes = Array.from(new Set(
@@ -84,9 +114,13 @@ export function calculatePaymentSummary(order, garments = [], payments = []) {
     : formatMode(order.advancePayment?.method || "cash");
 
   return {
-    totalAmount,
+    totalAmount: totalAmountMax, // Legacy fallback
+    totalAmountMin,
+    totalAmountMax,
     totalPaid,
-    balanceDue,
+    balanceDue: balanceDueMax, // Legacy fallback
+    balanceDueMin,
+    balanceDueMax,
     isFullyPaid,
     paymentModes,
     payments: activePayments

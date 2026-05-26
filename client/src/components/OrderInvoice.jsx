@@ -410,16 +410,15 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
 
   const calculateGarmentTotal = (garment) => {
     const qty = getQuantity(garment);
-    const finalized = garment.finalizedPrice !== undefined && garment.finalizedPrice !== null && garment.finalizedPrice !== ""
-      ? Number(garment.finalizedPrice)
-      : (garment.priceRange?.max || 0);
-    return finalized * qty;
+    const min = Number(garment.priceRange?.min ?? garment.minPrice) || 0;
+    const max = Number(garment.priceRange?.max ?? garment.maxPrice) || 0;
+    return {
+      min: min * qty,
+      max: max * qty
+    };
   };
 
   const summary = calculatePaymentSummary(order, garments, payments);
-  const finalizedSubtotal = summary.totalAmount;
-  const advance = summary.totalPaid;
-  const balanceDue = summary.balanceDue;
 
   const getGarmentId = (garment, index) => {
     if (garment.garmentId) return garment.garmentId;
@@ -789,10 +788,10 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                         fontFamily: "monospace",
                       }}
                     >
-                      {g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== "" ? (
-                        <>₹{Number(g.finalizedPrice).toLocaleString('en-IN')}</>
+                      {Number(g.priceRange?.min ?? g.minPrice) === Number(g.priceRange?.max ?? g.maxPrice) ? (
+                        <>₹{Number(g.priceRange?.min ?? g.minPrice).toLocaleString('en-IN')}</>
                       ) : (
-                        <>₹{(g.priceRange?.max || 0).toLocaleString('en-IN')}</>
+                        <>₹{Number(g.priceRange?.min ?? g.minPrice).toLocaleString('en-IN')} – ₹{Number(g.priceRange?.max ?? g.maxPrice).toLocaleString('en-IN')}</>
                       )}
                     </td>
                     <td
@@ -804,7 +803,11 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                         color: "#be185d",
                       }}
                     >
-                      <>₹{total.toLocaleString('en-IN')}</>
+                      {total.min === total.max ? (
+                        <>₹{total.min.toLocaleString('en-IN')}</>
+                      ) : (
+                        <>₹{total.min.toLocaleString('en-IN')} – ₹{total.max.toLocaleString('en-IN')}</>
+                      )}
                     </td>
                   </tr>
                 );
@@ -821,7 +824,7 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                     fontWeight: "600",
                   }}
                 >
-                  Subtotal
+                  Subtotal Range
                 </td>
                 <td
                   style={{
@@ -832,7 +835,11 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                     color: "#be185d",
                   }}
                 >
-                  ₹{finalizedSubtotal.toLocaleString('en-IN')}
+                  {summary.totalAmountMin === summary.totalAmountMax ? (
+                    <>₹{summary.totalAmountMin.toLocaleString('en-IN')}</>
+                  ) : (
+                    <>₹{summary.totalAmountMin.toLocaleString('en-IN')} – ₹{summary.totalAmountMax.toLocaleString('en-IN')}</>
+                  )}
                 </td>
               </tr>
             </tfoot>
@@ -931,7 +938,13 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                     fontSize: "18px",
                   }}
                 >
-                  {summary.isFullyPaid ? "Paid" : `₹${summary.balanceDue.toLocaleString('en-IN')}`}
+                  {summary.isFullyPaid ? (
+                    "Paid"
+                  ) : summary.balanceDueMin === summary.balanceDueMax ? (
+                    `₹${summary.balanceDueMin.toLocaleString('en-IN')}`
+                  ) : (
+                    `₹${summary.balanceDueMin.toLocaleString('en-IN')} – ₹${summary.balanceDueMax.toLocaleString('en-IN')}`
+                  )}
                 </span>
               </div>
             </div>

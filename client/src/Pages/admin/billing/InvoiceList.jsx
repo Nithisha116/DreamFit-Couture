@@ -280,7 +280,7 @@ const InvoiceList = () => {
 
                         {/* Payment Status */}
                         {inv.status !== "cancelled" && (
-                          inv.paymentStatus === "paid" ? (
+                          (inv.paymentStatus === "paid" || inv.paymentStatus === "fully_paid") ? (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
                               Paid
                             </span>

@@ -57,18 +57,23 @@ export const createInvoiceService = async (orderId, invoiceData, userId) => {
 
     // 4. Extract advance payments already registered against order
     const totalPaidRupees = order.paymentSummary?.totalPaid || 0;
-    const grandTotalRupees = totals.grandTotal;
+    const grandTotalRupees = totals.grandTotalMax || totals.grandTotal;
     
     const paidPaise = toPaise(totalPaidRupees);
-    const grandTotalPaise = toPaise(grandTotalRupees);
-    const duePaise = Math.max(0, grandTotalPaise - paidPaise);
+    const grandTotalMinPaise = toPaise(totals.grandTotalMin);
+    const grandTotalMaxPaise = toPaise(totals.grandTotalMax);
+    const isFullyPaid = paidPaise >= grandTotalMinPaise;
+
+    const dueMinPaise = isFullyPaid ? 0 : Math.max(0, grandTotalMinPaise - paidPaise);
+    const dueMaxPaise = isFullyPaid ? 0 : Math.max(0, grandTotalMaxPaise - paidPaise);
+    const duePaise = dueMaxPaise;
 
     // 5. Generate collision-free sequential number
     const invoiceNumber = await generateInvoiceNumber();
 
     // 6. Compute margin analytics
     const estProfit = calculateProfit({
-      grandTotal: totals.grandTotal,
+      grandTotal: totals.grandTotalMax || totals.grandTotal,
       outsourcingCost: invoiceData.outsourcingCost || 0,
       materialCost: invoiceData.materialCost || 0
     });
@@ -82,7 +87,9 @@ export const createInvoiceService = async (orderId, invoiceData, userId) => {
       summary: {
         ...totals,
         paidAmount: totalPaidRupees,
-        dueAmount: toRupees(duePaise)
+        dueAmount: toRupees(duePaise),
+        dueAmountMin: toRupees(dueMinPaise),
+        dueAmountMax: toRupees(dueMaxPaise)
       },
       profitMargin: {
         outsourcingCost: invoiceData.outsourcingCost || 0,
@@ -91,7 +98,7 @@ export const createInvoiceService = async (orderId, invoiceData, userId) => {
         estimatedProfit: estProfit
       },
       status: "issued",
-      paymentStatus: duePaise === 0 ? "paid" : paidPaise > 0 ? "partial" : "pending",
+      paymentStatus: isFullyPaid ? "paid" : paidPaise > 0 ? "partial" : "pending",
       dueDate: invoiceData.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default 7 days
       generatedBy: userId
     });
@@ -99,11 +106,15 @@ export const createInvoiceService = async (orderId, invoiceData, userId) => {
     await invoiceRepository.save(invoice, session);
 
     // 8. Sync financials back to Order to keep speed snapshots alive
-    order.balanceAmount = invoice.summary.dueAmount;
+    order.balanceAmount = invoice.summary.dueAmountMax;
+    order.balanceMin = invoice.summary.dueAmountMin;
+    order.balanceMax = invoice.summary.dueAmountMax;
     order.paymentSummary.paymentStatus = invoice.paymentStatus;
-    // Lock order stitching charges to finalize invoicing
-    order.priceSummary.totalMin = grandTotalRupees;
-    order.priceSummary.totalMax = grandTotalRupees;
+    // Set order price range to the invoice grand total range
+    order.minPrice = totals.grandTotalMin;
+    order.maxPrice = totals.grandTotalMax;
+    order.priceSummary.totalMin = totals.grandTotalMin;
+    order.priceSummary.totalMax = totals.grandTotalMax;
     await order.save({ session });
 
     await session.commitTransaction();
@@ -205,13 +216,24 @@ export const collectInvoicePaymentService = async (invoiceId, paymentData, userI
     await ledgerTx.save({ session });
 
     // 3. Update Invoice Financial Summary using precise math
-    const nextPaidPaise = toPaise(invoice.summary.paidAmount) + amountPaise;
-    const nextDuePaise = Math.max(0, toPaise(invoice.summary.grandTotal) - nextPaidPaise);
-
-    invoice.summary.paidAmount = toRupees(nextPaidPaise);
-    invoice.summary.dueAmount = toRupees(nextDuePaise);
+    const nextPaidRupees = toRupees(toPaise(invoice.summary.paidAmount) + amountPaise);
+    const nextPaidPaise = toPaise(nextPaidRupees);
     
-    if (nextDuePaise === 0) {
+    const grandTotalMin = invoice.summary.grandTotalMin !== undefined ? invoice.summary.grandTotalMin : invoice.summary.grandTotal;
+    const grandTotalMax = invoice.summary.grandTotalMax !== undefined ? invoice.summary.grandTotalMax : invoice.summary.grandTotal;
+    const grandTotalMinPaise = toPaise(grandTotalMin);
+    const grandTotalMaxPaise = toPaise(grandTotalMax);
+    
+    const isFullyPaid = nextPaidPaise >= grandTotalMinPaise;
+    const nextDueMinPaise = isFullyPaid ? 0 : Math.max(0, grandTotalMinPaise - nextPaidPaise);
+    const nextDueMaxPaise = isFullyPaid ? 0 : Math.max(0, grandTotalMaxPaise - nextPaidPaise);
+
+    invoice.summary.paidAmount = nextPaidRupees;
+    invoice.summary.dueAmount = toRupees(nextDueMaxPaise);
+    invoice.summary.dueAmountMin = toRupees(nextDueMinPaise);
+    invoice.summary.dueAmountMax = toRupees(nextDueMaxPaise);
+    
+    if (isFullyPaid) {
       invoice.paymentStatus = "paid";
     } else {
       invoice.paymentStatus = "partial";
@@ -220,6 +242,8 @@ export const collectInvoicePaymentService = async (invoiceId, paymentData, userI
 
     // 4. Sync totals back to Order financials
     order.balanceAmount = invoice.summary.dueAmount;
+    order.balanceMin = invoice.summary.dueAmountMin || 0;
+    order.balanceMax = invoice.summary.dueAmountMax || 0;
     order.paymentSummary.totalPaid = toRupees(toPaise(order.paymentSummary.totalPaid) + amountPaise);
     order.paymentSummary.paymentStatus = invoice.paymentStatus;
     
@@ -367,20 +391,30 @@ export const syncOrderInvoice = async (orderId, session = null) => {
     const garments = await mongoose.model("Garment")
       .find({ order: orderId, isActive: true })
       .session(session);
-      
-    const invoiceItems = garments.map(g => ({
-      name: g.name || "Custom Garment",
-      qty: 1,
-      price: g.finalizedAmount || g.maxPrice || g.priceRange?.max || 0,
-      total: g.finalizedAmount || g.maxPrice || g.priceRange?.max || 0
-    }));
+
+    const invoiceItems = garments.map(g => {
+      const minVal = Number(g.minPrice || g.priceRange?.min) || 0;
+      const maxVal = Number(g.maxPrice || g.priceRange?.max) || 0;
+      return {
+        name: g.name || "Custom Garment",
+        qty: 1,
+        price: maxVal,
+        total: maxVal,
+        minPrice: minVal,
+        maxPrice: maxVal
+      };
+    });
 
     if (invoiceItems.length === 0) {
+      const minVal = order.minPrice || order.priceSummary?.totalMin || 0;
+      const maxVal = order.maxPrice || order.priceSummary?.totalMax || 0;
       invoiceItems.push({
         name: "Custom Tailoring Services",
         qty: 1,
-        price: order.finalizedAmount || order.priceSummary?.totalMax || 0,
-        total: order.finalizedAmount || order.priceSummary?.totalMax || 0
+        price: maxVal,
+        total: maxVal,
+        minPrice: minVal,
+        maxPrice: maxVal
       });
     }
 
@@ -388,14 +422,27 @@ export const syncOrderInvoice = async (orderId, session = null) => {
     const customerName = order.customer?.name || "Walk-in Customer";
     const phone = order.customer?.phone || "";
 
-    // 4. Calculate dynamic pricing totals
-    const totalAmount = order.finalizedAmount || order.priceSummary?.totalMax || order.totalAmount || 0;
+    // 4. Calculate dynamic range-based pricing totals
+    let totalMin = 0;
+    let totalMax = 0;
+    
+    if (garments && garments.length > 0) {
+      garments.forEach(g => {
+        totalMin += Number(g.minPrice || g.priceRange?.min) || 0;
+        totalMax += Number(g.maxPrice || g.priceRange?.max) || 0;
+      });
+    } else {
+      totalMin = order.minPrice || order.priceSummary?.totalMin || 0;
+      totalMax = order.maxPrice || order.priceSummary?.totalMax || 0;
+    }
+
     const paidAmount = order.paymentSummary?.totalPaid || 0;
-    const balanceAmount = Math.max(0, totalAmount - paidAmount);
+    const balanceMin = Math.max(0, totalMin - paidAmount);
+    const balanceMax = Math.max(0, totalMax - paidAmount);
 
     // Map payment status casing
     let paymentStatus = "Pending";
-    if (balanceAmount === 0 && paidAmount > 0) {
+    if (balanceMax === 0 && paidAmount > 0) {
       paymentStatus = "Paid";
     } else if (paidAmount > 0) {
       paymentStatus = "Partial";
@@ -403,9 +450,9 @@ export const syncOrderInvoice = async (orderId, session = null) => {
 
     // Resolve Invoice Type
     let invoiceType = "Final";
-    if (paidAmount > 0 && balanceAmount > 0) {
+    if (paidAmount > 0 && balanceMax > 0) {
       invoiceType = "Advance";
-    } else if (paidAmount > 0 && balanceAmount === 0) {
+    } else if (paidAmount > 0 && balanceMax === 0) {
       invoiceType = "Final";
     }
 
@@ -417,23 +464,29 @@ export const syncOrderInvoice = async (orderId, session = null) => {
       console.log(`📝 Found existing invoice ${invoice.invoiceNumber}. Updating...`);
       invoice.customerName = customerName;
       invoice.phone = phone;
-      invoice.totalAmount = totalAmount;
+      invoice.totalAmount = totalMax;
       invoice.paidAmount = paidAmount;
-      invoice.balanceAmount = balanceAmount;
+      invoice.balanceAmount = balanceMax;
       invoice.paymentStatus = paymentStatus;
       invoice.invoiceType = invoiceType;
       invoice.items = invoiceItems;
       
       invoice.summary = {
-        subtotal: totalAmount,
+        subtotal: totalMax,
         discountType: "none",
         discountValue: 0,
         discountAmount: 0,
         taxPercentage: 0,
         taxAmount: 0,
-        grandTotal: totalAmount,
+        grandTotal: totalMax,
         paidAmount: paidAmount,
-        dueAmount: balanceAmount
+        dueAmount: balanceMax,
+        subtotalMin: totalMin,
+        subtotalMax: totalMax,
+        grandTotalMin: totalMin,
+        grandTotalMax: totalMax,
+        dueAmountMin: balanceMin,
+        dueAmountMax: balanceMax
       };
       
       if (order.specialNotes) {
@@ -457,21 +510,27 @@ export const syncOrderInvoice = async (orderId, session = null) => {
         customerName,
         phone,
         invoiceType,
-        totalAmount,
+        totalAmount: totalMax,
         paidAmount,
-        balanceAmount,
+        balanceAmount: balanceMax,
         paymentStatus,
         items: invoiceItems,
         summary: {
-          subtotal: totalAmount,
+          subtotal: totalMax,
           discountType: "none",
           discountValue: 0,
           discountAmount: 0,
           taxPercentage: 0,
           taxAmount: 0,
-          grandTotal: totalAmount,
+          grandTotal: totalMax,
           paidAmount: paidAmount,
-          dueAmount: balanceAmount
+          dueAmount: balanceMax,
+          subtotalMin: totalMin,
+          subtotalMax: totalMax,
+          grandTotalMin: totalMin,
+          grandTotalMax: totalMax,
+          dueAmountMin: balanceMin,
+          dueAmountMax: balanceMax
         },
         notes: order.specialNotes || "Auto-generated invoice",
         generatedBy: order.createdBy || orderId
