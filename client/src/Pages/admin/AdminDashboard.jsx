@@ -114,6 +114,7 @@ import StatCard from '../../components/common/StatCard';
 import DeliveryPipelineSection from '../../components/dashboard/DeliveryPipelineSection';
 import showToast from '../../utils/toast';
 import { fetchAppointments } from '../../features/appointment/appointmentSlice';
+import CountUp from 'react-countup';
 
 export default function AdminDashboard() {
   const dispatch = useDispatch();
@@ -1456,7 +1457,7 @@ const displayPerformers = (isAdmin || isStoreKeeper)
           {/* Card 1 - Total Orders */}
           <StatCard
             title="Total Orders"
-            value={safeFormat(orderStats?.total || 0)}
+            value={<CountUp end={orderStats?.total || 0} separator="," duration={1.5} />}
             icon={<ShoppingCart className="text-blue-600" size={20} />}
             bgColor="bg-blue-50"
             borderColor="border-blue-200"
@@ -1486,11 +1487,12 @@ const displayPerformers = (isAdmin || isStoreKeeper)
           {/* Card 2 - Revenue */}
           <StatCard
             title="Revenue"
-            value={`₹${safeFormat(dailyRevenueSummary?.totalRevenue || 0)}`}
+            value={<CountUp end={dailyRevenueSummary?.totalRevenue || 0} prefix="₹" separator="," duration={1.5} />}
             icon={<IndianRupee className="text-green-600" size={20} />}
             bgColor="bg-green-50"
             borderColor="border-green-200"
-            className="transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
+            onClick={() => navigate(`${basePath}/banking/overview`)}
+            className="cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
           >
             <div className="mt-2 sm:mt-3 flex gap-1 sm:gap-2 text-[10px] sm:text-xs">
               <div className="bg-white p-1 sm:p-2 rounded-lg flex-1 text-center">
@@ -1507,11 +1509,12 @@ const displayPerformers = (isAdmin || isStoreKeeper)
           {/* Card 3 - Total Works */}
           <StatCard
             title="Total Works"
-            value={safeFormat(workStats?.totalWorks || workStats?.total || recentWorks?.length || 0)}
+            value={<CountUp end={workStats?.totalWorks || workStats?.total || recentWorks?.length || 0} separator="," duration={1.5} />}
             icon={<Layers className="text-purple-600" size={20} />}
             bgColor="bg-purple-50"
             borderColor="border-purple-200"
-            className="transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
+            onClick={() => navigate(`${basePath}/orders?filter=active`)}
+            className="cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
           >
             <div className="mt-2 sm:mt-3 grid grid-cols-4 gap-1 text-[8px] sm:text-xs">
               <div className="bg-white p-1 rounded-lg text-center">
@@ -1542,7 +1545,7 @@ const displayPerformers = (isAdmin || isStoreKeeper)
             title="Appointments"
             value={appointmentsLoading ? (
               <Loader className="w-5 h-5 animate-spin text-indigo-600" />
-            ) : safeFormat(appointments?.length || 0)}
+            ) : <CountUp end={appointments?.length || 0} separator="," duration={1.5} />}
             icon={<Calendar className="text-indigo-600" size={20} />}
             bgColor="bg-indigo-50"
             borderColor="border-indigo-200"
