@@ -1024,34 +1024,59 @@ const displayPerformers = (isAdmin || isStoreKeeper)
 
   // ===== ROLE-BASED QUICK ACTIONS using basePath =====
   const getQuickActions = () => {
-    const actions = [
-      {
-        label: 'New Order',
-        icon: ShoppingCart,
-        path: `${basePath}/orders/new`,
-        color: 'blue',
-        description: 'Create a new order',
-        show: true // Both Admin and Store Keeper can create orders
-      },
+    const commonActions = [
       {
         label: 'Add Customer',
         icon: UserPlus,
         path: `${basePath}/add-customer`,
         color: 'green',
         description: 'Register new customer',
-        show: true // Both can add customers
-      }
+      },
+      {
+        label: 'New Order',
+        icon: ShoppingCart,
+        path: `${basePath}/orders/new`,
+        color: 'blue',
+        description: 'Create a new order',
+      },
+      {
+        label: 'Add Appointment',
+        icon: Calendar,
+        path: `${basePath}/appointments`,
+        color: 'orange',
+        description: 'Schedule a new appointment',
+      },
+      {
+        label: 'Add Product',
+        icon: Package,
+        path: `${basePath}/products`,
+        color: 'purple',
+        description: 'Add a new product to inventory',
+      },
     ];
 
-    // Banking actions (both Admin and Store Keeper)
-    actions.push(
+    const adminActions = [
+      ...commonActions,
+      {
+        label: 'Add Staff',
+        icon: Users,
+        path: `${basePath}/add-staff`,
+        color: 'pink',
+        description: 'Add new staff member',
+      },
+      {
+        label: 'Add Tailor',
+        icon: Scissors,
+        path: `${basePath}/tailors/add`,
+        color: 'teal',
+        description: 'Register new tailor',
+      },
       {
         label: 'Add Expense',
         icon: Receipt,
         path: `${basePath}/banking/expense`,
         color: 'red',
         description: 'Record an expense',
-        show: true
       },
       {
         label: 'Add Income',
@@ -1059,33 +1084,30 @@ const displayPerformers = (isAdmin || isStoreKeeper)
         path: `${basePath}/banking/income`,
         color: 'green',
         description: 'Record an income',
-        show: true
       }
-    );
+    ];
 
-    // Admin-only actions
-    if (isAdmin) {
-      actions.push(
-        {
-          label: 'Add Staff',
-          icon: Users,
-          path: `${basePath}/add-staff`,
-          color: 'purple',
-          description: 'Add new staff member',
-          show: true
-        },
-        {
-          label: 'Add Tailor',
-          icon: Scissors,
-          path: `${basePath}/tailors/add`,
-          color: 'orange',
-          description: 'Register new tailor',
-          show: true
-        }
-      );
-    }
+    const storeKeeperActions = [
+      ...commonActions,
+      {
+        label: 'Add Expense',
+        icon: Receipt,
+        path: `${basePath}/banking/expense`,
+        color: 'red',
+        description: 'Record an expense',
+      },
+      {
+        label: 'Add Income',
+        icon: DollarSign,
+        path: `${basePath}/banking/income`,
+        color: 'green',
+        description: 'Record an income',
+      }
+    ];
 
-    return actions.filter(action => action.show);
+    if (isAdmin) return adminActions;
+    if (isStoreKeeper) return storeKeeperActions;
+    return [];
   };
 
   const quickActions = getQuickActions();
@@ -1451,7 +1473,43 @@ const displayPerformers = (isAdmin || isStoreKeeper)
             }
           </p>
         </div>
+        {/* ===== QUICK ACTIONS ===== */}
+<div className="bg-white rounded-xl shadow-sm p-4 sm:p-5 lg:p-6 mb-6 lg:mb-8">
+  <div className="flex items-center justify-between mb-4">
+    <h2 className="text-sm sm:text-base lg:text-lg font-bold text-slate-800 flex items-center gap-2">
+      <Zap size={18} className="text-yellow-500" />
+      Quick Actions
+    </h2>
+  </div>
 
+  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3">
+    {quickActions.slice(0, 4).map((action, index) => {
+      const IconComponent = action.icon;
+
+      return (
+        <button
+          key={index}
+          onClick={() => navigate(action.path)}
+          className="flex flex-col items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-4 transition-all duration-200 hover:shadow-md"
+        >
+          <div className="p-3 rounded-full bg-white shadow-sm">
+            <IconComponent size={22} className="text-blue-600" />
+          </div>
+
+          <div className="text-center">
+            <p className="text-sm font-semibold text-slate-800">
+              {action.label}
+            </p>
+
+            <p className="text-[11px] text-slate-500 mt-1">
+              {action.description}
+            </p>
+          </div>
+        </button>
+      );
+    })}
+  </div>
+</div>
         {/* ===== KPI CARDS - Fully Responsive ===== */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
           {/* Card 1 - Total Orders */}
@@ -2322,6 +2380,7 @@ const displayPerformers = (isAdmin || isStoreKeeper)
   </div>
 </div>
 
+
         {/* ===== STORE KEEPER SECTION (if not admin) - Responsive ===== */}
        {/* ===== STORE KEEPER SECTION ===== */}
 {!isAdmin && isStoreKeeper && (
@@ -3115,6 +3174,7 @@ const displayPerformers = (isAdmin || isStoreKeeper)
 //             <div className="grid grid-cols-3 gap-1 text-xs mt-2"><div className="bg-white p-1 text-center">Working<p className="font-bold text-green-600">{tailorStats.busy}</p></div><div className="bg-white p-1 text-center">Idle<p className="font-bold text-slate-600">{tailorStats.idle}</p></div><div className="bg-white p-1 text-center">Leave<p className="font-bold text-orange-600">{tailorStats.onLeave}</p></div></div>
 //           </StatCard>
 //         </div>
+
 
 //         {/* Revenue Trend Chart */}
 //         <div className="bg-white rounded-xl p-6 shadow-sm mb-6">

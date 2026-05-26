@@ -255,11 +255,18 @@ const InvoiceDetails = () => {
         {/* Calculations & Balances summary */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
           {/* Notes remarks */}
-          <div className="text-xs text-gray-400 font-medium leading-relaxed max-w-sm">
-            <p className="font-bold text-gray-500 uppercase tracking-wider mb-1">Standard Studio Terms</p>
-            <p>1. Tailoring works once finalized and invoiced trigger Delivery Lock safety protocols.</p>
-            <p>2. Trial sessions are recommended before marking statuses as complete.</p>
-            <p>3. Dynamic UPI checkout details remain valid until invoice values are refreshed.</p>
+          <div className="space-y-4">
+            
+
+            {/* Terms & Conditions */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
+              <h3 className="font-bold text-gray-700 uppercase tracking-wider text-xs">Terms & Conditions</h3>
+              <ul className="list-decimal list-inside text-xs text-gray-600 space-y-1">
+                <li>All orders require a 50% advance payment.</li>
+                <li>Alterations for completed garments will be chargeable.</li>
+                <li>Goods not collected within 30 days of the due date may be disposed of without notice.</li>
+              </ul>
+            </div>
           </div>
 
           {/* Ledger calculations */}
