@@ -113,6 +113,7 @@ import {
 import StatCard from '../../components/common/StatCard';
 import DeliveryPipelineSection from '../../components/dashboard/DeliveryPipelineSection';
 import showToast from '../../utils/toast';
+import { fetchAppointments } from '../../features/appointment/appointmentSlice';
 
 export default function AdminDashboard() {
   const dispatch = useDispatch();
@@ -205,6 +206,11 @@ export default function AdminDashboard() {
     dateRange: { start: null, end: null }
   };
   const revenueLoading = useSelector(selectDailyRevenueLoading);
+  
+  // ===== GET APPOINTMENTS DATA =====
+  const appointmentsState = useSelector((state) => state.appointment) || {};
+  const appointments = appointmentsState.appointments || [];
+  const appointmentsLoading = appointmentsState.isLoading || false;
   
   // ✅ Ithu thaan Graph-la peak vara vaikum
   const formattedChartData = useMemo(() => {
@@ -627,6 +633,7 @@ export default function AdminDashboard() {
     dispatch(fetchTailorStats());
     dispatch(fetchDailyRevenueStats(revenueParams));
     dispatch(fetchTodayTransactions());
+    dispatch(fetchAppointments());
     
     if (isAdmin || isStoreKeeper) {
       dispatch(fetchTailorPerformance({ period: dateRange }));
@@ -1453,6 +1460,8 @@ const displayPerformers = (isAdmin || isStoreKeeper)
             icon={<ShoppingCart className="text-blue-600" size={20} />}
             bgColor="bg-blue-50"
             borderColor="border-blue-200"
+            onClick={() => navigate(`${basePath}/orders`)}
+            className="cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
           >
             <div className="mt-2 sm:mt-3 grid grid-cols-3 gap-1 sm:gap-2 text-[10px] sm:text-xs">
               <div className="bg-white p-1 sm:p-2 rounded-lg text-center">
@@ -1481,6 +1490,7 @@ const displayPerformers = (isAdmin || isStoreKeeper)
             icon={<IndianRupee className="text-green-600" size={20} />}
             bgColor="bg-green-50"
             borderColor="border-green-200"
+            className="transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
           >
             <div className="mt-2 sm:mt-3 flex gap-1 sm:gap-2 text-[10px] sm:text-xs">
               <div className="bg-white p-1 sm:p-2 rounded-lg flex-1 text-center">
@@ -1501,6 +1511,7 @@ const displayPerformers = (isAdmin || isStoreKeeper)
             icon={<Layers className="text-purple-600" size={20} />}
             bgColor="bg-purple-50"
             borderColor="border-purple-200"
+            className="transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
           >
             <div className="mt-2 sm:mt-3 grid grid-cols-4 gap-1 text-[8px] sm:text-xs">
               <div className="bg-white p-1 rounded-lg text-center">
@@ -1526,27 +1537,21 @@ const displayPerformers = (isAdmin || isStoreKeeper)
             </div>
           </StatCard>
 
-          {/* Card 4 - Active Tailors */}
+          {/* Card 4 - Appointments */}
           <StatCard
-            title="Active Tailors"
-            value={safeFormat(tailorStats?.active || 0)}
-            icon={<Scissors className="text-purple-600" size={20} />}
-            bgColor="bg-purple-50"
-            borderColor="border-purple-200"
+            title="Appointments"
+            value={appointmentsLoading ? (
+              <Loader className="w-5 h-5 animate-spin text-indigo-600" />
+            ) : safeFormat(appointments?.length || 0)}
+            icon={<Calendar className="text-indigo-600" size={20} />}
+            bgColor="bg-indigo-50"
+            borderColor="border-indigo-200"
+            onClick={() => navigate(`${basePath}/appointments`)}
+            className="cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
           >
-            <div className="mt-2 sm:mt-3 grid grid-cols-3 gap-1 sm:gap-2 text-[10px] sm:text-xs">
-              <div className="bg-white p-1 sm:p-2 rounded-lg text-center">
-                <span className="text-slate-500 block">Working</span>
-                <p className="font-bold text-green-600 text-xs sm:text-sm">{tailorStats?.busy || 0}</p>
-              </div>
-              <div className="bg-white p-1 sm:p-2 rounded-lg text-center">
-                <span className="text-slate-500 block">Idle</span>
-                <p className="font-bold text-slate-600 text-xs sm:text-sm">{tailorStats?.idle || 0}</p>
-              </div>
-              <div className="bg-white p-1 sm:p-2 rounded-lg text-center">
-                <span className="text-slate-500 block">Leave</span>
-                <p className="font-bold text-orange-600 text-xs sm:text-sm">{tailorStats?.onLeave || 0}</p>
-              </div>
+            <div className="mt-2 sm:mt-3 flex items-center justify-between text-[10px] sm:text-xs text-indigo-600 font-medium">
+              <span>View Schedule</span>
+              <ArrowRight size={14} />
             </div>
           </StatCard>
         </div>

@@ -3953,6 +3953,7 @@ import ImagePreviewModal from "../../../components/ImagePreviewModal";
 import showToast from "../../../utils/toast";
 import { registerWorkflowJobsFromOrder } from "../../../workflow/orderWorkflowBridge";
 import { fetchWorks } from "../../../features/work/workSlice";
+import RangeBadge from "../../../components/RangeBadge";
 import { syncWorksToWorkflowJobs } from "../../../workflow/workflowEngine";
 import ProductionWorkflowBuilder from "../../../components/workflow/ProductionWorkflowBuilder";
 import {
@@ -4297,39 +4298,36 @@ export default function NewOrder() {
     return { min, max };
   }, [garments]);
 
-  // Calculate finalized amount (negotiated sum)
-  const finalizedAmount = useMemo(() => {
-    return garments.reduce((sum, g) => {
-      const hasFinalized = g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== "";
-      const val = hasFinalized ? g.finalizedPrice : (g.priceRange?.max || 0);
-      return sum + Number(val);
-    }, 0);
-  }, [garments]);
+  // Calculate finalized amount (negotiated sum - legacy support maps to max)
+  const finalizedAmount = estimatedRange.max;
 
   // Unified driving totalAmount
-  const totalAmount = finalizedAmount;
+  const totalAmount = estimatedRange.max;
 
-  // Calculate priceSummary object for backward compatibility
+  // Calculate priceSummary object
   const priceSummary = useMemo(() => {
-    return { totalMin: finalizedAmount, totalMax: finalizedAmount };
-  }, [finalizedAmount]);
+    return { totalMin: estimatedRange.min, totalMax: estimatedRange.max };
+  }, [estimatedRange.min, estimatedRange.max]);
 
   // Calculate balance - with NaN protection and DEBUG
   const balanceAmount = useMemo(() => {
     console.log("%c⚖️⚖️⚖️ CALCULATING BALANCE ⚖️⚖️⚖️", "background: orange; color: white; font-size: 12px");
     
     const paid = isNaN(totalPayments) ? 0 : Number(totalPayments);
-    const remaining = Math.max(0, finalizedAmount - paid);
+    const remainingMin = Math.max(0, estimatedRange.min - paid);
+    const remainingMax = Math.max(0, estimatedRange.max - paid);
     
-    console.log("  Finalized Total Amount:", finalizedAmount);
+    console.log("  Estimated Min Amount:", estimatedRange.min);
+    console.log("  Estimated Max Amount:", estimatedRange.max);
     console.log("  Total Paid:", paid);
-    console.log("  Remaining Balance:", remaining);
+    console.log("  Remaining Min Balance:", remainingMin);
+    console.log("  Remaining Max Balance:", remainingMax);
     
     return {
-      min: remaining,
-      max: remaining,
+      min: remainingMin,
+      max: remainingMax,
     };
-  }, [finalizedAmount, totalPayments]);
+  }, [estimatedRange.min, estimatedRange.max, totalPayments]);
 
   // 🔍🔍🔍 CUSTOMER HANDLERS 🔍🔍🔍
   
@@ -5739,10 +5737,14 @@ const renderDayContents = useCallback((day, date) => {
                             </div>
                             
                             <div>
-                              <p className="text-xs text-slate-400">Price</p>
-                              <p className="font-semibold text-emerald-600">
-                                ₹{(garment.finalizedPrice || garment.priceRange?.max || 0).toLocaleString('en-IN')}
-                              </p>
+                              <p className="text-xs text-slate-400">Price Range</p>
+                              <div className="mt-0.5">
+                                <RangeBadge
+                                  min={garment.priceRange?.min ?? garment.minPrice}
+                                  max={garment.priceRange?.max ?? garment.maxPrice}
+                                  type="standard"
+                                />
+                              </div>
                             </div>
                           </div>
 
@@ -6038,16 +6040,10 @@ const renderDayContents = useCallback((day, date) => {
             
             <div className="space-y-4">
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 shadow-sm">
-                <p className="text-[10px] text-blue-600 font-black uppercase mb-0.5">Finalized Billing Amount</p>
-                <p className="text-2xl font-black text-blue-700">
-                  ₹{finalizedAmount.toLocaleString('en-IN')}
-                </p>
-                {estimatedRange.min > 0 && estimatedRange.max > 0 && (
-                  <div className="mt-2 pt-2 border-t border-blue-200/50 flex justify-between text-[9px] text-slate-500 font-bold">
-                    <span>ESTIMATED RANGE:</span>
-                    <span>₹{estimatedRange.min.toLocaleString('en-IN')} - ₹{estimatedRange.max.toLocaleString('en-IN')}</span>
-                  </div>
-                )}
+                <p className="text-[10px] text-blue-600 font-black uppercase mb-0.5">Estimated Billing Amount Range</p>
+                <div className="mt-1">
+                  <RangeBadge min={estimatedRange.min} max={estimatedRange.max} type="standard" className="text-sm py-1.5 px-3 rounded-xl font-black" />
+                </div>
               </div>
 
               {garments.length > 0 && (

@@ -93,8 +93,9 @@ const PaymentReceipt = forwardRef(({
 
   // Running totals after this payment
   const totalPaidAfterThis = previousTotal + currentAmount;
-  const balance = Math.max(0, orderTotal - totalPaidAfterThis);
-  const isReceiptFullyPaid = balance <= 0;
+  const isReceiptFullyPaid = summary.totalAmountMin > 0 && totalPaidAfterThis >= summary.totalAmountMin;
+  const balanceMin = isReceiptFullyPaid ? 0 : Math.max(0, summary.totalAmountMin - totalPaidAfterThis);
+  const balanceMax = isReceiptFullyPaid ? 0 : Math.max(0, summary.totalAmountMax - totalPaidAfterThis);
 
   // Payment status
   const getPaymentStatus = () => {
@@ -267,9 +268,13 @@ const PaymentReceipt = forwardRef(({
             </thead>
             <tbody>
               <tr style={{ borderBottom: "1px solid #fbcfe8" }}>
-                <td style={{ padding: "12px 14px" }}>Order Total</td>
+                <td style={{ padding: "12px 14px" }}>Order Price Range</td>
                 <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: "600" }}>
-                  {formatCurrency(orderTotal)}
+                  {summary.totalAmountMin === summary.totalAmountMax ? (
+                    formatCurrency(summary.totalAmountMax)
+                  ) : (
+                    `${formatCurrency(summary.totalAmountMin)} – ${formatCurrency(summary.totalAmountMax)}`
+                  )}
                 </td>
               </tr>
               
@@ -322,21 +327,25 @@ const PaymentReceipt = forwardRef(({
 
         {/* ===== RUNNING BALANCE SECTION ===== */}
         <div style={{ 
-          backgroundColor: "#fff7ed",
+          backgroundColor: isReceiptFullyPaid ? "#ecfdf5" : "#fff7ed",
           borderRadius: "12px",
           padding: "20px",
           marginBottom: "30px",
-          border: "1px solid #fed7aa"
+          border: isReceiptFullyPaid ? "1px solid #a7f3d0" : "1px solid #fed7aa"
         }}>
-          <h3 style={{ color: "#9a3412", fontSize: "16px", fontWeight: "700", margin: "0 0 15px 0" }}>
+          <h3 style={{ color: isReceiptFullyPaid ? "#065f46" : "#9a3412", fontSize: "16px", fontWeight: "700", margin: "0 0 15px 0" }}>
             BALANCE AFTER THIS PAYMENT
           </h3>
           
-          <div style={{ display: "flex", justifycontent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <p style={{ fontSize: "13px", color: "#9a3412", margin: "0 0 5px 0" }}>Remaining Balance</p>
-              <p style={{ fontSize: "28px", fontWeight: "800", color: "#be185d", margin: 0 }}>
-                {formatCurrency(balance)}
+              <p style={{ fontSize: "13px", color: isReceiptFullyPaid ? "#065f46" : "#9a3412", margin: "0 0 5px 0" }}>Remaining Balance</p>
+              <p style={{ fontSize: "28px", fontWeight: "800", color: isReceiptFullyPaid ? "#065f46" : "#be185d", margin: 0 }}>
+                {balanceMin === balanceMax ? (
+                  formatCurrency(balanceMax)
+                ) : (
+                  `${formatCurrency(balanceMin)} – ${formatCurrency(balanceMax)}`
+                )}
               </p>
             </div>
             

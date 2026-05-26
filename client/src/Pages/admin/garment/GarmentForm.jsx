@@ -827,36 +827,20 @@ const renderDayContents = useCallback(
       return;
     }
 
-    if (!formData.priceRange.min || !formData.priceRange.max) {
-      showToast.error("Please enter price range");
+    if (formData.priceRange.min === "" || formData.priceRange.min === undefined || formData.priceRange.min === null ||
+        formData.priceRange.max === "" || formData.priceRange.max === undefined || formData.priceRange.max === null) {
+      showToast.error("Please enter both minimum and maximum price");
       setLoading(false);
       return;
     }
 
-    if (parseInt(formData.priceRange.min) > parseInt(formData.priceRange.max)) {
+    const minPriceNum = Number(formData.priceRange.min) || 0;
+    const maxPriceNum = Number(formData.priceRange.max) || 0;
+
+    if (minPriceNum > maxPriceNum) {
       showToast.error("Minimum price cannot be greater than maximum price");
       setLoading(false);
       return;
-    }
-
-    if (formData.finalizedPrice === "" || formData.finalizedPrice === undefined || formData.finalizedPrice === null) {
-      showToast.error("Please enter the price for this garment");
-      setLoading(false);
-      return;
-    }
-
-    const finalPriceNum = Number(formData.finalizedPrice);
-    const minPriceNum = Number(formData.priceRange.min) || 0;
-    const maxPriceNum = Number(formData.priceRange.max) || 0;
-    
-    if (minPriceNum > 0 && maxPriceNum > 0) {
-      if (finalPriceNum < minPriceNum || finalPriceNum > maxPriceNum) {
-        const proceed = window.confirm(`⚠️ Custom Price Warning:\nThe entered price ₹${finalPriceNum} is outside the standard catalog range of ₹${minPriceNum} - ₹${maxPriceNum}.\n\nDo you want to override and lock this custom price?`);
-        if (!proceed) {
-          setLoading(false);
-          return;
-        }
-      }
     }
 
     if (formData.fabricSource === "shop") {
@@ -940,9 +924,9 @@ const renderDayContents = useCallback(
       formDataToSend.append("estimatedDelivery", formData.estimatedDelivery);
       formDataToSend.append("priority", formData.priority);
       formDataToSend.append("priceRange", JSON.stringify(formData.priceRange));
-      if (formData.finalizedPrice !== "" && formData.finalizedPrice !== null && formData.finalizedPrice !== undefined) {
-        formDataToSend.append("finalizedPrice", String(formData.finalizedPrice));
-      }
+      formDataToSend.append("minPrice", String(formData.priceRange.min));
+      formDataToSend.append("maxPrice", String(formData.priceRange.max));
+      formDataToSend.append("finalizedPrice", String(formData.priceRange.max));
 
       // Add fabric data
       formDataToSend.append("fabricSource", formData.fabricSource);
@@ -1372,62 +1356,68 @@ const renderDayContents = useCallback(
                 </div>
               </div>
 
-              {/* Finalized Price Input */}
+              {/* Custom Price Range Inputs */}
               <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200">
                 <label className="block text-[8px] sm:text-xs font-black uppercase text-slate-500 mb-2">
-                  Garment Price (₹) <span className="text-rose-500">*</span>
+                  Customize Garment Price Range (₹) <span className="text-rose-500">*</span>
                 </label>
                 
-                {/* Quick Selection Buttons */}
-                {formData.priceRange.min && formData.priceRange.max && (
-                  <div className="flex gap-2 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, finalizedPrice: Number(formData.priceRange.min) || 0 }))}
-                      className="flex-1 py-1.5 px-3 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold border border-blue-200 transition-all text-center"
-                    >
-                      Min Preset: ₹{formData.priceRange.min}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, finalizedPrice: Number(formData.priceRange.max) || 0 }))}
-                      className="flex-1 py-1.5 px-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold border border-indigo-200 transition-all text-center"
-                    >
-                      Max Preset: ₹{formData.priceRange.max}
-                    </button>
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                  <div>
+                    <label className="block text-[8px] sm:text-xs font-bold text-slate-400 mb-1">
+                      Min Price (₹)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-3 text-slate-400 font-bold text-xs">₹</span>
+                      <input
+                        type="number"
+                        value={formData.priceRange.min || ""}
+                        onChange={(e) => {
+                          const val = e.target.value === "" ? "" : Number(e.target.value);
+                          setFormData(prev => ({
+                            ...prev,
+                            priceRange: {
+                              ...prev.priceRange,
+                              min: val
+                            }
+                          }));
+                        }}
+                        placeholder="Min price"
+                        required
+                        className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-xs font-bold text-slate-800"
+                      />
+                    </div>
                   </div>
-                )}
 
-                <div className="relative">
-                  <span className="absolute left-3 top-3.5 text-slate-400 font-bold text-sm">₹</span>
-                  <input
-                    type="number"
-                    name="finalizedPrice"
-                    value={formData.finalizedPrice || ""}
-                    onChange={(e) => {
-                      const val = e.target.value === "" ? "" : Number(e.target.value);
-                      setFormData(prev => ({ ...prev, finalizedPrice: val }));
-                    }}
-                    placeholder="Enter garment price (e.g. 2500)"
-                    required
-                    className="w-full pl-8 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-bold text-slate-800"
-                  />
+                  <div>
+                    <label className="block text-[8px] sm:text-xs font-bold text-slate-400 mb-1">
+                      Max Price (₹)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-3 text-slate-400 font-bold text-xs">₹</span>
+                      <input
+                        type="number"
+                        value={formData.priceRange.max || ""}
+                        onChange={(e) => {
+                          const val = e.target.value === "" ? "" : Number(e.target.value);
+                          setFormData(prev => ({
+                            ...prev,
+                            priceRange: {
+                              ...prev.priceRange,
+                              max: val
+                            }
+                          }));
+                        }}
+                        placeholder="Max price"
+                        required
+                        className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-xs font-bold text-slate-800"
+                      />
+                    </div>
+                  </div>
                 </div>
                 
-                {formData.finalizedPrice !== "" && formData.finalizedPrice !== undefined && formData.finalizedPrice !== null && (
-                  (Number(formData.finalizedPrice) < Number(formData.priceRange.min) || Number(formData.finalizedPrice) > Number(formData.priceRange.max)) ? (
-                    <p className="text-[10px] text-amber-600 font-bold mt-1.5 flex items-center gap-1">
-                      ⚠️ Custom price is outside standard catalog range
-                    </p>
-                  ) : (
-                    <p className="text-[10px] text-green-600 font-bold mt-1.5 flex items-center gap-1">
-                      ✓ Price is within catalog range
-                    </p>
-                  )
-                )}
-                
-                <p className="text-[9px] text-slate-400 mt-1">
-                  This price is locked and will be used directly for all order billing, invoicing, and balance calculations.
+                <p className="text-[9px] text-slate-400 mt-2">
+                  This customized estimated price range will be used for order billing, invoicing, and balance calculations.
                 </p>
               </div>
 

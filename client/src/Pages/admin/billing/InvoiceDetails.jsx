@@ -21,6 +21,7 @@ import {
   Plus
 } from "lucide-react";
 import showToast from "../../../utils/toast";
+import RangeBadge from "../../../components/RangeBadge";
 
 const InvoiceDetails = () => {
   const { id } = useParams();
@@ -106,9 +107,10 @@ const InvoiceDetails = () => {
   }
 
   // UPI QR String generation
+  const isFullyPaid = invoice.paymentStatus?.toLowerCase() === 'paid' || invoice.paymentStatus?.toLowerCase() === 'fully_paid' || (invoice.summary?.dueAmount || 0) <= 0;
   const merchantUpi = "dreamfitcouture@ybl";
   const payeeName = "DreamFit Couture";
-  const dueAmount = invoice.summary?.dueAmount || 0;
+  const dueAmount = isFullyPaid ? 0 : (invoice.summary?.dueAmount || 0);
   const invoiceNumber = invoice.invoiceNumber || "";
   
   const upiString = `upi://pay?pa=${merchantUpi}&pn=${encodeURIComponent(payeeName)}&am=${dueAmount}&cu=INR&tn=${encodeURIComponent(`Inv ${invoiceNumber}`)}`;
@@ -240,7 +242,9 @@ const InvoiceDetails = () => {
                   <tr key={idx} className="hover:bg-gray-50/50">
                     <td className="py-3.5 px-4 font-bold text-gray-800">{item.name}</td>
                     <td className="py-3.5 px-4 text-gray-500 capitalize">{item.category || "stitching"}</td>
-                    <td className="py-3.5 px-4 text-right font-extrabold text-gray-900">₹{(item.total || item.price || 0).toLocaleString("en-IN")}</td>
+                    <td className="py-3.5 px-4 text-right font-extrabold text-gray-900">
+                      <RangeBadge min={item.minPrice ?? item.price} max={item.maxPrice ?? item.price} type="standard" />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -261,8 +265,10 @@ const InvoiceDetails = () => {
           {/* Ledger calculations */}
           <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 space-y-2.5 text-sm print:bg-transparent print:border-none print:p-0">
             <div className="flex justify-between py-1 border-b border-gray-200">
-              <span className="text-gray-500 font-medium">Gross Subtotal</span>
-              <span className="font-bold text-gray-800">₹{(invoice.summary?.subtotal || 0).toLocaleString("en-IN")}</span>
+              <span className="text-gray-500 font-medium">Gross Subtotal Range</span>
+              <span className="font-bold text-gray-800">
+                <RangeBadge min={invoice.summary?.subtotalMin ?? invoice.summary?.subtotal} max={invoice.summary?.subtotalMax ?? invoice.summary?.subtotal} type="standard" />
+              </span>
             </div>
             
             {invoice.summary?.discountAmount > 0 && (
@@ -280,8 +286,10 @@ const InvoiceDetails = () => {
             )}
 
             <div className="flex justify-between py-1.5 border-b-2 border-gray-200 text-base font-extrabold text-gray-900">
-              <span>Grand Total Value</span>
-              <span className="text-indigo-600">₹{(invoice.summary?.grandTotal || 0).toLocaleString("en-IN")}</span>
+              <span>Grand Total Range</span>
+              <span className="text-indigo-600">
+                <RangeBadge min={invoice.summary?.grandTotalMin ?? invoice.summary?.grandTotal} max={invoice.summary?.grandTotalMax ?? invoice.summary?.grandTotal} type="standard" />
+              </span>
             </div>
 
             <div className="flex justify-between py-1 border-b border-gray-200 text-xs text-gray-500">
@@ -289,9 +297,11 @@ const InvoiceDetails = () => {
               <span className="font-semibold text-gray-700">- ₹{(invoice.summary?.paidAmount || 0).toLocaleString("en-IN")}</span>
             </div>
 
-            <div className={`flex justify-between pt-2 text-lg font-black ${dueAmount > 0 ? "text-rose-500" : "text-emerald-600"}`}>
+            <div className={`flex justify-between pt-2 text-lg font-black ${!isFullyPaid ? "text-rose-500" : "text-emerald-600"}`}>
               <span>Outstanding Dues</span>
-              <span>₹{dueAmount.toLocaleString("en-IN")}</span>
+              <span>
+                <RangeBadge min={isFullyPaid ? 0 : (invoice.summary?.dueAmountMin ?? invoice.summary?.dueAmount)} max={isFullyPaid ? 0 : (invoice.summary?.dueAmountMax ?? invoice.summary?.dueAmount)} type={!isFullyPaid ? "balance" : "paid"} />
+              </span>
             </div>
           </div>
         </div>

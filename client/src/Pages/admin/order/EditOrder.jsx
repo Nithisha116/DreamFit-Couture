@@ -35,6 +35,7 @@ import { fetchAllCustomers } from "../../../features/customer/customerSlice";
 import GarmentForm from "../garment/GarmentForm";
 import AddPaymentModal from "../../../components/AddPaymentModal";
 import showToast from "../../../utils/toast";
+import RangeBadge from "../../../components/RangeBadge";
 import "./CalendarStyles.css";
 
 // ─── Payment method icon ─────────────────────────────────────────────────────
@@ -52,6 +53,7 @@ const PaymentMethodIcon = ({ method }) => {
 const PaymentStatusBadge = ({ status }) => {
   const map = {
     paid: { bg: "bg-green-100", text: "text-green-700", border: "border-green-200", icon: "✅", label: "Payment Completed" },
+    fully_paid: { bg: "bg-green-100", text: "text-green-700", border: "border-green-200", icon: "✅", label: "Payment Completed" },
     partial: { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200", icon: "⏳", label: "Partial Payment" },
     pending: { bg: "bg-red-100", text: "text-red-700", border: "border-red-200", icon: "❌", label: "Payment Pending" },
   };
@@ -715,8 +717,14 @@ export default function EditOrder() {
                           </div>
                           <div className="grid grid-cols-3 gap-4 text-sm mb-2">
                             <div>
-                              <p className="text-xs text-slate-400">Price</p>
-                              <p className="font-bold text-blue-600 text-xs">₹{garment.priceRange?.min} - ₹{garment.priceRange?.max}</p>
+                              <p className="text-xs text-slate-400">Price Range</p>
+                              <div className="mt-0.5">
+                                <RangeBadge
+                                  min={garment.priceRange?.min}
+                                  max={garment.priceRange?.max}
+                                  type="standard"
+                                />
+                              </div>
                             </div>
                             <div>
                               <p className="text-xs text-slate-400">Delivery</p>

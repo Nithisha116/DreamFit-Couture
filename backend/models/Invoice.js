@@ -20,6 +20,14 @@ const invoiceItemSchema = new mongoose.Schema({
     type: Number, 
     required: true,
     min: 0 
+  },
+  minPrice: {
+    type: Number,
+    default: 0
+  },
+  maxPrice: {
+    type: Number,
+    default: 0
   }
 }, { _id: false });
 
@@ -107,7 +115,13 @@ const invoiceSchema = new mongoose.Schema({
     taxAmount: { type: Number, default: 0, min: 0 },
     grandTotal: { type: Number, default: 0, min: 0 },
     paidAmount: { type: Number, default: 0, min: 0 },
-    dueAmount: { type: Number, default: 0, min: 0 }
+    dueAmount: { type: Number, default: 0, min: 0 },
+    subtotalMin: { type: Number, default: 0 },
+    subtotalMax: { type: Number, default: 0 },
+    grandTotalMin: { type: Number, default: 0 },
+    grandTotalMax: { type: Number, default: 0 },
+    dueAmountMin: { type: Number, default: 0 },
+    dueAmountMax: { type: Number, default: 0 }
   },
   
   profitMargin: {

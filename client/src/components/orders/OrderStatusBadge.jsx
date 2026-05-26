@@ -18,11 +18,12 @@ export const ORDER_STATUS_CONFIG = {
 };
 
 export const PAYMENT_STATUS_CONFIG = {
-  pending:   { label: 'Pending',   bg: '#fef2f2', border: '#fecaca', text: '#991b1b', dot: '#ef4444' },
-  partial:   { label: 'Partial',   bg: '#fff7ed', border: '#fed7aa', text: '#9a3412', dot: '#f97316' },
-  paid:      { label: 'Paid',      bg: '#ecfdf5', border: '#a7f3d0', text: '#065f46', dot: '#10b981' },
-  overpaid:  { label: 'Overpaid',  bg: '#f5f3ff', border: '#ddd6fe', text: '#5b21b6', dot: '#7c3aed' },
-  refunded:  { label: 'Refunded',  bg: '#f0f9ff', border: '#bae6fd', text: '#0c4a6e', dot: '#0ea5e9' },
+  pending:    { label: 'Pending',   bg: '#fef2f2', border: '#fecaca', text: '#991b1b', dot: '#ef4444' },
+  partial:    { label: 'Partial',   bg: '#fff7ed', border: '#fed7aa', text: '#9a3412', dot: '#f97316' },
+  paid:       { label: 'Paid',      bg: '#ecfdf5', border: '#a7f3d0', text: '#065f46', dot: '#10b981' },
+  fully_paid: { label: 'Fully Paid', bg: '#ecfdf5', border: '#a7f3d0', text: '#065f46', dot: '#10b981' },
+  overpaid:   { label: 'Overpaid',  bg: '#f5f3ff', border: '#ddd6fe', text: '#5b21b6', dot: '#7c3aed' },
+  refunded:   { label: 'Refunded',  bg: '#f0f9ff', border: '#bae6fd', text: '#0c4a6e', dot: '#0ea5e9' },
 };
 
 export function OrderStatusBadge({ status, size = 'md' }) {

@@ -5460,6 +5460,7 @@ import { createNotification } from "./notification.controller.js";
 import r2Service from "../services/r2.service.js";
 import crypto from "crypto";
 import multer from "multer";
+import { calculateRangeTotals } from "../utils/rangeUtils.js";
 
 // Configure multer for memory storage
 export const upload = multer({ 
@@ -5563,32 +5564,6 @@ export const updateOrderPaymentSummary = async (orderId) => {
     const order = await Order.findById(orderId);
     if (!order) return;
 
-    // Dynamically calculate and self-heal the priceSummary from the actual garments in database
-    const garments = await Garment.find({ order: orderId, isActive: true });
-    if (garments && garments.length > 0) {
-      let totalMin = 0;
-      let totalMax = 0;
-      let totalFinalized = 0;
-      for (const g of garments) {
-        const minVal = g.minPrice !== undefined && g.minPrice !== null ? g.minPrice : (g.priceRange?.min || 0);
-        const maxVal = g.maxPrice !== undefined && g.maxPrice !== null ? g.maxPrice : (g.priceRange?.max || 0);
-        const finalVal = g.finalizedAmount !== undefined && g.finalizedAmount !== null
-          ? g.finalizedAmount
-          : (g.finalizedPrice !== undefined && g.finalizedPrice !== null
-            ? g.finalizedPrice
-            : maxVal);
-
-        totalMin += minVal;
-        totalMax += maxVal;
-        totalFinalized += finalVal;
-      }
-      order.minPrice = totalMin;
-      order.maxPrice = totalMax;
-      order.finalizedAmount = totalFinalized;
-      // We set totalMax in priceSummary to totalFinalized so legacy/reference areas also pick up finalized price!
-      order.priceSummary = { totalMin, totalMax: totalFinalized };
-    }
-
     const payments = await Payment.find({ 
       order: orderId, 
       isDeleted: false,
@@ -5600,10 +5575,24 @@ export const updateOrderPaymentSummary = async (orderId) => {
       new Date(b.paymentDate) - new Date(a.paymentDate)
     )[0];
 
-    let paymentStatus = 'pending';
-    const totalAmount = order.finalizedAmount || order.priceSummary?.totalMax || 0;
+    // Dynamically calculate and self-heal the priceSummary from the actual garments in database
+    const garments = await Garment.find({ order: orderId, isActive: true });
     
-    if (totalPaid >= totalAmount) {
+    const { totalMin, totalMax, balanceMin, balanceMax } = calculateRangeTotals(garments, totalPaid);
+    
+    order.minPrice = totalMin;
+    order.maxPrice = totalMax;
+    order.priceSummary = { totalMin, totalMax };
+    
+    order.balanceMin = balanceMin;
+    order.balanceMax = balanceMax;
+    // Legacy support
+    order.balanceAmount = balanceMax;
+    order.dueAmount = balanceMax;
+    order.finalizedAmount = totalMax;
+
+    let paymentStatus = 'pending';
+    if (totalPaid >= totalMin) {
       paymentStatus = 'paid';
     } else if (totalPaid > 0) {
       paymentStatus = 'partial';
@@ -5616,9 +5605,6 @@ export const updateOrderPaymentSummary = async (orderId) => {
       paymentCount: payments.length,
       paymentStatus
     };
-    
-    order.balanceAmount = Math.max(0, totalAmount - totalPaid);
-    order.dueAmount = Math.max(0, totalAmount - totalPaid);
     
     await order.save();
     console.log(`✅ Payment summary updated: Paid: ₹${totalPaid}, Status: ${paymentStatus}`);
@@ -5974,26 +5960,17 @@ export const createOrder = async (req, res) => {
     // Calculate totals
     let totalMin = 0;
     let totalMax = 0;
-    let totalFinalized = 0;
     
     if (garments && garments.length > 0) {
       garments.forEach((g) => {
         const minVal = Number(g.minPrice || g.priceRange?.min) || 0;
         const maxVal = Number(g.maxPrice || g.priceRange?.max) || 0;
-        const finalVal = g.finalizedAmount !== undefined && g.finalizedAmount !== null && g.finalizedAmount !== ""
-          ? Number(g.finalizedAmount)
-          : (g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
-            ? Number(g.finalizedPrice)
-            : maxVal);
-
         totalMin += minVal;
         totalMax += maxVal;
-        totalFinalized += finalVal;
       });
     } else if (priceSummary) {
       totalMin = Number(priceSummary.totalMin) || 0;
       totalMax = Number(priceSummary.totalMax) || 0;
-      totalFinalized = Number(priceSummary.totalMax) || 0;
     }
 
     // ── Use ONLY the payments[] array — do NOT auto-push from advancePayment ──
@@ -6018,17 +5995,19 @@ export const createOrder = async (req, res) => {
       },
       minPrice: totalMin,
       maxPrice: totalMax,
-      finalizedAmount: totalFinalized,
-      dueAmount: Math.max(0, totalFinalized - totalInitialPaid),
-      priceSummary: { totalMin, totalMax: totalFinalized },
+      finalizedAmount: totalMax,
+      dueAmount: totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMax - totalInitialPaid),
+      balanceMin: totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMin - totalInitialPaid),
+      balanceMax: totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMax - totalInitialPaid),
+      priceSummary: { totalMin, totalMax },
       paymentSummary: {
         totalPaid: totalInitialPaid,
         lastPaymentDate: allPayments.length > 0 ? new Date() : null,
         lastPaymentAmount: allPayments.length > 0 ? allPayments[allPayments.length - 1].amount : 0,
         paymentCount: allPayments.length,
-        paymentStatus: totalInitialPaid >= totalFinalized ? 'paid' : (totalInitialPaid > 0 ? 'partial' : 'pending')
+        paymentStatus: totalInitialPaid >= totalMin ? 'paid' : (totalInitialPaid > 0 ? 'partial' : 'pending')
       },
-      balanceAmount: Math.max(0, totalFinalized - totalInitialPaid),
+      balanceAmount: totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMax - totalInitialPaid),
       createdBy: creatorId,
       status: status || "draft",
       orderDate: orderDate || new Date(),
@@ -6049,6 +6028,7 @@ export const createOrder = async (req, res) => {
       const existingPayments = await Payment.find({ order: order._id });
       
       if (existingPayments.length === 0) {
+        let runningPaid = 0;
         for (const paymentData of allPayments) {
           let safeAmount = 0;
           
@@ -6066,6 +6046,8 @@ export const createOrder = async (req, res) => {
               safeAmount = 0;
             }
           }
+          
+          runningPaid += safeAmount;
           
           const now = new Date();
           const hours = String(now.getHours()).padStart(2, '0');
@@ -6086,6 +6068,8 @@ export const createOrder = async (req, res) => {
             paymentTime: paymentTime,
             notes: paymentData.notes || '',
             receivedBy: creatorId,
+            balanceMinAfterPayment: runningPaid >= totalMin ? 0 : Math.max(0, totalMin - runningPaid),
+            balanceMaxAfterPayment: runningPaid >= totalMin ? 0 : Math.max(0, totalMax - runningPaid),
             metadata: {
               requestId: requestId
             }
@@ -6737,6 +6721,22 @@ export const addPaymentToOrder = async (req, res) => {
     
     const creatorId = req.user?._id || req.user?.id;
     
+    const existingPayments = await Payment.find({ order: order._id, isDeleted: false });
+    const totalPaidBefore = existingPayments.reduce((sum, p) => sum + p.amount, 0);
+    const newTotalPaid = totalPaidBefore + Number(paymentData.amount);
+    
+    // Dynamically calculate the price range
+    const garments = await Garment.find({ order: order._id, isActive: true });
+    let totalMin = order.minPrice || 0;
+    let totalMax = order.maxPrice || 0;
+    if (garments && garments.length > 0) {
+      totalMin = garments.reduce((sum, g) => sum + (Number(g.minPrice || g.priceRange?.min) || 0), 0);
+      totalMax = garments.reduce((sum, g) => sum + (Number(g.maxPrice || g.priceRange?.max) || 0), 0);
+    }
+    
+    const balanceMinAfterPayment = newTotalPaid >= totalMin ? 0 : Math.max(0, totalMin - newTotalPaid);
+    const balanceMaxAfterPayment = newTotalPaid >= totalMin ? 0 : Math.max(0, totalMax - newTotalPaid);
+
     const now = new Date();
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
@@ -6753,7 +6753,9 @@ export const addPaymentToOrder = async (req, res) => {
       paymentDate: paymentData.paymentDate || new Date(),
       paymentTime: paymentTime,
       notes: paymentData.notes || '',
-      receivedBy: creatorId
+      receivedBy: creatorId,
+      balanceMinAfterPayment,
+      balanceMaxAfterPayment
     });
     
     console.log("\n✅ ===== PAYMENT CREATED =====");

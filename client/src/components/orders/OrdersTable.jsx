@@ -28,10 +28,11 @@ const PaymentProgressBar = memo(({ order }) => {
   const total   = order.finalizedAmount !== undefined && order.finalizedAmount !== null && order.finalizedAmount > 0
     ? order.finalizedAmount
     : (order.priceSummary?.totalMax || 0);
-  const pct     = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
   const status  = order.paymentSummary?.paymentStatus || 'pending';
+  const isPaid = status === 'paid' || status === 'fully_paid';
+  const pct     = isPaid ? 100 : (total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0);
 
-  const barColor = status === 'paid' ? '#16a34a' : status === 'partial' ? '#d97706' : '#e5e7eb';
+  const barColor = isPaid ? '#16a34a' : status === 'partial' ? '#d97706' : '#e5e7eb';
 
   return (
     <div style={{ width: '100%', maxWidth: 100 }}>
@@ -48,7 +49,7 @@ const PaymentProgressBar = memo(({ order }) => {
       </div>
       {total > 0 && (
         <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>
-          {fmt(paid)} / {fmt(total)}
+          {isPaid ? `${fmt(paid)} (Paid)` : `${fmt(paid)} / ${fmt(total)}`}
         </div>
       )}
     </div>

@@ -1738,6 +1738,7 @@ import PaymentReceipt from "../../../components/PaymentReceipt";
 import AddPaymentModal from "../../../components/AddPaymentModal";
 import showToast from "../../../utils/toast";
 import { calculatePaymentSummary } from "../../../utils/paymentUtils";
+import RangeBadge from "../../../components/RangeBadge";
 
 // ==================== IMAGE MODAL COMPONENT ====================
 const ImageModal = ({ isOpen, image, imageType, onClose }) => {
@@ -2066,15 +2067,18 @@ export default function OrderDetails() {
     return { min, max };
   }, [garments]);
 
-  const finalizedAmount = summary.totalAmount;
+  const finalizedAmount = {
+    min: summary.totalAmountMin,
+    max: summary.totalAmountMax
+  };
 
   // Calculate price summary from currentOrder
   const priceSummary = currentOrder?.priceSummary || { totalMin: 0, totalMax: 0 };
 
   // Calculate balance using the centralized payment helper
   const balanceAmount = {
-    min: summary.balanceDue,
-    max: summary.balanceDue
+    min: summary.balanceDueMin,
+    max: summary.balanceDueMax
   };
 
   // Handle Back
@@ -3102,10 +3106,14 @@ const handleSavePayment = async (paymentData) => {
                                 <p className="font-mono text-slate-700 truncate text-xs">{garment.garmentId}</p>
                               </div>
                               <div className="min-w-0">
-                                <p className="text-slate-400 text-[10px]">Price</p>
-                                <p className="font-bold text-blue-600 text-xs">
-                                  ₹{(garment.finalizedPrice || garment.priceRange?.max || 0).toLocaleString('en-IN')}
-                                </p>
+                                <p className="text-slate-400 text-[10px]">Price Range</p>
+                                <div className="mt-0.5">
+                                  <RangeBadge
+                                    min={garment.priceRange?.min ?? garment.minPrice}
+                                    max={garment.priceRange?.max ?? garment.maxPrice}
+                                    type="standard"
+                                  />
+                                </div>
                               </div>
                               <div className="min-w-0 col-span-2 sm:col-span-1">
                                 <p className="text-slate-400 text-[10px]">Delivery</p>
@@ -3302,9 +3310,11 @@ const handleSavePayment = async (paymentData) => {
 
               <div className="space-y-3 sm:space-y-4">
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-blue-100 shadow-sm">
-                  <p className="text-[9px] sm:text-[10px] text-blue-600 font-black uppercase mb-0.5">Finalized Billing Amount</p>
+                  <p className="text-[9px] sm:text-[10px] text-blue-600 font-black uppercase mb-0.5">Estimated Billing Amount Range</p>
                   <p className="text-lg sm:text-xl lg:text-2xl font-black text-blue-700 break-words">
-                    {formatCurrency(finalizedAmount || priceSummary.totalMax)}
+                    {finalizedAmount.min === finalizedAmount.max
+                      ? formatCurrency(finalizedAmount.max)
+                      : `${formatCurrency(finalizedAmount.min)} - ${formatCurrency(finalizedAmount.max)}`}
                   </p>
                   {estimatedRange.min > 0 && estimatedRange.max > 0 && (
                     <div className="mt-2 pt-2 border-t border-blue-200/50 flex justify-between text-[8px] sm:text-[9px] text-slate-500 font-bold">
@@ -3426,15 +3436,20 @@ const handleSavePayment = async (paymentData) => {
                 <div className="bg-orange-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
                   <p className="text-[10px] sm:text-xs text-orange-600 font-black uppercase mb-1">Balance Amount</p>
                   <p className="text-base sm:text-lg lg:text-xl font-black text-orange-700 break-words">
-                    {balanceAmount.min === balanceAmount.max
-                      ? formatCurrency(balanceAmount.max)
-                      : `${formatCurrency(balanceAmount.min)} - ${formatCurrency(balanceAmount.max)}`}
+                    {summary.isFullyPaid ? (
+                      formatCurrency(0)
+                    ) : balanceAmount.min === balanceAmount.max ? (
+                      formatCurrency(balanceAmount.max)
+                    ) : (
+                      `${formatCurrency(balanceAmount.min)} - ${formatCurrency(balanceAmount.max)}`
+                    )}
                   </p>
-                  {balanceAmount.min <= 0 && balanceAmount.max <= 0 && (
+                  {summary.isFullyPaid ? (
                     <p className="text-[10px] sm:text-xs text-green-600 mt-1">✅ Fully paid</p>
-                  )}
-                  {balanceAmount.min <= 0 && balanceAmount.max > 0 && (
-                    <p className="text-[10px] sm:text-xs text-orange-600 mt-1">⚠️ Minimum reached</p>
+                  ) : (
+                    balanceAmount.min <= 0 && balanceAmount.max > 0 && (
+                      <p className="text-[10px] sm:text-xs text-orange-600 mt-1">⚠️ Minimum reached</p>
+                    )
                   )}
                 </div>
 
@@ -3545,7 +3560,7 @@ const handleSavePayment = async (paymentData) => {
                                   {inv.invoiceType || "Final"}
                                 </span>
                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
-                                  inv.paymentStatus?.toLowerCase() === 'paid' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                  (inv.paymentStatus?.toLowerCase() === 'paid' || inv.paymentStatus?.toLowerCase() === 'fully_paid') ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
                                   inv.paymentStatus?.toLowerCase() === 'partial' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
                                   'bg-rose-50 text-rose-600 border border-rose-100'
                                 }`}>

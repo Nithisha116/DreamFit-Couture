@@ -240,26 +240,39 @@ const garmentSchema = new mongoose.Schema({
   validateBeforeSave: true 
 });
 
-// ✅ Sync legacy and new price fields before validation
-garmentSchema.pre('validate', function() {
-  if (this.finalizedAmount !== undefined && this.finalizedAmount !== null) {
-    this.finalizedPrice = this.finalizedAmount;
-  } else if (this.finalizedPrice !== undefined && this.finalizedPrice !== null) {
-    this.finalizedAmount = this.finalizedPrice;
+// ✅ Sync legacy and new price fields before validation with strict checks
+garmentSchema.pre('validate', function(next) {
+  // Backward compatibility self-healing fallback migration
+  if ((!this.priceRange?.min || this.priceRange.min === 0) && (this.finalizedPrice || this.finalizedAmount)) {
+    const fallback = Number(this.finalizedPrice || this.finalizedAmount || 0);
+    this.priceRange = { min: fallback, max: fallback };
+    this.minPrice = fallback;
+    this.maxPrice = fallback;
   }
 
-  if (this.minPrice !== undefined && this.minPrice !== null && this.minPrice !== 0) {
+  if (this.priceRange && this.priceRange.min !== undefined) {
+    this.minPrice = Number(this.priceRange.min);
+  } else if (this.minPrice !== undefined && this.minPrice !== null && this.minPrice !== 0) {
     if (!this.priceRange) this.priceRange = {};
     this.priceRange.min = this.minPrice;
-  } else if (this.priceRange && this.priceRange.min !== undefined) {
-    this.minPrice = this.priceRange.min;
   }
 
-  if (this.maxPrice !== undefined && this.maxPrice !== null && this.maxPrice !== 0) {
+  if (this.priceRange && this.priceRange.max !== undefined) {
+    this.maxPrice = Number(this.priceRange.max);
+  } else if (this.maxPrice !== undefined && this.maxPrice !== null && this.maxPrice !== 0) {
     if (!this.priceRange) this.priceRange = {};
     this.priceRange.max = this.maxPrice;
-  } else if (this.priceRange && this.priceRange.max !== undefined) {
-    this.maxPrice = this.priceRange.max;
+  }
+
+  // Strict range-based validation
+  if (this.priceRange && Number(this.priceRange.min) > Number(this.priceRange.max)) {
+    const err = new Error("Invalid price range: Minimum price cannot exceed maximum price.");
+    if (typeof next === 'function') return next(err);
+    throw err;
+  }
+
+  if (typeof next === 'function') {
+    next();
   }
 });
 

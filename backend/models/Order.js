@@ -83,6 +83,8 @@ const orderSchema = new mongoose.Schema({
     paymentStatus: "pending"
   }) },
   balanceAmount: { type: Number, default: 0 },
+  balanceMin: { type: Number, default: 0 },
+  balanceMax: { type: Number, default: 0 },
   minPrice: { type: Number, default: 0 },
   maxPrice: { type: Number, default: 0 },
   finalizedAmount: { type: Number, default: 0 },
@@ -110,6 +112,16 @@ orderSchema.pre('save', async function() {
       const date = new Date();
       const dateStr = `${String(date.getDate()).padStart(2, '0')}${String(date.getMonth() + 1).padStart(2, '0')}${date.getFullYear()}`;
       this.orderId = `${dateStr}-${Date.now().toString().slice(-4)}`;
+    }
+
+    // Backward compatibility self-healing for legacy fixed prices
+    if (!this.minPrice && this.finalizedAmount) {
+      this.minPrice = this.finalizedAmount;
+      this.maxPrice = this.finalizedAmount;
+    }
+    if (!this.balanceMax && this.balanceAmount) {
+      this.balanceMin = this.balanceAmount;
+      this.balanceMax = this.balanceAmount;
     }
 
     // NOTE: Payment summary is managed exclusively by updateOrderPaymentSummary()
@@ -351,6 +363,9 @@ orderSchema.index({ status: 1 });
 orderSchema.index({ orderId: 1 });
 orderSchema.index({ customer: 1 });
 orderSchema.index({ garments: 1 });
+orderSchema.index({ minPrice: 1 });
+orderSchema.index({ maxPrice: 1 });
+orderSchema.index({ balanceMax: 1 });
 
 // ============================================
 // ✅ EXPORT MODEL

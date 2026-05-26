@@ -15,24 +15,56 @@ export const calculateInvoiceTotals = ({ items = [], discountType = "none", disc
     return sum + (pricePaise * qty);
   }, 0);
 
+  const subtotalMinPaise = items.reduce((sum, item) => {
+    const pricePaise = toPaise(item.minPrice !== undefined ? item.minPrice : item.price);
+    const qty = Number(item.qty) || 1;
+    return sum + (pricePaise * qty);
+  }, 0);
+
+  const subtotalMaxPaise = items.reduce((sum, item) => {
+    const pricePaise = toPaise(item.maxPrice !== undefined ? item.maxPrice : item.price);
+    const qty = Number(item.qty) || 1;
+    return sum + (pricePaise * qty);
+  }, 0);
+
   let discountPaise = 0;
+  let discountMinPaise = 0;
+  let discountMaxPaise = 0;
+  
   if (discountType === "flat") {
     discountPaise = toPaise(discountValue);
+    discountMinPaise = toPaise(discountValue);
+    discountMaxPaise = toPaise(discountValue);
   } else if (discountType === "percentage") {
-    discountPaise = Math.round((subtotalPaise * (Number(discountValue) || 0)) / 100);
+    const pct = Number(discountValue) || 0;
+    discountPaise = Math.round((subtotalPaise * pct) / 100);
+    discountMinPaise = Math.round((subtotalMinPaise * pct) / 100);
+    discountMaxPaise = Math.round((subtotalMaxPaise * pct) / 100);
   }
 
   // Discounted subtotal cannot be negative
   const discountedSubtotalPaise = Math.max(0, subtotalPaise - discountPaise);
+  const discountedSubtotalMinPaise = Math.max(0, subtotalMinPaise - discountMinPaise);
+  const discountedSubtotalMaxPaise = Math.max(0, subtotalMaxPaise - discountMaxPaise);
   
-  const taxPaise = Math.round((discountedSubtotalPaise * (Number(taxPercentage) || 0)) / 100);
+  const taxPct = Number(taxPercentage) || 0;
+  const taxPaise = Math.round((discountedSubtotalPaise * taxPct) / 100);
+  const taxMinPaise = Math.round((discountedSubtotalMinPaise * taxPct) / 100);
+  const taxMaxPaise = Math.round((discountedSubtotalMaxPaise * taxPct) / 100);
+  
   const grandTotalPaise = discountedSubtotalPaise + taxPaise;
+  const grandTotalMinPaise = discountedSubtotalMinPaise + taxMinPaise;
+  const grandTotalMaxPaise = discountedSubtotalMaxPaise + taxMaxPaise;
 
   return {
     subtotal: toRupees(subtotalPaise),
     discountAmount: toRupees(discountPaise),
     taxAmount: toRupees(taxPaise),
-    grandTotal: toRupees(grandTotalPaise)
+    grandTotal: toRupees(grandTotalPaise),
+    subtotalMin: toRupees(subtotalMinPaise),
+    subtotalMax: toRupees(subtotalMaxPaise),
+    grandTotalMin: toRupees(grandTotalMinPaise),
+    grandTotalMax: toRupees(grandTotalMaxPaise)
   };
 };
 

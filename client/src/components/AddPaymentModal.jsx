@@ -95,8 +95,13 @@ export default function AddPaymentModal({
       const max = Number(balanceAmount.max ?? balanceAmount.min ?? 0);
       return { min, max };
     }
-    const min = (Number(orderTotalMin) || Number(orderTotal) || 0) - totalPaid;
-    const max = (Number(orderTotalMax) || Number(orderTotal) || 0) - totalPaid;
+    const minPrice = Number(orderTotalMin) || Number(orderTotal) || 0;
+    const maxPrice = Number(orderTotalMax) || Number(orderTotal) || 0;
+    if (totalPaid >= minPrice && minPrice > 0) {
+      return { min: 0, max: 0 };
+    }
+    const min = minPrice - totalPaid;
+    const max = maxPrice - totalPaid;
     return { min, max };
   })();
 
