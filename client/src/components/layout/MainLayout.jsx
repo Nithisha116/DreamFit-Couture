@@ -550,6 +550,7 @@ export default function MainLayout() {
   const [reportsOpen, setReportsOpen] = useState(false);
   const [ordersOutsourcingOpen, setOrdersOutsourcingOpen] = useState(false);
   const [employeeManagementOpen, setEmployeeManagementOpen] = useState(false);
+  const [productionStaffOpen, setProductionStaffOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
@@ -670,6 +671,12 @@ export default function MainLayout() {
     { id: 'salary-sub', label: 'Payroll & Salary', icon: Wallet, path: `/${rolePath}/salary` },
   ];
 
+  const productionStaffItems = [
+    { id: 'tailors-sub', label: 'Tailors', icon: Scissors, path: `/${rolePath}/tailors` },
+    { id: 'cutting-masters-sub', label: 'Cutting Masters', icon: HardHat, path: `/${rolePath}/cutting-masters` },
+    { id: 'store-keepers-sub', label: 'Store Keepers', icon: Store, path: `/${rolePath}/store-keepers` },
+  ];
+
   const getNavigationItems = () => {
     const tasksOrWorks = isCuttingMaster
       ? { id: 'works', icon: Briefcase, label: 'Works', path: `/${rolePath}/works`, show: canViewWorks }
@@ -690,9 +697,6 @@ export default function MainLayout() {
       { id: 'ordersOutsourcing', icon: ShoppingCart, label: 'Orders & Outsourcing', path: '#', show: canViewOrders, isDropdown: true },
       tasksOrWorks,
       ...boutiqueModules,
-      { id: 'tailors', icon: Scissors, label: 'Tailors', path: `/${rolePath}/tailors`, show: canViewTailors },
-      { id: 'cutting-masters', icon: HardHat, label: 'Cutting Masters', path: `/${rolePath}/cutting-masters`, show: canViewCuttingMasters },
-      { id: 'store-keepers', icon: Store, label: 'Store Keepers', path: `/${rolePath}/store-keepers`, show: canViewStoreKeepers },
       { id: 'measurements', icon: Ruler, label: 'Measurements', path: `/${rolePath}/measurements`, show: canViewMeasurement },
       { id: 'products', icon: Package, label: 'Products', path: `/${rolePath}/products`, show: canViewProducts },
       { id: 'banking', icon: Landmark, label: 'Banking', path: '#', show: canViewBanking, isDropdown: true },
@@ -757,7 +761,12 @@ export default function MainLayout() {
   };
 
   const isEmployeeManagementActive = () => {
-    return employeeManagementItems.some(item => isActive(item.path));
+    return employeeManagementItems.some(item => isActive(item.path)) ||
+      productionStaffItems.some(item => isActive(item.path));
+  };
+
+  const isProductionStaffActive = () => {
+    return productionStaffItems.some(item => isActive(item.path));
   };
 
   useEffect(() => {
@@ -772,6 +781,9 @@ export default function MainLayout() {
     }
     if (isEmployeeManagementActive() && !employeeManagementOpen) {
       setEmployeeManagementOpen(true);
+    }
+    if (isProductionStaffActive() && !productionStaffOpen) {
+      setProductionStaffOpen(true);
     }
   }, [location.pathname]);
 
@@ -1090,6 +1102,7 @@ export default function MainLayout() {
                       <div className={`ml-9 mt-1 space-y-1 border-l border-slate-700 pl-4 py-1 transition-all duration-300 ${
                         !desktopSidebarOpen && isDesktop ? 'ml-0 pl-0 border-l-0' : ''
                       }`}>
+                        {/* Core employee sub-items */}
                         {employeeManagementItems.map(sub => {
                           const isSubActive = isActive(sub.path);
                           return (
@@ -1113,6 +1126,55 @@ export default function MainLayout() {
                             </Link>
                           );
                         })}
+
+                        {/* Production Staff nested collapsible */}
+                        {(!desktopSidebarOpen && isDesktop) ? null : (
+                          <div className="pt-1">
+                            <button
+                              onClick={() => setProductionStaffOpen(!productionStaffOpen)}
+                              className={`w-full flex items-center justify-between gap-2 py-2 text-sm transition-all duration-200 ${
+                                isProductionStaffActive()
+                                  ? 'text-blue-400 font-medium'
+                                  : 'text-slate-500 hover:text-blue-400'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <Briefcase size={14} className="flex-shrink-0" />
+                                <span>Production Staff</span>
+                              </span>
+                              {productionStaffOpen
+                                ? <ChevronDown size={12} />
+                                : <ChevronRight size={12} />
+                              }
+                            </button>
+
+                            {productionStaffOpen && (
+                              <div className="ml-4 mt-1 space-y-1 border-l border-slate-700/60 pl-3 py-1">
+                                {productionStaffItems.map(sub => {
+                                  const isSubActive = isActive(sub.path);
+                                  return (
+                                    <Link
+                                      key={sub.id}
+                                      to={sub.path}
+                                      className={`flex items-center gap-2 py-1.5 text-sm transition-all duration-200 ${
+                                        isSubActive
+                                          ? 'text-blue-400 font-medium'
+                                          : 'text-slate-500 hover:text-blue-400'
+                                      }`}
+                                      onClick={closeSidebar}
+                                    >
+                                      <sub.icon size={13} className="flex-shrink-0" />
+                                      <span>{sub.label}</span>
+                                      {isSubActive && (
+                                        <span className="ml-auto w-1.5 h-1.5 bg-blue-400 rounded-full" />
+                                      )}
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

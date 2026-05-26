@@ -10,7 +10,8 @@ const StatCard = ({
   trend = null,
   trendValue = null,
   onClick = null,
-  className = ''
+  className = '',
+  children
 }) => {
   return (
     <div 
@@ -63,6 +64,11 @@ const StatCard = ({
             ></div>
           </div>
         </div>
+      )}
+
+      {/* Children (optional sub-content) */}
+      {children && (
+        <div className="mt-2">{children}</div>
       )}
     </div>
   );

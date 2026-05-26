@@ -413,6 +413,7 @@ import { Toaster } from "react-hot-toast";
 // Layout & Protected Route
 import MainLayout from "../components/layout/MainLayout";
 import ProtectedRoute from "./ProtectedRoute";
+import ErrorBoundary from "../components/ErrorBoundary";
 
 // 🚀 LAZY LOADING - Auth Pages
 const Login = lazy(() => import("../Pages/auth/Login"));
@@ -638,7 +639,7 @@ export default function AppRouter() {
             }
           >
             {/* Dashboard */}
-            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="dashboard" element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
             
             {/* Orders Management */}
             <Route path="orders" element={<Orders />} />
@@ -762,7 +763,7 @@ export default function AppRouter() {
               </ProtectedRoute>
             }
           >
-            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="dashboard" element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
             
             {/* Orders Management */}
             <Route path="orders" element={<Orders />} />
