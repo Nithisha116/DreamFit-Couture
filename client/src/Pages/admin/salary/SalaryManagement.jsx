@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { 
   fetchSalaryReports, 
   generateSalaries, 
@@ -11,7 +12,7 @@ import {
   Wallet, Calendar, Filter, Download, 
   Lock, Unlock, RefreshCw, Search,
   ChevronRight, FileText, CheckCircle, 
-  AlertCircle, Users, TrendingUp, DollarSign, Settings
+  AlertCircle, Users, TrendingUp, DollarSign, Settings, History
 } from "lucide-react";
 import showToast from "../../../utils/toast";
 import SalarySlipModal from "../../../components/salary/SalarySlipModal";
@@ -19,6 +20,7 @@ import PayrollSettingsModal from "../../../components/salary/PayrollSettingsModa
 
 export default function SalaryManagement() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { reports, loading, error, success } = useSelector((state) => state.salary);
   
   const [filters, setFilters] = useState({
@@ -248,7 +250,7 @@ export default function SalaryManagement() {
                       <span className="text-base font-black text-slate-900">₹{report.netSalary.toLocaleString()}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex justify-center">
+                      <div className="flex flex-col items-center gap-1.5">
                         {report.isLocked ? (
                           <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 text-[10px] font-black uppercase tracking-tighter">
                             <Lock size={12} /> LOCKED
@@ -258,10 +260,30 @@ export default function SalaryManagement() {
                             <Unlock size={12} /> PENDING
                           </div>
                         )}
+                        {/* Payment status badge */}
+                        {report.paymentStatus && (
+                          <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tight border ${
+                            report.paymentStatus === 'paid'
+                              ? 'bg-blue-50 text-blue-600 border-blue-100'
+                              : report.paymentStatus === 'partial'
+                              ? 'bg-amber-50 text-amber-600 border-amber-100'
+                              : 'bg-red-50 text-red-500 border-red-100'
+                          }`}>
+                            {report.paymentStatus === 'paid' ? '✓ Paid' : report.paymentStatus === 'partial' ? '◑ Partial' : '○ Unpaid'}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
+                        {/* History button — links to SalaryHistoryPage */}
+                        <button
+                          onClick={() => navigate(`/admin/salary/${report.employeeId}`)}
+                          className="p-2 bg-white text-violet-600 border border-slate-100 rounded-lg hover:bg-violet-50 hover:border-violet-100 transition-all shadow-sm"
+                          title="View Salary History"
+                        >
+                          <History size={16} />
+                        </button>
                         <button 
                           onClick={() => handleViewSlip(report)}
                           className="p-2 bg-white text-slate-600 border border-slate-100 rounded-lg hover:bg-blue-50 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"

@@ -519,6 +519,10 @@ const SalaryManagement = lazy(() =>
 const EmployeeAnalytics = lazy(() =>
   import("../Pages/admin/salary/EmployeeAnalytics")
 );
+
+const SalaryHistoryPage = lazy(() =>
+  import("../Pages/admin/salary/SalaryHistoryPage")
+);
 // Placeholders (keep as is - they're simple components)
 const ManagerDashboard = () => (
   <div className="p-8 font-black text-slate-800 uppercase italic">
@@ -722,6 +726,8 @@ export default function AppRouter() {
             {/* Salary & Payroll Management */}
             <Route path="salary" element={<SalaryManagement />} />
             <Route path="salary/analytics/:id" element={<EmployeeAnalytics />} />
+            <Route path="salary/:employeeId" element={<SalaryHistoryPage />} />
+            <Route path="salary-slip/:employeeId/:month/:year" element={<div className="p-8 text-slate-400 text-center font-medium">Salary Slip — Coming Soon</div>} />
             
             {/* Shop Keeper */}
             <Route path="shopkeeper" element={<ShopKeeper />} />

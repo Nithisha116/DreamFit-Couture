@@ -1224,7 +1224,7 @@
 // Pages/banking/ExpensePage.jsx - COMPLETE WITH FULL-WIDTH TABLE FIX
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Plus,
   TrendingDown,
@@ -1261,6 +1261,7 @@ import { exportToExcel } from '../../utils/exportToExcel';
 export default function ExpensePage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const accountFilter = searchParams.get('account');
   
@@ -1288,6 +1289,17 @@ export default function ExpensePage() {
   const [selectedAccount, setSelectedAccount] = useState(accountFilter || 'all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState('all');
+
+  // ── Auto-open salary modal when navigated from SalaryHistoryPage ──────────
+  const [prefilledSalaryState, setPrefilledSalaryState] = useState(null);
+  useEffect(() => {
+    if (location.state?.openPaySalary) {
+      setPrefilledSalaryState(location.state);
+      setShowAddModal(true);
+      // Clear location state so refresh doesn't re-open
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
 
@@ -2417,11 +2429,13 @@ const formatTime = (dateString) => {
       {/* Add Expense Modal */}
       {showAddModal && (
         <AddExpenseModal
-          onClose={() => setShowAddModal(false)}
+          onClose={() => { setShowAddModal(false); setPrefilledSalaryState(null); }}
           accountType={selectedAccount !== 'all' ? selectedAccount : null}
+          prefilledState={prefilledSalaryState}
           onSuccess={() => {
             loadTransactions();
             setShowAddModal(false);
+            setPrefilledSalaryState(null);
           }}
         />
       )}
