@@ -36,43 +36,54 @@ const PIPELINE_STAGE_DEFS = {
 // Helper: Get workflow stages array of objects
 
 function getWorkflowStages(work) {
-  const defaultKeys = ['cutting', 'stitching', 'trial', 'packing'];
 
-  if (work.workflowStages && typeof work.workflowStages === 'object' && !Array.isArray(work.workflowStages)) {
-    return defaultKeys.map((key, i) => {
-      const stageData = work.workflowStages[key] || {};
-      const def = PIPELINE_STAGE_DEFS[key] || {};
-      const status = stageData.completed 
-        ? 'completed' 
-        : (work.currentStage === key ? 'active' : 'pending');
-      
-      return {
-        key,
-        label: def.label || (key.charAt(0).toUpperCase() + key.slice(1)),
-        order: i + 1,
-        status: status
-      };
-    });
-  }
-
+  // 1. Prefer explicit workflowStages array
   if (Array.isArray(work.workflowStages) && work.workflowStages.length > 0) {
     return [...work.workflowStages].sort((a, b) => a.order - b.order);
   }
 
-  if (Array.isArray(work.order?.workflowStages) && work.order.workflowStages.length > 0) {
+  // 2. Fallback to order workflowStages
+  if (
+    Array.isArray(work.order?.workflowStages) &&
+    work.order.workflowStages.length > 0
+  ) {
     return [...work.order.workflowStages].sort((a, b) => a.order - b.order);
   }
 
+  // 3. Fallback using stageKeys
+  if (Array.isArray(work.stageKeys) && work.stageKeys.length > 0) {
+    return work.stageKeys.map((key, index) => {
+      const def = PIPELINE_STAGE_DEFS[key] || {};
+
+      return {
+        key,
+        label:
+          def.label ||
+          key.charAt(0).toUpperCase() + key.slice(1),
+        order: index + 1,
+        status:
+          work.currentStage === key ? "active" : "pending",
+      };
+    });
+  }
+
+  // LAST fallback only
+  const defaultKeys = ['cutting', 'stitching', 'trial', 'packing'];
+
   return defaultKeys.map((key, i) => {
     const def = PIPELINE_STAGE_DEFS[key] || {};
+
     return {
       key,
-      label: def.label || (key.charAt(0).toUpperCase() + key.slice(1)),
+      label:
+        def.label ||
+        key.charAt(0).toUpperCase() + key.slice(1),
       order: i + 1,
       status: i === 0 ? 'active' : 'pending'
     };
   });
 }
+
 
 
 
@@ -554,7 +565,10 @@ export const processQrScan = async (req, res) => {
     const updateDoc = { $set: {}, $push: {} };
     const now = new Date();
 
-    const pipelineKeys = ['cutting', 'stitching', 'trial', 'packing'];
+    const pipelineKeys =
+  work.stageKeys && work.stageKeys.length > 0
+    ? work.stageKeys
+    : getWorkflowStages(work).map((s) => s.key);
     const activeKey = work.currentStage && pipelineKeys.includes(work.currentStage) 
       ? work.currentStage 
       : 'cutting';

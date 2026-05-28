@@ -6747,20 +6747,48 @@ export const createWorksFromOrder = async (req, res) => {
       const workId = await generateWorkId(order._id, order.orderId);
       
       // ✅ OPEN POOL MODEL: Create with null cuttingMaster
-      const work = await Work.create({
-        workId,
-        order: orderId,
-        garment: garment._id,
-        estimatedDelivery: garment.estimatedDelivery || new Date(Date.now() + 7*24*60*60*1000),
-        createdBy: req.user._id,
-        measurementPdf,
-        status: 'pending',           // Waiting for acceptance
-        cuttingMaster: null           // ⭐ NOT assigned to anyone
-      });
-      
-      works.push(work);
-    }
 
+const dynamicStageKeys =
+  order.stageKeys?.length
+    ? order.stageKeys
+    : (order.workflowStages || []).map((s) => s.key);
+
+const activeStage = dynamicStageKeys[0] || 'cutting';
+
+const workflowStages = order.workflowStages || [];
+const stageKeys =
+  order.stageKeys ||
+  workflowStages.map(stage => stage.key);
+
+const work = await Work.create({
+  order: orderId,
+  garment: garment._id,
+
+  estimatedDelivery:
+    garment.estimatedDelivery ||
+    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+
+  createdBy: req.user._id,
+  measurementPdf,
+
+  status: 'pending',
+  cuttingMaster: null,
+
+  workId: generateWorkId(garment.name),
+
+  // ✅ CUSTOM WORKFLOW SAVE
+  workflowStages,
+  stageKeys,
+
+  // ✅ FIRST STAGE
+  currentStage:
+    stageKeys?.length > 0
+      ? stageKeys[0]
+      : "cutting",
+});
+// ✅ VERY IMPORTANT
+works.push(work);
+    }
     // ✅ Notify ALL cutting masters about available works
     const cuttingMasters = await CuttingMaster.find({ isActive: true });
     
@@ -6935,7 +6963,7 @@ export const getWorks = async (req, res) => {
     const works = await Work.find(filter)
       .populate({
         path: 'order',
-        select: 'orderId customer deliveryDate workflowStages',
+        select: 'orderId customer deliveryDate workflowStages stageKeys',
         populate: {
           path: 'customer',
           select: 'name'
@@ -7211,10 +7239,10 @@ export const getWorksByCuttingMaster = async (req, res) => {
     const works = await Work.find(filter)
       .populate({
         path: 'order',
-        select: 'orderId customer deliveryDate',
+        select: 'orderId customer deliveryDate workflowStages stageKeys',
         populate: {
           path: 'customer',
-          select: 'name phone'
+          select: 'name',
         }
       })
       .populate({
@@ -7410,10 +7438,10 @@ export const assignTailor = async (req, res) => {
       
       if (work.status === 'pending' || work.status === 'accepted') {
         decrementUpdate['workStats.pending'] = -1;
-      } else if (['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing'].includes(work.status)) {
-        decrementUpdate['workStats.inProgress'] = -1;
-      } else if (work.status === 'ready-to-deliver') {
+      } else if (work.status === 'ready-to-deliver' || work.status === 'cancelled') {
         decrementUpdate['workStats.completed'] = -1;
+      } else {
+        decrementUpdate['workStats.inProgress'] = -1;
       }
       
       await Tailor.findByIdAndUpdate(previousTailorId, {
@@ -7431,10 +7459,10 @@ export const assignTailor = async (req, res) => {
     
     if (work.status === 'pending' || work.status === 'accepted') {
       incrementUpdate['workStats.pending'] = 1;
-    } else if (['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing'].includes(work.status)) {
-      incrementUpdate['workStats.inProgress'] = 1;
-    } else if (work.status === 'ready-to-deliver') {
+    } else if (work.status === 'ready-to-deliver' || work.status === 'cancelled') {
       incrementUpdate['workStats.completed'] = 1;
+    } else {
+      incrementUpdate['workStats.inProgress'] = 1;
     }
 
     // ✅ Update new tailor's workStats
@@ -7561,13 +7589,10 @@ export const updateWorkStatus = async (req, res) => {
 
     // Validate status
     console.log('4️⃣ Validating status:', status);
-    const validStatuses = [
-      'pending', 'accepted', 'cutting-started', 'cutting-completed',
-      'sewing-started', 'sewing-completed', 'ironing', 'ready-to-deliver'
-    ];
-
-    if (!validStatuses.includes(status)) {
-      console.log('❌ Invalid status:', status);
+    
+    // Support custom/arbitrary stages dynamically by validating format rather than matching against a whitelist
+    if (!status || typeof status !== 'string') {
+      console.log('❌ Invalid status format:', status);
       return res.status(400).json({
         success: false,
         message: 'Invalid status value'
@@ -7577,14 +7602,10 @@ export const updateWorkStatus = async (req, res) => {
 
     // Update status and set corresponding timestamp
     console.log('5️⃣ Updating work data...');
-    const statusUpdates = {
-      'cutting-started': { cuttingStartedAt: new Date() },
-      'cutting-completed': { cuttingCompletedAt: new Date() },
-      'sewing-started': { sewingStartedAt: new Date() },
-      'sewing-completed': { sewingCompletedAt: new Date() },
-      'ironing': { ironingAt: new Date() },
-      'ready-to-deliver': { readyAt: new Date() }
-    };
+    // ✅ Dynamic timestamp support
+const statusUpdates = {
+  'ready-to-deliver': { readyAt: new Date() }
+};
 
     // Update work
     work.status = status;
@@ -7614,20 +7635,15 @@ export const updateWorkStatus = async (req, res) => {
     if (work.tailor) {
       console.log('7️⃣ Updating tailor stats...');
       
-      // CORRECTED status to workStats mapping
-      const statusToCategory = {
-        'pending': 'pending',
-        'accepted': 'pending',
-        'cutting-started': 'inProgress',
-        'cutting-completed': 'inProgress',
-        'sewing-started': 'inProgress',
-        'sewing-completed': 'inProgress',
-        'ironing': 'inProgress',
-        'ready-to-deliver': 'completed'
+      // Dynamic status category extraction to support any dynamic workflow stage tag
+      const getCategoryFromStatus = (s) => {
+        if (s === 'pending' || s === 'accepted') return 'pending';
+        if (s === 'ready-to-deliver' || s === 'cancelled') return 'completed';
+        return 'inProgress';
       };
 
-      const previousCategory = statusToCategory[previousStatus];
-      const newCategory = statusToCategory[status];
+      const previousCategory = getCategoryFromStatus(previousStatus);
+      const newCategory = getCategoryFromStatus(status);
 
       console.log('   Previous status:', previousStatus, '-> Category:', previousCategory);
       console.log('   New status:', status, '-> Category:', newCategory);
@@ -7718,9 +7734,9 @@ export const updateWorkStatus = async (req, res) => {
         // Check if ALL works are ready
         const allWorksReady = orderWorks.every(w => w.status === 'ready-to-deliver');
         
-        // Check if ANY work is in progress
+        // Check if ANY work is in progress using completely generic checks
         const anyWorkInProgress = orderWorks.some(w => 
-          ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing'].includes(w.status)
+          !['pending', 'accepted', 'ready-to-deliver', 'cancelled'].includes(w.status)
         );
         
         // Determine new order status
@@ -7728,8 +7744,8 @@ export const updateWorkStatus = async (req, res) => {
         let statusChanged = false;
         
         if (allWorksReady) {
-          newOrderStatus = 'ready-to-delivery';
-          console.log('✅ ALL works ready! Order status should be: ready-to-delivery');
+          newOrderStatus = 'ready-to-deliver';
+          console.log('✅ ALL works ready! Order status should be: ready-to-deliver');
           statusChanged = true;
           
           // ✅ Send WhatsApp notification for ready order
@@ -7841,10 +7857,10 @@ export const deleteWork = async (req, res) => {
       
       if (work.status === 'pending' || work.status === 'accepted') {
         decrementUpdate['workStats.pending'] = -1;
-      } else if (['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing'].includes(work.status)) {
-        decrementUpdate['workStats.inProgress'] = -1;
-      } else if (work.status === 'ready-to-deliver') {
+      } else if (work.status === 'ready-to-deliver' || work.status === 'cancelled') {
         decrementUpdate['workStats.completed'] = -1;
+      } else {
+        decrementUpdate['workStats.inProgress'] = -1;
       }
       
       await Tailor.findByIdAndUpdate(work.tailor, {
@@ -7895,38 +7911,26 @@ export const getWorkStats = async (req, res) => {
     console.log('📊 Fetching work statistics...');
     
     // Aggregate work statistics by status
-    const stats = await Work.aggregate([
-      {
-        $group: {
-          _id: null,
-          totalWorks: { $sum: 1 },
-          pendingWorks: {
-            $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
-          },
-          acceptedWorks: {
-            $sum: { $cond: [{ $eq: ['$status', 'accepted'] }, 1, 0] }
-          },
-          cuttingStarted: {
-            $sum: { $cond: [{ $eq: ['$status', 'cutting-started'] }, 1, 0] }
-          },
-          cuttingCompleted: {
-            $sum: { $cond: [{ $eq: ['$status', 'cutting-completed'] }, 1, 0] }
-          },
-          sewingStarted: {
-            $sum: { $cond: [{ $eq: ['$status', 'sewing-started'] }, 1, 0] }
-          },
-          sewingCompleted: {
-            $sum: { $cond: [{ $eq: ['$status', 'sewing-completed'] }, 1, 0] }
-          },
-          ironing: {
-            $sum: { $cond: [{ $eq: ['$status', 'ironing'] }, 1, 0] }
-          },
-          readyToDeliver: {
-            $sum: { $cond: [{ $eq: ['$status', 'ready-to-deliver'] }, 1, 0] }
-          }
-        }
-      }
-    ]);
+    const allWorks = await Work.find({ isActive: true });
+
+const stats = {
+  totalWorks: allWorks.length,
+  pendingWorks: allWorks.filter(w =>
+    ['pending', 'accepted'].includes(w.status)
+  ).length,
+
+  inProgressWorks: allWorks.filter(w =>
+    !['pending', 'accepted', 'ready-to-deliver', 'cancelled'].includes(w.status)
+  ).length,
+
+  completedWorks: allWorks.filter(w =>
+    w.status === 'ready-to-deliver'
+  ).length,
+
+  cancelledWorks: allWorks.filter(w =>
+    w.status === 'cancelled'
+  ).length
+};
 
     // Get today's works
     const today = new Date();
@@ -7939,20 +7943,10 @@ export const getWorkStats = async (req, res) => {
     // Get overdue works (estimated delivery passed and not ready)
     const overdueWorks = await Work.countDocuments({
       estimatedDelivery: { $lt: new Date() },
-      status: { $ne: 'ready-to-deliver' }
+      status: { $nin: ['ready-to-deliver', 'cancelled'] },
     });
 
-    const result = stats[0] || {
-      totalWorks: 0,
-      pendingWorks: 0,
-      acceptedWorks: 0,
-      cuttingStarted: 0,
-      cuttingCompleted: 0,
-      sewingStarted: 0,
-      sewingCompleted: 0,
-      ironing: 0,
-      readyToDeliver: 0
-    };
+    const result = stats;
 
     res.json({
       success: true,
@@ -8122,14 +8116,13 @@ export const recalculateTailorStats = async (req, res) => {
 
     console.log('📋 Works found:', works.length);
     
-    // Calculate correct stats based on actual work statuses
+    // Calculate correct stats based on actual work statuses using fully generic evaluation metrics
     const workStats = {
       totalAssigned: works.length,
-      completed: works.filter(w => w.status === 'ready-to-deliver').length,
+      completed: works.filter(w => w.status === 'ready-to-deliver' || w.status === 'cancelled').length,
       pending: works.filter(w => ['pending', 'accepted'].includes(w.status)).length,
       inProgress: works.filter(w => 
-        ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing']
-        .includes(w.status)
+        !['pending', 'accepted', 'ready-to-deliver', 'cancelled'].includes(w.status)
       ).length
     };
 
@@ -8192,11 +8185,10 @@ export const recalculateAllTailorStats = async (req, res) => {
 
       const workStats = {
         totalAssigned: works.length,
-        completed: works.filter(w => w.status === 'ready-to-deliver').length,
+        completed: works.filter(w => w.status === 'ready-to-deliver' || w.status === 'cancelled').length,
         pending: works.filter(w => ['pending', 'accepted'].includes(w.status)).length,
         inProgress: works.filter(w => 
-          ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing']
-          .includes(w.status)
+          !['pending', 'accepted', 'ready-to-deliver', 'cancelled'].includes(w.status)
         ).length
       };
 
@@ -8306,43 +8298,28 @@ export const getDashboardWorkStats = async (req, res) => {
     console.log('📅 Work date filter:', dateFilter);
     
     // Aggregate work statistics by status
-    const stats = await Work.aggregate([
-      { $match: dateFilter },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          pending: {
-            $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
-          },
-          accepted: {
-            $sum: { $cond: [{ $eq: ['$status', 'accepted'] }, 1, 0] }
-          },
-          cuttingStarted: {
-            $sum: { $cond: [{ $eq: ['$status', 'cutting-started'] }, 1, 0] }
-          },
-          cuttingCompleted: {
-            $sum: { $cond: [{ $eq: ['$status', 'cutting-completed'] }, 1, 0] }
-          },
-          sewingStarted: {
-            $sum: { $cond: [{ $eq: ['$status', 'sewing-started'] }, 1, 0] }
-          },
-          sewingCompleted: {
-            $sum: { $cond: [{ $eq: ['$status', 'sewing-completed'] }, 1, 0] }
-          },
-          ironing: {
-            $sum: { $cond: [{ $eq: ['$status', 'ironing'] }, 1, 0] }
-          },
-          readyToDeliver: {
-            $sum: { $cond: [{ $eq: ['$status', 'ready-to-deliver'] }, 1, 0] }
-          },
-          cancelled: {
-            $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] }
-          }
-        }
-      }
-    ]);
+    const works = await Work.find(dateFilter);
 
+const stats = {
+  total: works.length,
+
+  pending: works.filter(w =>
+    ['pending', 'accepted'].includes(w.status)
+  ).length,
+
+  readyToDeliver: works.filter(w =>
+    w.status === 'ready-to-deliver'
+  ).length,
+
+  cancelled: works.filter(w =>
+    w.status === 'cancelled'
+  ).length,
+
+  inProgress: works.filter(w =>
+    !['pending', 'accepted', 'ready-to-deliver', 'cancelled']
+      .includes(w.status)
+  ).length
+};
     // Get today's works (separate from filter)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -8354,44 +8331,28 @@ export const getDashboardWorkStats = async (req, res) => {
     // Get overdue works (estimated delivery passed and not ready)
     const overdueWorks = await Work.countDocuments({
       estimatedDelivery: { $lt: new Date() },
-      status: { $ne: 'ready-to-deliver' },
+      status: { $nin: ['ready-to-deliver', 'cancelled'] },
       ...dateFilter // Apply date filter to estimated delivery
     });
 
-    const result = stats[0] || {
-      total: 0,
-      pending: 0,
-      accepted: 0,
-      cuttingStarted: 0,
-      cuttingCompleted: 0,
-      sewingStarted: 0,
-      sewingCompleted: 0,
-      ironing: 0,
-      readyToDeliver: 0,
-      cancelled: 0
-    };
+    const result = stats;
 
-    // Combine similar statuses for easier frontend use
+    // Combine similar statuses for easier frontend use dynamically to prevent dropping custom stages
     const workStats = {
       total: result.total,
-      pending: result.pending + result.accepted, // Pending includes accepted
-      inProgress: result.cuttingStarted + result.cuttingCompleted + 
-                  result.sewingStarted + result.sewingCompleted + result.ironing,
+      pending: result.pending, // Pending includes accepted
+      inProgress: result.inProgress,
       completed: result.readyToDeliver,
       cancelled: result.cancelled,
       todayWorks,
       overdueWorks,
       // Detailed breakdown (optional)
       details: {
-        pending: result.pending,
-        accepted: result.accepted,
-        cuttingStarted: result.cuttingStarted,
-        cuttingCompleted: result.cuttingCompleted,
-        sewingStarted: result.sewingStarted,
-        sewingCompleted: result.sewingCompleted,
-        ironing: result.ironing,
-        readyToDeliver: result.readyToDeliver
-      },
+  pending: result.pending,
+  inProgress: result.inProgress,
+  readyToDeliver: result.readyToDeliver,
+  cancelled: result.cancelled
+},
       filter: {
         period,
         startDate: dateFilter.createdAt?.$gte,
@@ -8480,7 +8441,7 @@ export const getRecentWorks = async (req, res) => {
     const recentWorks = await Work.find(dateFilter)
       .populate({
         path: 'order',
-        select: 'orderId customer deliveryDate workflowStages',
+        select: 'orderId customer deliveryDate workflowStages stageKeys',
         populate: {
           path: 'customer',
           select: 'name phone'
@@ -8607,29 +8568,19 @@ export const getWorkStatusBreakdown = async (req, res) => {
 
     // Status colors for frontend
     const statusColors = {
-      'pending': '#f59e0b',
-      'accepted': '#f59e0b',
-      'cutting-started': '#3b82f6',
-      'cutting-completed': '#3b82f6',
-      'sewing-started': '#3b82f6',
-      'sewing-completed': '#3b82f6',
-      'ironing': '#3b82f6',
-      'ready-to-deliver': '#10b981',
-      'cancelled': '#ef4444'
-    };
+  'pending': '#f59e0b',
+  'accepted': '#f59e0b',
+  'ready-to-deliver': '#10b981',
+  'cancelled': '#ef4444'
+};
 
     // Map status to display names
     const statusNames = {
-      'pending': 'Pending',
-      'accepted': 'Accepted',
-      'cutting-started': 'Cutting Started',
-      'cutting-completed': 'Cutting Done',
-      'sewing-started': 'Sewing Started',
-      'sewing-completed': 'Sewing Done',
-      'ironing': 'Ironing',
-      'ready-to-deliver': 'Ready',
-      'cancelled': 'Cancelled'
-    };
+  'pending': 'Pending',
+  'accepted': 'Accepted',
+  'ready-to-deliver': 'Ready',
+  'cancelled': 'Cancelled'
+};
 
     // For pie chart, we want to combine similar statuses
     const pieData = [
@@ -8642,12 +8593,12 @@ export const getWorkStatusBreakdown = async (req, res) => {
     breakdown.forEach(item => {
       if (['pending', 'accepted'].includes(item._id)) {
         pieData[0].value += item.count; // Pending
-      } else if (['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing'].includes(item._id)) {
-        pieData[1].value += item.count; // In Progress
       } else if (item._id === 'ready-to-deliver') {
-        pieData[2].value = item.count; // Ready
+        pieData[2].value += item.count; // Ready
       } else if (item._id === 'cancelled') {
-        pieData[3].value = item.count; // Cancelled
+        pieData[3].value += item.count; // Cancelled
+      } else {
+        pieData[1].value += item.count; // Dynamic Custom Steps count toward In Progress
       }
     });
 
@@ -8811,21 +8762,20 @@ export const getCuttingMasterDashboardStats = async (req, res) => {
 
     // Calculate statistics
     const stats = {
-      totalWorks: works.length,
-      pendingWorks: works.filter(w => w.status === 'pending').length,
-      acceptedWorks: works.filter(w => w.status === 'accepted').length,
-      cuttingStarted: works.filter(w => w.status === 'cutting-started').length,
-      cuttingCompleted: works.filter(w => w.status === 'cutting-completed').length,
-      sewingStarted: works.filter(w => w.status === 'sewing-started').length,
-      sewingCompleted: works.filter(w => w.status === 'sewing-completed').length,
-      ironing: works.filter(w => w.status === 'ironing').length,
-      readyToDeliver: works.filter(w => w.status === 'ready-to-deliver').length,
-      completed: works.filter(w => w.status === 'ready-to-deliver').length,
-      inProgress: works.filter(w => 
-        ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing']
-        .includes(w.status)
-      ).length
-    };
+  totalWorks: works.length,
+
+  pendingWorks: works.filter(w =>
+    ['pending', 'accepted'].includes(w.status)
+  ).length,
+
+  completed: works.filter(w =>
+    ['ready-to-deliver', 'cancelled'].includes(w.status)
+  ).length,
+
+  inProgress: works.filter(w =>
+    !['pending', 'accepted', 'ready-to-deliver', 'cancelled'].includes(w.status)
+  ).length
+};
 
     // Get available works in the pool (pending and not assigned to anyone)
     const availableWorks = await Work.countDocuments({
@@ -9040,7 +8990,7 @@ export const getTodaySummaryForMaster = async (req, res) => {
         $gte: today,
         $lt: tomorrow
       },
-      status: { $ne: 'ready-to-deliver' },
+      status: { $nin: ['ready-to-deliver', 'cancelled'] },
       isActive: true
     }).populate({
       path: 'garment',

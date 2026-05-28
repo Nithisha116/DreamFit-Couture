@@ -169,6 +169,7 @@ const res = advanceStageByTrackingId(actualTrackingId, "manual");
     if (res.ok) {
       setJob(res.job);
       setJustCompleted(true);
+      refreshWorkflowJobs();
       if (res.nextKey) {
         const nextLabel = getStageLabelFromDef(res.nextKey, res.job.workflowStages);
         showToast.success(`${getStageLabelFromDef(res.activeKey, res.job.workflowStages)} completed — ${nextLabel} is now active`);

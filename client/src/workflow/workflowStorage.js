@@ -86,14 +86,38 @@ export function upsertWorkflowJob(job) {
   if (idx >= 0) {
     const prev = jobs[idx];
     saved = sanitizeWorkflowJob({
-      ...prev,
-      ...incoming,
-      workflowTrackingId:
-        prev.workflowTrackingId || incoming.workflowTrackingId,
-      id: prev.id || incoming.id,
-      createdAt: prev.createdAt || incoming.createdAt,
-      updatedAt: Date.now(),
-    });
+  ...prev,
+  ...incoming,
+
+  // ✅ IMPORTANT FIX
+  workflowStages:
+    incoming.workflowStages &&
+    Object.keys(incoming.workflowStages).length
+      ? incoming.workflowStages
+      : (prev.workflowStages || {}),
+
+  // ✅ IMPORTANT FIX
+  stageKeys:
+    incoming.stageKeys && incoming.stageKeys.length
+      ? incoming.stageKeys
+      : (prev.stageKeys || []),
+
+  // ✅ IMPORTANT FIX
+  stages:
+    incoming.stages &&
+    Object.keys(incoming.stages).length
+      ? incoming.stages
+      : (prev.stages || {}),
+
+  workflowTrackingId:
+    prev.workflowTrackingId || incoming.workflowTrackingId,
+
+  id: prev.id || incoming.id,
+
+  createdAt: prev.createdAt || incoming.createdAt,
+
+  updatedAt: Date.now(),
+});
     next[idx] = saved;
   } else {
     saved = { ...incoming, updatedAt: Date.now() };

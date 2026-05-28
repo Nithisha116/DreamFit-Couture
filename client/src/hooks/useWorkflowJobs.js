@@ -39,10 +39,18 @@ export function useWorkflowJobs() {
   }, [refresh]);
 
   useEffect(() => {
-    const onChange = () => reloadFromStorage();
-    window.addEventListener(WORKFLOW_CHANGED_EVENT, onChange);
-    return () => window.removeEventListener(WORKFLOW_CHANGED_EVENT, onChange);
-  }, [reloadFromStorage]);
+  const onChange = () => reloadFromStorage();
+
+  window.addEventListener(WORKFLOW_CHANGED_EVENT, onChange);
+
+  // Sync updates across tabs/windows
+  window.addEventListener("storage", onChange);
+
+  return () => {
+    window.removeEventListener(WORKFLOW_CHANGED_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}, [reloadFromStorage]);
 
   return { jobs, refresh, loading: apiLoading, version };
 }

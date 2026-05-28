@@ -28,7 +28,14 @@ export function loadBoutiqueTasks() {
 
 /** Pipeline row from WorkflowJob (SSOT) */
 export function buildPipelineViewModelFromJob(job) {
-  const stageKeys = normalizeWorkflowStages(job.workflowStages || job.stageKeys);
+  const stageKeys =
+  Array.isArray(job?.stageKeys) && job.stageKeys.length
+    ? job.stageKeys
+    : Array.isArray(job?.workflowStages)
+      ? job.workflowStages.map((s) =>
+          typeof s === "string" ? s : s.key
+        )
+      : []; 
   const stages = stageKeys.map((key) => ({
     key,
     label: getStageLabelFromDef(key, job.workflowStages),
@@ -105,7 +112,7 @@ function taskMatchesWork(task, work) {
   }
   return false;
 }
-
+/*
 function resolvePipelineStageKeys(work, boutiqueTasks = loadBoutiqueTasks()) {
   const hay = collectWorkSearchText(work);
   const related = boutiqueTasks.filter((t) => taskMatchesWork(t, work));
@@ -123,15 +130,6 @@ function legacyBuildFromWork(work, boutiqueTasks) {
   const related = boutiqueTasks.filter((t) => taskMatchesWork(t, work));
   const stageKeys = resolvePipelineStageKeys(work, boutiqueTasks);
   const status = work.status || "pending";
-
-  const isStageDone = (key) => {
-    const cuttingDone = ["cutting-completed", "sewing-started", "sewing-completed", "ironing", "ready-to-deliver"].includes(status);
-    const sewingDone = ["sewing-completed", "ironing", "ready-to-deliver"].includes(status);
-    if (key === "cutting") return cuttingDone;
-    if (key === "stitching") return sewingDone;
-    if (key === "ironing" || key === "packed") return status === "ready-to-deliver";
-    return false;
-  };
 
   let activeIdx = stageKeys.findIndex((k) => !isStageDone(k));
   if (status === "ready-to-deliver") activeIdx = stageKeys.length - 1;
@@ -181,12 +179,22 @@ function legacyBuildFromWork(work, boutiqueTasks) {
     delayDays,
   };
 }
-
+*/
 /** Prefer workflow job; fallback to legacy work inference */
 export function buildPipelineViewModel(work, boutiqueTasks = loadBoutiqueTasks()) {
   const job = work?._id ? getWorkflowJobByWorkMongoId(work._id) : null;
   if (job) return buildPipelineViewModelFromJob(job);
-  return legacyBuildFromWork(work, boutiqueTasks);
+
+return buildPipelineViewModelFromJob({
+  workflowStages: work.workflowStages || [],
+  stageKeys: work.stageKeys || [],
+  stages: work.stages || {},
+  currentStageLabel: work.currentStage,
+  garmentName: work.garmentName,
+  orderId: work.order?.orderId,
+  customerName: work.order?.customer?.name,
+  priority: "normal",
+});
 }
 
 export function filterJobsForPipeline(jobs, daysAhead = 5) {

@@ -98,6 +98,12 @@ function workToJobFields(work) {
     dueDate: work?.estimatedDelivery || order?.deliveryDate || null,
     workStatus: work?.status || "pending",
     workflowStages: order?.workflowStages || work?.workflowStages || null,
+    stageKeys:
+  order?.stageKeys ||
+  work?.stageKeys ||
+  (order?.workflowStages || work?.workflowStages || []).map(
+    (s) => s.key
+  ),
     garment,
     // ── Measurements ──────────────────────────────
     measurements: garmentObj?.measurements || [],
@@ -236,7 +242,6 @@ export function syncWorksToWorkflowJobs(works = [], boutiqueTasks = []) {
 
   const merged = [...byWorkId.values(), ...orderOnly];
   saveWorkflowJobs(merged);
-  emitWorkflowChanged();
   return merged;
 }
 
@@ -348,8 +353,6 @@ export function advanceStageByTrackingId(trackingId, completedBy = "qr") {
   const updated = recomputeJobMeta({ ...job, stages });
 
 upsertWorkflowJob(updated);
-
-emitWorkflowChanged();
 
   const completedKeys = keys.filter((k) => stages[k]?.state === "completed");
   const suggestedWorkStatus = workStatusForCompletedStages(keys, completedKeys);

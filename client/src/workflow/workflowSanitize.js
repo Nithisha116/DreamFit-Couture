@@ -45,13 +45,25 @@ function deriveMeta(keys, stages) {
 export function sanitizeWorkflowJob(job) {
   if (!job || typeof job !== "object") return null;
 
-  let keys = normalizeWorkflowStages(job.workflowStages || job.stageKeys);
-  if (!keys.length) {
-    keys = normalizeWorkflowStages(resolveStageKeysForJob(job));
-  }
-  if (!keys.length) {
-    keys = [...DEFAULT_WORKFLOW_STAGES];
-  }
+  let keys = [];
+
+if (Array.isArray(job.stageKeys) && job.stageKeys.length > 0) {
+  keys = job.stageKeys
+    .map((k) => normalizeStageKey(k))
+    .filter(Boolean);
+
+} else if (job.workflowStages) {
+  keys = normalizeWorkflowStages(job.workflowStages);
+}
+
+if (!keys.length) {
+  keys = normalizeWorkflowStages(resolveStageKeysForJob(job));
+}
+
+if (!keys.length) {
+  keys = [...DEFAULT_WORKFLOW_STAGES];
+}
+  
 
   const stages = {};
   keys.forEach((k) => {
@@ -90,7 +102,7 @@ export function sanitizeWorkflowJob(job) {
     workCode: workCode || job.workCode || null,
     workflowStages: keys.map((key, index) => ({
   key,
-  label: getStageLabelFromDef(key, keys),
+  label: getStageLabelFromDef(key, job.workflowStages || keys),
   order: index + 1,
 })),
     stageKeys: keys,

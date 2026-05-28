@@ -49,26 +49,24 @@ const orderSchema = new mongoose.Schema({
   
   currentStage: {
     type: String,
-    enum: [
-      "new",
-      "cutting",
-      "stitching",
-      "trial",
-      "packing",
-      "delivered",
-    ],
     default: "new",
   },
 
   workflowStages: {
-    type: mongoose.Schema.Types.Mixed,
-    default: () => ({
-      cutting: { completed: false, completedAt: null, assignedTo: null },
-      stitching: { completed: false, completedAt: null, assignedTo: null },
-      trial: { completed: false, completedAt: null, assignedTo: null },
-      packing: { completed: false, completedAt: null, assignedTo: null }
-    })
-  },
+  type: [
+    {
+      key: String,
+      label: String,
+      order: Number,
+    }
+  ],
+  default: [],
+},
+
+stageKeys: {
+  type: [String],
+  default: [],
+},
   specialNotes: { type: String, default: "" },
   priceSummary: { type: priceSummarySchema, default: () => ({ totalMin: 0, totalMax: 0 }) },
   // NOTE: payments are stored in the separate Payment collection — NOT embedded here

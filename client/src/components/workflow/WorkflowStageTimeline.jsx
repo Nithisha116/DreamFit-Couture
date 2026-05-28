@@ -10,7 +10,14 @@ export default function WorkflowStageTimeline({
   compact = false,
   variant = "horizontal",
 }) {
-  const keys = normalizeWorkflowStages(job?.workflowStages || job?.stageKeys);
+  const keys =
+  Array.isArray(job?.stageKeys) && job.stageKeys.length
+    ? job.stageKeys
+    : Array.isArray(job?.workflowStages)
+      ? job.workflowStages.map((s) =>
+          typeof s === "string" ? s : s.key
+        )
+      : [];
 
   if (!keys.length) {
     return (
@@ -26,6 +33,8 @@ export default function WorkflowStageTimeline({
           const label = getStageLabelFromDef(key, job?.workflowStages);
           const isCompleted = stage?.state === "completed";
           const isActive = stage?.state === "active";
+          const workerName = stage?.assignedTo?.name || "Unassigned";
+          const statusText = isCompleted ? "Completed" : isActive ? "Active" : "Pending";
 
           return (
             <li
@@ -70,16 +79,21 @@ export default function WorkflowStageTimeline({
                 >
                   {label}
                 </p>
-                {isActive && (
-                  <p className="text-[10px] font-semibold text-violet-600 uppercase tracking-wide">
-                    Current stage
-                  </p>
-                )}
-                {isCompleted && stage?.completedAt && (
-                  <p className="text-[10px] text-emerald-600/80">
-                    Completed
-                  </p>
-                )}
+                <p
+                  className={[
+                    "text-[10px] font-semibold uppercase tracking-wide",
+                    isCompleted
+                      ? "text-emerald-600"
+                      : isActive
+                        ? "text-violet-600"
+                        : "text-slate-400",
+                  ].join(" ")}
+                >
+                  {statusText}
+                </p>
+                <p className="text-xs text-slate-600 mt-0.5 truncate">
+                  {workerName}
+                </p>
               </div>
               <span className="text-lg shrink-0" aria-hidden>
                 {isCompleted ? "✓" : isActive ? "●" : "○"}

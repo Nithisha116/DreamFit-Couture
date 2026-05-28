@@ -106,7 +106,15 @@ export function normalizeWorkflowStages(stages) {
   for (const raw of stages) {
     if (raw == null) continue;
     const rawKey =
-      typeof raw === "object" ? raw.key || raw.stage || raw.id : raw;
+ typeof raw === "object"
+   ? raw.key ||
+     raw.stage ||
+     raw.id ||
+     raw.name ||
+     raw.label ||
+     raw.stageName ||
+     raw.title
+   : raw;
     if (rawKey == null) continue;
     const key = normalizeStageKey(rawKey);
     if (!key || seen.has(key)) continue;

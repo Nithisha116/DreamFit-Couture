@@ -43,26 +43,25 @@ const workSchema = new mongoose.Schema({
   qrCode: String,
   currentStage: {
     type: String,
-    enum: [
-      "new",
-      "cutting",
-      "stitching",
-      "trial",
-      "packing",
-      "delivered",
-    ],
+    
     default: "new",
   },
   overallStatus: String,
   workflowStages: {
-    type: mongoose.Schema.Types.Mixed,
-    default: () => ({
-      cutting: { completed: false, completedAt: null, assignedTo: null },
-      stitching: { completed: false, completedAt: null, assignedTo: null },
-      trial: { completed: false, completedAt: null, assignedTo: null },
-      packing: { completed: false, completedAt: null, assignedTo: null }
-    })
-  },
+  type: [
+    {
+      key: String,
+      label: String,
+      order: Number,
+    }
+  ],
+  default: [],
+},
+
+stageKeys: {
+  type: [String],
+  default: [],
+},
 
   scanLogs: [{
     scannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

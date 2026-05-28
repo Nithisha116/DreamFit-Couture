@@ -1,148 +1,145 @@
 import { useEffect, useMemo, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { format } from "date-fns";
 import { X, UserPlus, Search, Loader2 } from "lucide-react";
-import { STAGE_TO_WORKER_ROLE, WORKER_ROLES } from "../../workflow/workflowConstants";
 import {
-  fetchWorkers,
-  selectAllWorkers,
-  selectWorkerLoading,
-  selectWorkerError,
-  clearWorkerList,
-} from "../../features/worker/workerSlice";
+  STAGE_TO_WORKER_ROLE,
+  WORKER_ROLES,
+  getStageLabelFromDef,
+  normalizeWorkflowStages,
+} from "../../workflow/workflowConstants";
 import API from "../../app/axios";
 import showToast from "../../utils/toast";
 
-// Example dummy fallback data for when backend has no workers
-const dummyWorkerData = {
-  helper: [
-    { _id: "dummy1", fullName: "Rahul Helper", phone: "9876543210", role: "helper", status: "active" },
-    { _id: "dummy2", fullName: "Aman Helper", phone: "9876543211", role: "helper", status: "active" },
-  ],
-  ironing: [
-    { _id: "dummy3", fullName: "Raju Iron", phone: "9876543212", role: "ironing", status: "active" },
-    { _id: "dummy4", fullName: "Sameer Iron", phone: "9876543213", role: "ironing", status: "active" },
-  ],
-  embroidery: [
-    { _id: "dummy5", fullName: "Imran Embroidery", phone: "9876543214", role: "embroidery", status: "active" },
-    { _id: "dummy6", fullName: "Faiz Embroidery", phone: "9876543215", role: "embroidery", status: "active" },
-  ],
-  aari: [
-    { _id: "dummy7", fullName: "Karan Aari", phone: "9876543216", role: "aari", status: "active" },
-    { _id: "dummy8", fullName: "Sahil Aari", phone: "9876543217", role: "aari", status: "active" },
-  ],
-  tailor: [
-    { _id: "dummy9", fullName: "Ramesh Tailor", phone: "9876543218", role: "tailor", status: "active" },
-    { _id: "dummy10", fullName: "Suresh Tailor", phone: "9876543219", role: "tailor", status: "active" },
-  ],
-  cutting: [
-    { _id: "dummy11", fullName: "Mahesh Cutter", phone: "9876543220", role: "cutting", status: "active" },
-    { _id: "dummy12", fullName: "Dinesh Cutter", phone: "9876543221", role: "cutting", status: "active" },
-  ]
-};
-
 export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
-  const dispatch = useDispatch();
-  const workers = useSelector(selectAllWorkers) || [];
-  const loading = useSelector(selectWorkerLoading);
-  const error = useSelector(selectWorkerError);
-
-  const [role, setRole] = useState("");
-  const [selectedWorker, setSelectedWorker] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [loadingRoles, setLoadingRoles] = useState({});
+  const [roleWorkers, setRoleWorkers] = useState({});
+  const [assignmentsByStage, setAssignmentsByStage] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
-  // Determine stage and default role for assignment
-  const activeKey = job?.currentStageKey || job?.stageKeys?.[0];
-  const defaultRole = STAGE_TO_WORKER_ROLE[activeKey] || "helper";
-  const roleId = role || defaultRole;
+  const stageKeys = useMemo(() => {
+    return normalizeWorkflowStages(job?.workflowStages || job?.stageKeys);
+  }, [job?.workflowStages, job?.stageKeys]);
 
-  // Handle debouncing of the search input
+  const jobId = job?.workMongoId || job?._id;
+
+  const stageRole = useMemo(() => {
+    const m = {};
+    stageKeys.forEach((k) => {
+      m[k] = STAGE_TO_WORKER_ROLE[k] || "helper";
+    });
+    return m;
+  }, [stageKeys]);
+
+  const requiredRoles = useMemo(() => {
+    return Array.from(new Set(stageKeys.map((k) => stageRole[k]).filter(Boolean)));
+  }, [stageKeys, stageRole]);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    if (!open || !job) return;
 
-  // Fetch workers when role or debounced search changes
+    const next = {};
+    stageKeys.forEach((k) => {
+      const a = job.stages?.[k]?.assignedTo;
+      if (a?.workerId || a?.name) {
+        next[k] = {
+          _id: a.workerId || null,
+          fullName: a.name || "",
+          role: a.role || stageRole[k],
+          status: "active",
+        };
+      }
+    });
+    setAssignmentsByStage(next);
+  }, [open, job, stageKeys, stageRole]);
+
   useEffect(() => {
-    if (open && roleId) {
-      dispatch(fetchWorkers({ role: roleId, search: debouncedSearch, status: "active" }));
+    if (!open || !job) return;
+    let cancelled = false;
+
+    async function loadRole(role) {
+      setLoadingRoles((s) => ({ ...s, [role]: true }));
+      try {
+        const query = new URLSearchParams();
+        query.append("role", role);
+        query.append("status", "active");
+        if (searchQuery.trim()) query.append("search", searchQuery.trim());
+        const res = await API.get(`/workers?${query.toString()}`);
+        const list = res?.data?.workers || res?.data?.data || [];
+        if (!cancelled) {
+          setRoleWorkers((s) => ({ ...s, [role]: Array.isArray(list) ? list : [] }));
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setRoleWorkers((s) => ({ ...s, [role]: [] }));
+        }
+      } finally {
+        if (!cancelled) setLoadingRoles((s) => ({ ...s, [role]: false }));
+      }
     }
-  }, [open, roleId, debouncedSearch, dispatch]);
 
-  // Reset states on close
+    requiredRoles.forEach((r) => loadRole(r));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, job, requiredRoles, searchQuery]);
+
   useEffect(() => {
     if (!open) {
-      setSelectedWorker(null);
-      setRole("");
       setSearchQuery("");
-      setDebouncedSearch("");
-      dispatch(clearWorkerList());
+      setLoadingRoles({});
+      setRoleWorkers({});
+      setAssignmentsByStage({});
+      setSaving(false);
+      setSaveError(null);
     }
-  }, [open, dispatch]);
+  }, [open]);
 
-  // Compute final workers list to show (uses dummy fallback ONLY if backend returns no workers)
-  const displayWorkers = useMemo(() => {
-    if (workers && workers.length > 0) {
-      return workers;
-    }
-    // Fallback to dummy data only if no backend data is loaded
-    const fallback = dummyWorkerData[roleId] || [];
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return fallback.filter(
-        w =>
-          w.fullName.toLowerCase().includes(q) ||
-          w.phone.includes(q)
-      );
-    }
-    return fallback;
-  }, [workers, roleId, searchQuery]);
-
-  const handleRoleChange = (e) => {
-    const nextRole = e.target.value;
-    setRole(nextRole);
-    setSelectedWorker(null);
-    setSearchQuery("");
-    setDebouncedSearch("");
-    dispatch(clearWorkerList());
+  const handleWorkerSelect = (stageKey, workerId) => {
+    const role = stageRole[stageKey] || "helper";
+    const list = roleWorkers[role] || [];
+    const w = list.find((x) => x._id === workerId) || null;
+    setAssignmentsByStage((s) => ({
+      ...s,
+      [stageKey]: w
+        ? { ...w, fullName: w.fullName || w.name || w.full_name || "" }
+        : null,
+    }));
   };
 
-  const handleAssign = async () => {
-    if (!selectedWorker) return;
-
-    const jobId = job.workMongoId || job._id;
-
-    // If it is a dummy worker or the job doesn't have a Mongo ObjectId (workMongoId is missing),
-    // bypass the backend API request and complete the assignment flow locally
-    if (!jobId || (selectedWorker._id && String(selectedWorker._id).startsWith("dummy"))) {
-      showToast.success(`Worker assigned successfully`);
-      onAssigned?.({
-        ...job,
-        workerName: selectedWorker.fullName || selectedWorker.name,
-        workerId: selectedWorker._id,
-        role: roleId
-      });
-      onClose();
+  const handleSaveAll = async () => {
+    if (!jobId) {
+      showToast.error("Work record missing — cannot save assignments");
       return;
     }
+    setSaving(true);
+    setSaveError(null);
 
     try {
-      await API.post(`/workflow/works/${jobId}/assign-worker`, {
-        stage: activeKey,
-        role: roleId,
-        workerId: selectedWorker._id,
-        workerName: selectedWorker.fullName || selectedWorker.name,
-      });
+      for (const key of stageKeys) {
+        const role = stageRole[key] || "helper";
+        const selected = assignmentsByStage[key];
+        if (!selected?._id) continue;
 
-      showToast.success(`Worker assigned successfully`);
-      onAssigned?.({ ...job, workerName: selectedWorker.fullName || selectedWorker.name, workerId: selectedWorker._id, role: roleId });
+        await API.post(`/workflow/works/${jobId}/assign-worker`, {
+          stage: key,
+          role,
+          workerId: selected._id,
+          workerName: selected.fullName || selected.name,
+        });
+      }
+
+      showToast.success("Workers assigned across workflow stages");
+      onAssigned?.({ ...job });
       onClose();
     } catch (err) {
-      console.error("❌ Worker assignment failed:", err);
-      showToast.error(err.response?.data?.message || "Failed to assign worker");
+      const msg = err?.response?.data?.message || "Failed to assign workers";
+      setSaveError(msg);
+      showToast.error(msg);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -194,25 +191,7 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
             </div>
           </div>
 
-          {/* Role selector */}
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-              Role
-            </label>
-            <select
-              value={roleId}
-              onChange={handleRoleChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-violet-500/30 outline-none transition-all cursor-pointer bg-white"
-            >
-              {WORKER_ROLES.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Search Input */}
+          {/* Search Input (filters worker lists) */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">
               Search Employee
@@ -228,69 +207,74 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
             </div>
           </div>
 
-          {/* Searchable dropdown list */}
+          {/* Stage → Worker dropdowns */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">
-              Active Workers
+              Workflow stage assignments
             </label>
 
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-10 space-y-2 text-slate-400">
-                <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
-                <p className="text-xs font-semibold">Loading active workers...</p>
-              </div>
-            ) : error ? (
-              <div className="text-center py-8 rounded-xl bg-red-50 border border-red-100 p-4">
-                <p className="text-sm font-bold text-red-600">Failed to load workers</p>
-                <p className="text-xs text-red-500 mt-1">Please check connection or re-login.</p>
-                <button
-                  type="button"
-                  onClick={() => dispatch(fetchWorkers({ role: roleId, search: debouncedSearch, status: "active" }))}
-                  className="mt-2 text-xs font-black text-violet-700 underline uppercase"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : !displayWorkers || displayWorkers.length === 0 ? (
+            {!stageKeys.length ? (
               <div className="text-center py-10 rounded-xl bg-slate-50 border border-dashed border-slate-200 p-4">
-                <p className="text-sm font-bold text-slate-500">No employees found</p>
-                <p className="text-xs text-slate-400 mt-1">No active workers found under the selected role.</p>
+                <p className="text-sm font-bold text-slate-500">No workflow stages</p>
+                <p className="text-xs text-slate-400 mt-1">This job has no configured stages.</p>
               </div>
             ) : (
-              <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                {displayWorkers.map((w) => (
-                  <button
-                    key={w._id}
-                    type="button"
-                    onClick={() => setSelectedWorker(w)}
-                    className={`w-full text-left rounded-xl border p-3 flex items-center justify-between transition-all duration-200 ${
-                      selectedWorker?._id === w._id
-                        ? "border-violet-500 bg-violet-50/55 shadow-sm ring-2 ring-violet-200"
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
-                        <span className="text-xs font-bold text-violet-700 capitalize">
-                          {(w.fullName || w.name).charAt(0)}
+              <div className="space-y-2">
+                {stageKeys.map((key) => {
+                  const roleId = stageRole[key] || "helper";
+                  const list = roleWorkers[roleId] || [];
+                  const busy = Boolean(loadingRoles[roleId]);
+                  const selected = assignmentsByStage[key];
+                  const state = job.stages?.[key]?.state || "pending";
+
+                  const stateCls =
+                    state === "completed"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : state === "active"
+                        ? "bg-violet-50 text-violet-700 border-violet-200"
+                        : "bg-slate-50 text-slate-500 border-slate-200";
+
+                  return (
+                    <div
+                      key={key}
+                      className="rounded-xl border border-slate-200 bg-white p-3"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-slate-800 truncate">
+                            {getStageLabelFromDef(key, job.workflowStages)}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-mono uppercase">
+                            {WORKER_ROLES.find((r) => r.id === roleId)?.label || roleId}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-extrabold px-2 py-1 rounded-full border ${stateCls}`}>
+                          {state}
                         </span>
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-bold text-slate-800 text-sm truncate">{w.fullName || w.name}</p>
-                        <p className="text-[10px] text-slate-500 font-mono capitalize">
-                          {w.role.replace('_', ' ')} · {w.status}
-                        </p>
+
+                      <div className="relative">
+                        <select
+                          value={selected?._id || ""}
+                          onChange={(e) => handleWorkerSelect(key, e.target.value)}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-violet-500/30 outline-none transition-all cursor-pointer bg-white"
+                        >
+                          <option value="">
+                            {busy ? "Loading workers..." : "Select worker"}
+                          </option>
+                          {list.map((w) => (
+                            <option key={w._id} value={w._id}>
+                              {w.fullName || w.name}
+                            </option>
+                          ))}
+                        </select>
+                        {busy && (
+                          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-violet-600" />
+                        )}
                       </div>
                     </div>
-                    {selectedWorker?._id === w._id && (
-                      <div className="h-5 w-5 rounded-full bg-violet-600 flex items-center justify-center shrink-0">
-                        <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -306,13 +290,20 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
             </button>
             <button
               type="button"
-              onClick={handleAssign}
-              disabled={!selectedWorker || loading}
+              onClick={handleSaveAll}
+              disabled={saving}
               className="flex-1 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 py-3 text-sm font-bold text-white shadow-md hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              Assign
+              {saving ? "Saving..." : "Assign"}
             </button>
           </div>
+
+          {saveError && (
+            <div className="rounded-xl bg-red-50 border border-red-100 p-3 text-left">
+              <p className="text-xs font-bold text-red-700">Assignment failed</p>
+              <p className="text-xs text-red-600 mt-1">{saveError}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
