@@ -107,6 +107,33 @@ const employeeSalarySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    // ===== PAYMENT TRACKING (added for salary payment workflow) =====
+    paidAmount: {
+      type: Number,
+      default: 0,
+    },
+    remainingAmount: {
+      type: Number,
+      default: null, // null = not yet computed (use netSalary - paidAmount)
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["unpaid", "partial", "paid"],
+      default: "unpaid",
+    },
+    paymentHistory: [
+      {
+        transactionId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "SalaryTransaction",
+        },
+        amount: { type: Number },
+        paidAt: { type: Date },
+        method: { type: String },
+        transactionType: { type: String },
+        refNumber: { type: String },
+      },
+    ],
     generatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

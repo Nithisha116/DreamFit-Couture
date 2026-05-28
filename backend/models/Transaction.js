@@ -216,7 +216,26 @@ const transactionSchema = new mongoose.Schema({
     type: String,
     enum: ['completed', 'pending', 'cancelled'],
     default: 'completed'
-  }
+  },
+
+  // ── Salary mirror fields (auto-generated from SalaryTransaction) ────────
+  isSystemGenerated: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
+  sourceType: {
+    type: String,
+    enum: ['manual', 'salary_transaction'],
+    default: 'manual',
+  },
+  sourceId: {
+    type: mongoose.Schema.Types.ObjectId,
+  },
+  employeeRef: {
+    type: String, // stores employeeId string (tailorId, cuttingMasterId, etc.)
+  },
+
 }, { 
   timestamps: true 
 });
