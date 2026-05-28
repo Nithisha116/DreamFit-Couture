@@ -357,13 +357,46 @@ export function advanceStageByTrackingId(trackingId, completedBy = "qr") {
   };
 
   const nextKey = keys[activeIdx + 1];
-  if (nextKey) {
-    stages[nextKey] = { ...stages[nextKey], state: "active" };
-  }
 
-  const updated = recomputeJobMeta({ ...job, stages });
+// ✅ IMPORTANT: remove any previous active states
+keys.forEach((key) => {
+  if (stages[key]?.state === "active") {
+    stages[key] = {
+      ...stages[key],
+      state: "pending",
+    };
+  }
+});
+
+// ✅ mark completed stage
+stages[activeKey] = {
+  ...stages[activeKey],
+  state: "completed",
+  completedAt: Date.now(),
+  completedBy,
+};
+
+// ✅ activate next stage
+if (nextKey) {
+  stages[nextKey] = {
+    ...stages[nextKey],
+    state: "active",
+  };
+}
+
+const updated = recomputeJobMeta({
+  ...job,
+  stages,
+  currentStageKey: nextKey || null,
+  currentStageLabel: nextKey
+    ? getStageLabelFromDef(nextKey, job.workflowStages)
+    : "Completed",
+  lifecycleStatus: nextKey ? "open" : "completed",
+});
 
 upsertWorkflowJob(updated);
+
+emitWorkflowChanged();
 
   const completedKeys = keys.filter((k) => stages[k]?.state === "completed");
   const suggestedWorkStatus = workStatusForCompletedStages(keys, completedKeys);

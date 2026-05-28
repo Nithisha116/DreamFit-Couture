@@ -65,20 +65,23 @@ function resolveTrackingId(wfParam) {
 
 export default function WorkflowScanPage() {
   const { trackingId: paramId } = useParams();
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { user } = useSelector((state) => state.auth);
-  const basePath = user?.role === "STORE_KEEPER" ? "/storekeeper" : "/admin";
+  const [searchParams]          = useSearchParams();
+  const navigate                = useNavigate();
+  const { user }                = useSelector((state) => state.auth);
+  const basePath                = user?.role === "STORE_KEEPER" ? "/storekeeper" : "/admin";
 
-  const wfParam = searchParams.get("wf") || paramId;
+  const wfParam    = searchParams.get("wf") || paramId;
   const trackingId = useMemo(() => resolveTrackingId(wfParam), [wfParam]);
 
-  const { jobs: workflowJobs, refresh: refreshWorkflowJobs, version } = useWorkflowJobs();
-  const [job, setJob] = useState(null);
+  // ✅ Destructure suppressNextApiMerge from the hook
+  const { jobs: workflowJobs, refresh: refreshWorkflowJobs, version, suppressNextApiMerge } =
+    useWorkflowJobs();
+
+  const [job, setJob]             = useState(null);
   const [loadState, setLoadState] = useState("loading");
   const [completing, setCompleting] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
-  const retriedLoadRef = useRef(false);
+  const retriedLoadRef            = useRef(false);
 
   const reloadJob = useCallback(() => {
     if (!trackingId) {
@@ -121,8 +124,8 @@ export default function WorkflowScanPage() {
     return () => window.removeEventListener(WORKFLOW_CHANGED_EVENT, onChange);
   }, [reloadJob]);
 
-  const activeKey = job ? getActiveStageKey(job) : null;
-  const assignee = activeKey ? job?.stages?.[activeKey]?.assignedTo : null;
+  const activeKey         = job ? getActiveStageKey(job) : null;
+  const assignee          = activeKey ? job?.stages?.[activeKey]?.assignedTo : null;
   const isWorkflowComplete = job?.lifecycleStatus === "completed";
 
   const finishButtonLabel = useMemo(() => {
@@ -137,9 +140,9 @@ export default function WorkflowScanPage() {
     return keys
       .filter((k) => job.stages?.[k]?.state === "completed" && job.stages[k].completedAt)
       .map((k) => ({
-        key: k,
+        key:   k,
         label: getStageLabelFromDef(k, job.workflowStages),
-        at: job.stages[k].completedAt,
+        at:    job.stages[k].completedAt,
       }));
   }, [job]);
 
@@ -160,22 +163,35 @@ export default function WorkflowScanPage() {
   const handleCompleteStage = () => {
     if (!trackingId || completing || isWorkflowComplete) return;
     setCompleting(true);
-    const actualTrackingId =
-  job?.workflowTrackingId || trackingId;
 
-const res = advanceStageByTrackingId(actualTrackingId, "manual");
+    const actualTrackingId = job?.workflowTrackingId || trackingId;
+
+    // ✅ STEP 1: Advance in localStorage (optimistic, instant)
+    const res = advanceStageByTrackingId(actualTrackingId, "manual");
     setCompleting(false);
 
     if (res.ok) {
+      // ✅ STEP 2: Immediately show updated job from localStorage
       setJob(res.job);
       setJustCompleted(true);
-      refreshWorkflowJobs();
+
       if (res.nextKey) {
         const nextLabel = getStageLabelFromDef(res.nextKey, res.job.workflowStages);
-        showToast.success(`${getStageLabelFromDef(res.activeKey, res.job.workflowStages)} completed — ${nextLabel} is now active`);
+        showToast.success(
+          `${getStageLabelFromDef(res.activeKey, res.job.workflowStages)} completed — ${nextLabel} is now active`
+        );
       } else {
         showToast.success("All stages completed — ready for delivery");
       }
+
+      // ✅ STEP 3: Suppress the API merge for 1.5 s so the API refresh
+      //    (triggered below) doesn't overwrite our localStorage state
+      //    before MongoDB has persisted work.currentStage.
+      suppressNextApiMerge();
+
+      // ✅ STEP 4: Refresh from API (will be suppressed for 1.5 s, then
+      //    re-fetches with the persisted Mongo state)
+      refreshWorkflowJobs();
     } else {
       showToast.error(res.error || "Could not complete stage");
     }
