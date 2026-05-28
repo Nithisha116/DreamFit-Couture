@@ -4,8 +4,9 @@
 
 import {
   PIPELINE_STAGE_DEFS,
+  extractOrderedStageKeys,
   getStageLabelFromDef,
-  getStageShortLabel
+  getStageShortLabel,
 } from "../workflow/workflowConstants";
 import { normalizeWorkflowStages } from "../workflow/workflowStageUtils";
 import { getActiveStageKey } from "../workflow/workflowEngine";
@@ -28,14 +29,7 @@ export function loadBoutiqueTasks() {
 
 /** Pipeline row from WorkflowJob (SSOT) */
 export function buildPipelineViewModelFromJob(job) {
-  const stageKeys =
-  Array.isArray(job?.stageKeys) && job.stageKeys.length
-    ? job.stageKeys
-    : Array.isArray(job?.workflowStages)
-      ? job.workflowStages.map((s) =>
-          typeof s === "string" ? s : s.key
-        )
-      : []; 
+  const stageKeys = extractOrderedStageKeys(job); 
   const stages = stageKeys.map((key) => ({
     key,
     label: getStageLabelFromDef(key, job.workflowStages),
@@ -186,8 +180,8 @@ export function buildPipelineViewModel(work, boutiqueTasks = loadBoutiqueTasks()
   if (job) return buildPipelineViewModelFromJob(job);
 
 return buildPipelineViewModelFromJob({
-  workflowStages: work.workflowStages || [],
-  stageKeys: work.stageKeys || [],
+  workflowStages: work.order?.workflowStages || work.workflowStages || [],
+  stageKeys: work.order?.stageKeys || work.stageKeys || [],
   stages: work.stages || {},
   currentStageLabel: work.currentStage,
   garmentName: work.garmentName,

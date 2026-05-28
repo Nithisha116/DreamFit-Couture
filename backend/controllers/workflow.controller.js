@@ -33,55 +33,76 @@ const PIPELINE_STAGE_DEFS = {
 
 
 
-// Helper: Get workflow stages array of objects
+function normalizeStageKey(key) {
+  const k = String(key || '').trim().toLowerCase().replace(/\s+/g, '_');
+  if (k === 'packing' || k === 'pack' || k === 'ready') return 'packed';
+  if (k === 'aari_work' || k === 'aariwork') return 'aari';
+  if (k === 'sewing') return 'stitching';
+  return k;
+}
+
+function buildWorkflowStageList(keys, work) {
+  return keys.map((rawKey, index) => {
+    const key = normalizeStageKey(rawKey);
+    const def = PIPELINE_STAGE_DEFS[key] || {};
+    const isActive =
+      work?.currentStage === key ||
+      work?.currentStage === rawKey ||
+      (index === 0 && !work?.currentStage);
+    return {
+      key,
+      label: def.label || String(key).charAt(0).toUpperCase() + String(key).slice(1),
+      order: index + 1,
+      status: isActive ? 'active' : 'pending',
+    };
+  });
+}
+
+// Helper: Get workflow stages array of objects (order.stageKeys / order.workflowStages SSOT)
 
 function getWorkflowStages(work) {
+  const order = work?.order;
 
-  // 1. Prefer explicit workflowStages array
-  if (Array.isArray(work.workflowStages) && work.workflowStages.length > 0) {
-    return [...work.workflowStages].sort((a, b) => a.order - b.order);
-  }
-
-  // 2. Fallback to order workflowStages
+  // 1. Work-level array of stage defs
   if (
-    Array.isArray(work.order?.workflowStages) &&
-    work.order.workflowStages.length > 0
+    Array.isArray(work.workflowStages) &&
+    work.workflowStages.length > 0 &&
+    typeof work.workflowStages[0] === 'object' &&
+    work.workflowStages[0]?.key
   ) {
-    return [...work.order.workflowStages].sort((a, b) => a.order - b.order);
+    return [...work.workflowStages].sort((a, b) => (a.order || 0) - (b.order || 0));
   }
 
-  // 3. Fallback using stageKeys
-  if (Array.isArray(work.stageKeys) && work.stageKeys.length > 0) {
-    return work.stageKeys.map((key, index) => {
-      const def = PIPELINE_STAGE_DEFS[key] || {};
+  // 2. Order stageKeys (explicit order from order creation)
+  if (Array.isArray(order?.stageKeys) && order.stageKeys.length > 0) {
+    return buildWorkflowStageList(order.stageKeys, work);
+  }
 
-      return {
-        key,
-        label:
-          def.label ||
-          key.charAt(0).toUpperCase() + key.slice(1),
-        order: index + 1,
-        status:
-          work.currentStage === key ? "active" : "pending",
-      };
-    });
+  // 3. Work stageKeys
+  if (Array.isArray(work.stageKeys) && work.stageKeys.length > 0) {
+    return buildWorkflowStageList(work.stageKeys, work);
+  }
+
+  // 4. Order workflowStages progress map (Mongo object keyed by stage)
+  if (
+    order?.workflowStages &&
+    typeof order.workflowStages === 'object' &&
+    !Array.isArray(order.workflowStages)
+  ) {
+    const keys =
+      Array.isArray(order.stageKeys) && order.stageKeys.length
+        ? order.stageKeys
+        : Object.keys(order.workflowStages);
+    return buildWorkflowStageList(keys, work);
+  }
+
+  // 5. Order workflowStages array
+  if (Array.isArray(order?.workflowStages) && order.workflowStages.length > 0) {
+    return [...order.workflowStages].sort((a, b) => (a.order || 0) - (b.order || 0));
   }
 
   // LAST fallback only
-  const defaultKeys = ['cutting', 'stitching', 'trial', 'packing'];
-
-  return defaultKeys.map((key, i) => {
-    const def = PIPELINE_STAGE_DEFS[key] || {};
-
-    return {
-      key,
-      label:
-        def.label ||
-        key.charAt(0).toUpperCase() + key.slice(1),
-      order: i + 1,
-      status: i === 0 ? 'active' : 'pending'
-    };
-  });
+  return buildWorkflowStageList(['cutting', 'stitching', 'ironing', 'packed'], work);
 }
 
 

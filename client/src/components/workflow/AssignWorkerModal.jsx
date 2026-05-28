@@ -4,8 +4,8 @@ import { X, UserPlus, Search, Loader2 } from "lucide-react";
 import {
   STAGE_TO_WORKER_ROLE,
   WORKER_ROLES,
+  extractOrderedStageKeys,
   getStageLabelFromDef,
-  normalizeWorkflowStages,
 } from "../../workflow/workflowConstants";
 import API from "../../app/axios";
 import showToast from "../../utils/toast";
@@ -19,7 +19,7 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
   const [saveError, setSaveError] = useState(null);
 
   const stageKeys = useMemo(() => {
-    return normalizeWorkflowStages(job?.workflowStages || job?.stageKeys);
+    return extractOrderedStageKeys(job);
   }, [job?.workflowStages, job?.stageKeys]);
 
   const jobId = job?.workMongoId || job?._id;

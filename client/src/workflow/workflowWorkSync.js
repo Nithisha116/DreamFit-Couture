@@ -19,7 +19,14 @@ export function workStatusForCompletedStages(stageKeys, completedKeys) {
   if (stageKeys.every((k) => done.has(k))) return "ready-to-deliver";
   const activeIdx = stageKeys.findIndex((k) => !done.has(k));
   const active = stageKeys[activeIdx];
-  if (active === "packed" || (activeIdx === stageKeys.length - 1 && done.has(stageKeys[stageKeys.length - 2]))) {
+  if (active === "packed" || active === "packing") {
+    return "ready-to-deliver";
+  }
+  if (
+    activeIdx === stageKeys.length - 1 &&
+    stageKeys.length > 1 &&
+    done.has(stageKeys[stageKeys.length - 2])
+  ) {
     return "ready-to-deliver";
   }
   if (active === "ironing") return "ironing";

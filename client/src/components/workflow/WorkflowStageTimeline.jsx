@@ -1,8 +1,8 @@
 import { Check, Circle } from "lucide-react";
 import {
+  extractOrderedStageKeys,
   getStageLabelFromDef,
   getStageShortLabel,
-  normalizeWorkflowStages,
 } from "../../workflow/workflowConstants";
 
 export default function WorkflowStageTimeline({
@@ -10,14 +10,7 @@ export default function WorkflowStageTimeline({
   compact = false,
   variant = "horizontal",
 }) {
-  const keys =
-  Array.isArray(job?.stageKeys) && job.stageKeys.length
-    ? job.stageKeys
-    : Array.isArray(job?.workflowStages)
-      ? job.workflowStages.map((s) =>
-          typeof s === "string" ? s : s.key
-        )
-      : [];
+  const keys = extractOrderedStageKeys(job);
 
   if (!keys.length) {
     return (

@@ -26,8 +26,68 @@ export function normalizeStageKey(key) {
     .replace(/\s+/g, "_");
   if (k === "aari_work" || k === "aariwork") return "aari";
   if (k === "sewing") return "stitching";
-  if (k === "pack" || k === "ready") return "packed";
+  if (k === "pack" || k === "ready" || k === "packing") return "packed";
   return k;
+}
+
+function stageKeysEqual(a, b) {
+  const na = normalizeWorkflowStages(a);
+  const nb = normalizeWorkflowStages(b);
+  return na.length === nb.length && na.every((k, i) => k === nb[i]);
+}
+
+/** True when keys match the built-in default pipeline */
+export function isDefaultWorkflowKeys(keys) {
+  return stageKeysEqual(keys, DEFAULT_WORKFLOW_STAGES);
+}
+
+/**
+ * Ordered stage keys for a job — SSOT for rendering and progression.
+ * Prefers explicit stageKeys; reconciles with workflowStages when they disagree.
+ */
+export function extractOrderedStageKeys(job) {
+  if (!job || typeof job !== "object") return [];
+
+  const fromStageKeys = normalizeWorkflowStages(job.stageKeys);
+  const fromWorkflow = normalizeWorkflowStages(job.workflowStages, job.stageKeys);
+
+  if (fromStageKeys.length && fromWorkflow.length) {
+    if (stageKeysEqual(fromStageKeys, fromWorkflow)) return fromStageKeys;
+    if (isDefaultWorkflowKeys(fromStageKeys) && !isDefaultWorkflowKeys(fromWorkflow)) {
+      return fromWorkflow;
+    }
+    if (!isDefaultWorkflowKeys(fromStageKeys) && isDefaultWorkflowKeys(fromWorkflow)) {
+      return fromStageKeys;
+    }
+    return fromStageKeys;
+  }
+  if (fromStageKeys.length) return fromStageKeys;
+  if (fromWorkflow.length) return fromWorkflow;
+  return [];
+}
+
+/** Keep custom per-order pipeline when API/sync sends default stages */
+export function mergeStageKeysPreferCustom(existingJob, incomingKeys) {
+  const prev = extractOrderedStageKeys(existingJob);
+  const next = normalizeWorkflowStages(incomingKeys);
+  if (!prev.length) return next;
+  if (!next.length) return prev;
+
+  const prevCustom = !isDefaultWorkflowKeys(prev);
+  const nextCustom = !isDefaultWorkflowKeys(next);
+
+  if (prevCustom && !nextCustom) return prev;
+  if (!prevCustom && nextCustom) return next;
+
+  if (!stageKeysEqual(prev, next)) {
+    const stages = existingJob?.stages || {};
+    const hasProgress = Object.values(stages).some(
+      (s) => s?.state === "completed" || s?.completedAt,
+    );
+    if (hasProgress && prevCustom) return prev;
+  }
+
+  return next;
 }
 
 /**
@@ -88,17 +148,31 @@ export function getStageShortLabel(key, workflowStages) {
  *   - object[]  e.g. [{ key, label, order, status }]  ← backend format
  * Always returns string[] of canonical keys.
  */
-export function normalizeWorkflowStages(stages) {
+export function normalizeWorkflowStages(stages, orderedHint) {
   if (stages && typeof stages === "object" && !Array.isArray(stages)) {
+    const values = Object.values(stages);
+    const isProgressMap =
+      values.length > 0 &&
+      values.some(
+        (v) =>
+          v &&
+          typeof v === "object" &&
+          ("completed" in v || "assignedTo" in v || "completedAt" in v),
+      );
+
+    const hintKeys = normalizeWorkflowStages(orderedHint);
+    const rawKeys =
+      isProgressMap && hintKeys.length ? hintKeys : Object.keys(stages);
+
     const seen = new Set();
     const out = [];
-    for (const rawKey of Object.keys(stages)) {
+    for (const rawKey of rawKeys) {
       const key = normalizeStageKey(rawKey);
       if (!key || seen.has(key)) continue;
       seen.add(key);
       out.push(key);
     }
-    return out.length ? out : [...DEFAULT_WORKFLOW_STAGES];
+    return out;
   }
   if (!Array.isArray(stages)) return [];
   const seen = new Set();
@@ -180,11 +254,9 @@ export function collectGarmentSearchText(jobOrWork) {
   return parts.filter(Boolean).join(" ").toLowerCase();
 }
 
-/** Dynamic stage list — per-order workflowStages is SSOT when present */
+/** Dynamic stage list — per-order workflowStages / stageKeys is SSOT when present */
 export function resolveStageKeysForJob(job, boutiqueTasks = []) {
-  const custom = normalizeWorkflowStages(
-    job?.workflowStages || job?.stageKeys,
-  );
+  const custom = extractOrderedStageKeys(job);
   if (custom.length) return custom;
 
   const hay = collectGarmentSearchText(job);

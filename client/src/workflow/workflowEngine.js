@@ -1,6 +1,8 @@
 import {
   PIPELINE_STAGE_DEFS,
   STAGE_TO_WORKER_ROLE,
+  extractOrderedStageKeys,
+  mergeStageKeysPreferCustom,
   resolveStageKeysForJob,
   getStageLabelFromDef,
 } from "./workflowConstants";
@@ -41,7 +43,7 @@ function initStages(stageKeys) {
 }
 
 export function getActiveStageKey(job) {
-  const keys = (job?.stageKeys || []).filter(
+  const keys = extractOrderedStageKeys(job).filter(
     (k) => k != null && String(k).trim() !== "",
   );
   if (!keys.length) return null;
@@ -58,7 +60,7 @@ export function deriveAssignmentStatus(job) {
 }
 
 export function deriveLifecycleStatus(job) {
-  const keys = (job.stageKeys || []).filter(
+  const keys = extractOrderedStageKeys(job).filter(
     (k) => k != null && String(k).trim() !== "",
   );
   if (!keys.length) return "open";
@@ -99,11 +101,12 @@ function workToJobFields(work) {
     workStatus: work?.status || "pending",
     workflowStages: order?.workflowStages || work?.workflowStages || null,
     stageKeys:
-  order?.stageKeys ||
-  work?.stageKeys ||
-  (order?.workflowStages || work?.workflowStages || []).map(
-    (s) => s.key
-  ),
+      (order?.stageKeys?.length ? order.stageKeys : null) ||
+      (work?.stageKeys?.length ? work.stageKeys : null) ||
+      extractOrderedStageKeys({
+        workflowStages: order?.workflowStages || work?.workflowStages,
+        stageKeys: order?.stageKeys || work?.stageKeys,
+      }),
     garment,
     // ── Measurements ──────────────────────────────
     measurements: garmentObj?.measurements || [],
@@ -131,9 +134,14 @@ function pruneStagesObject(stages, stageKeys) {
 }
 
 function withWorkflowStages(job, stageKeys) {
+  const workflowStages = stageKeys.map((key, index) => ({
+    key,
+    label: getStageLabelFromDef(key, job.workflowStages),
+    order: index + 1,
+  }));
   return {
     ...job,
-    workflowStages: stageKeys,
+    workflowStages,
     stageKeys,
     stages: pruneStagesObject(job.stages, stageKeys),
   };
@@ -142,9 +150,9 @@ function withWorkflowStages(job, stageKeys) {
 /** Create or refresh WorkflowJob from API Work record */
 export function createJobFromWork(work, boutiqueTasks = [], source = "work-sync", existingJob = null) {
   const fields = workToJobFields(work);
-  const stageKeys = resolveStageKeysForJob(
-    { ...existingJob, ...fields },
-    boutiqueTasks,
+  const stageKeys = mergeStageKeysPreferCustom(
+    existingJob,
+    resolveStageKeysForJob({ ...existingJob, ...fields }, boutiqueTasks),
   );
   let stages = existingJob?.stages ? { ...existingJob.stages } : initStages(stageKeys);
   stageKeys.forEach((k) => {
@@ -295,7 +303,10 @@ export function createJobFromOrderPayload(
     cuttingNotes: cuttingNotes || "",
     tailorNotes: tailorNotes || "",
   };
-  const stageKeys = resolveStageKeysForJob({ ...existingJob, ...fields });
+  const stageKeys = mergeStageKeysPreferCustom(
+    existingJob,
+    resolveStageKeysForJob({ ...existingJob, ...fields }),
+  );
   let stages = existingJob?.stages ? { ...existingJob.stages } : initStages(stageKeys);
   stageKeys.forEach((k) => {
     if (!stages[k]) stages[k] = emptyStage();
@@ -332,7 +343,7 @@ export function advanceStageByTrackingId(trackingId, completedBy = "qr") {
   const job = findWorkflowJob(trackingId);
   if (!job) return { ok: false, error: "Job not found" };
 
-  const keys = (job.stageKeys || []).filter((k) => k != null && k !== "");
+  const keys = extractOrderedStageKeys(job).filter((k) => k != null && k !== "");
   const activeKey = getActiveStageKey(job);
   const activeIdx = keys.indexOf(activeKey);
   if (activeIdx < 0) return { ok: false, error: "No active stage" };

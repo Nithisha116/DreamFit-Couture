@@ -1,8 +1,7 @@
 import {
   DEFAULT_WORKFLOW_STAGES,
+  extractOrderedStageKeys,
   getStageLabelFromDef,
-  normalizeStageKey,
-  normalizeWorkflowStages,
   resolveStageKeysForJob,
 } from "./workflowConstants";
 
@@ -21,7 +20,7 @@ function normalizeAssignee(raw) {
   };
 }
 
-function deriveMeta(keys, stages) {
+function deriveMeta(keys, stages, workflowStagesForLabels) {
   const activeKey =
     keys.find((k) => stages[k]?.state === "active") ||
     keys.find((k) => stages[k]?.state === "pending") ||
@@ -36,7 +35,7 @@ function deriveMeta(keys, stages) {
     lifecycleStatus: allDone ? "completed" : "open",
     currentStageKey: activeKey,
     currentStageLabel: activeKey
-      ? getStageLabelFromDef(activeKey, keys)
+      ? getStageLabelFromDef(activeKey, workflowStagesForLabels)
       : "In progress",
   };
 }
@@ -45,25 +44,15 @@ function deriveMeta(keys, stages) {
 export function sanitizeWorkflowJob(job) {
   if (!job || typeof job !== "object") return null;
 
-  let keys = [];
+  let keys = extractOrderedStageKeys(job);
 
-if (Array.isArray(job.stageKeys) && job.stageKeys.length > 0) {
-  keys = job.stageKeys
-    .map((k) => normalizeStageKey(k))
-    .filter(Boolean);
+  if (!keys.length) {
+    keys = resolveStageKeysForJob(job);
+  }
 
-} else if (job.workflowStages) {
-  keys = normalizeWorkflowStages(job.workflowStages);
-}
-
-if (!keys.length) {
-  keys = normalizeWorkflowStages(resolveStageKeysForJob(job));
-}
-
-if (!keys.length) {
-  keys = [...DEFAULT_WORKFLOW_STAGES];
-}
-  
+  if (!keys.length) {
+    keys = [...DEFAULT_WORKFLOW_STAGES];
+  }
 
   const stages = {};
   keys.forEach((k) => {
@@ -88,6 +77,12 @@ if (!keys.length) {
     }
   }
 
+  const workflowStages = keys.map((key, index) => ({
+    key,
+    label: getStageLabelFromDef(key, job.workflowStages || keys),
+    order: index + 1,
+  }));
+
   const workCode = job.workCode != null ? String(job.workCode).trim() : "";
   const trackingId =
     String(job.workflowTrackingId || "").trim() ||
@@ -100,14 +95,10 @@ if (!keys.length) {
     ...job,
     workflowTrackingId: trackingId,
     workCode: workCode || job.workCode || null,
-    workflowStages: keys.map((key, index) => ({
-  key,
-  label: getStageLabelFromDef(key, job.workflowStages || keys),
-  order: index + 1,
-})),
+    workflowStages,
     stageKeys: keys,
     stages,
-    ...deriveMeta(keys, stages),
+    ...deriveMeta(keys, stages, workflowStages),
     updatedAt: job.updatedAt || Date.now(),
     createdAt: job.createdAt || Date.now(),
   };

@@ -1,4 +1,9 @@
-import { WORKFLOW_CHANGED_EVENT, WORKFLOW_LS_KEY } from "./workflowConstants";
+import {
+  WORKFLOW_CHANGED_EVENT,
+  WORKFLOW_LS_KEY,
+  extractOrderedStageKeys,
+  mergeStageKeysPreferCustom,
+} from "./workflowConstants";
 import { dedupeWorkflowJobs, sanitizeWorkflowJob } from "./workflowSanitize";
 
 function normRef(ref) {
@@ -85,39 +90,32 @@ export function upsertWorkflowJob(job) {
   let saved;
   if (idx >= 0) {
     const prev = jobs[idx];
+    const mergedKeys = mergeStageKeysPreferCustom(
+      prev,
+      extractOrderedStageKeys(incoming),
+    );
+    const mergedStages = { ...(prev.stages || {}), ...(incoming.stages || {}) };
+    const stages = {};
+    mergedKeys.forEach((k) => {
+      stages[k] = mergedStages[k] || {
+        state: "pending",
+        assignedTo: null,
+        completedAt: null,
+        completedBy: null,
+      };
+    });
+
     saved = sanitizeWorkflowJob({
-  ...prev,
-  ...incoming,
-
-  // ✅ IMPORTANT FIX
-  workflowStages:
-    incoming.workflowStages &&
-    Object.keys(incoming.workflowStages).length
-      ? incoming.workflowStages
-      : (prev.workflowStages || {}),
-
-  // ✅ IMPORTANT FIX
-  stageKeys:
-    incoming.stageKeys && incoming.stageKeys.length
-      ? incoming.stageKeys
-      : (prev.stageKeys || []),
-
-  // ✅ IMPORTANT FIX
-  stages:
-    incoming.stages &&
-    Object.keys(incoming.stages).length
-      ? incoming.stages
-      : (prev.stages || {}),
-
-  workflowTrackingId:
-    prev.workflowTrackingId || incoming.workflowTrackingId,
-
-  id: prev.id || incoming.id,
-
-  createdAt: prev.createdAt || incoming.createdAt,
-
-  updatedAt: Date.now(),
-});
+      ...prev,
+      ...incoming,
+      stageKeys: mergedKeys,
+      stages,
+      workflowTrackingId:
+        prev.workflowTrackingId || incoming.workflowTrackingId,
+      id: prev.id || incoming.id,
+      createdAt: prev.createdAt || incoming.createdAt,
+      updatedAt: Date.now(),
+    });
     next[idx] = saved;
   } else {
     saved = { ...incoming, updatedAt: Date.now() };
