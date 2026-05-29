@@ -33,7 +33,7 @@ export default function ProtectedRoute({ children, allowedRoles }) {
       user?.role === "ADMIN" ? "/admin/dashboard" :
       user?.role === "MANAGER" ? "/manager/dashboard" :
       user?.role === "STORE_KEEPER" ? "/storekeeper/dashboard" :
-      "/cuttingmaster/dashboard";
+      "/cuttingmaster/works";
     
     console.log("🔐 [ProtectedRoute] Redirecting unauthorized user to:", redirectPath);
     return <Navigate to={redirectPath} replace />;

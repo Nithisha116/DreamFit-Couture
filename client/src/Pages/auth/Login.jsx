@@ -79,7 +79,7 @@ export default function Login() {
         navigate("/storekeeper/dashboard", { replace: true });
         showToast.success(`Welcome back, ${data.user.name || "User"}! 🎉`);
       } else if (userRole === "CUTTING_MASTER") {
-        navigate("/cuttingmaster/dashboard", { replace: true });
+        navigate("/cuttingmaster/works", { replace: true });
         showToast.success(`Welcome back, ${data.user.name || "User"}! 🎉`);
       } else {
         showToast.error("Unauthorized Role! ❌");
