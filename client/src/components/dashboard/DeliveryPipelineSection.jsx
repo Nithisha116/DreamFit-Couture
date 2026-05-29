@@ -122,7 +122,7 @@ function PipelineRow({ model, basePath }) {
         </Link>
       </div>
 
-      <div className="mt-4 overflow-x-auto pb-1">
+      <div className="mt-4 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <div className="flex min-w-[320px] items-start px-0.5 sm:min-w-0">
           {model.stages.map((stage, i) => (
             <StageNode key={stage.key} stage={stage} isLast={i === model.stages.length - 1} />

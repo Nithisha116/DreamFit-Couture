@@ -68,7 +68,9 @@ import {
   YAxis,
   CartesianGrid,
   BarChart,
-  Bar
+  Bar,
+  RadialBarChart,
+  RadialBar
 } from 'recharts';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
@@ -117,6 +119,7 @@ import DeliveryPipelineSection from '../../components/dashboard/DeliveryPipeline
 import showToast from '../../utils/toast';
 import { fetchAppointments } from '../../features/appointment/appointmentSlice';
 import CountUp from 'react-countup';
+import API from '../../app/axios';
 
 export default function AdminDashboard() {
   const dispatch = useDispatch();
@@ -244,6 +247,12 @@ export default function AdminDashboard() {
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
   const [workViewMode, setWorkViewMode] = useState('grid'); // 'grid' or 'list'
+  
+  // WIDGET DROPDOWN STATE
+  const [isWidgetDropdownOpen, setIsWidgetDropdownOpen] = useState(false);
+  
+  // Use global order stats
+  const displayStats = orderStats;
   
   // ===== WORK QUEUE STATE (from Cutting Master Works) =====
   const [queueSearch, setQueueSearch] = useState("");
@@ -436,6 +445,27 @@ export default function AdminDashboard() {
     console.log('🔄 Date range changed to:', dateRange);
     loadDashboardData();
   }, [dateRange, customStartDate, customEndDate]);
+
+  // ===== REAL-TIME GRAPH POLLING (Every 15 seconds) =====
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-refreshing real-time revenue data...');
+      const params = getDateParams();
+      const revenueParams = {
+        period: dateRange,
+        startDate: params.startDate, 
+        endDate: params.endDate
+      };
+      
+      // Update graph dynamically without blocking UI
+      dispatch(fetchDailyRevenueStats(revenueParams));
+      if (dateRange === 'today') {
+        dispatch(fetchTodayTransactions());
+      }
+    }, 15000); // 15 seconds
+
+    return () => clearInterval(interval);
+  }, [dateRange, customStartDate, customEndDate, dispatch]);
 
 //   const loadDashboardData = async () => {
 //     console.log('🚀 ===== LOADING DASHBOARD DATA STARTED =====');
@@ -1125,7 +1155,7 @@ const displayPerformers = (isAdmin || isStoreKeeper)
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#eff6ff]">
       {/* Mobile Header */}
       <div className="lg:hidden bg-white border-b border-slate-200 sticky top-0 z-30">
         <div className="flex items-center justify-between px-4 py-3">
@@ -1288,11 +1318,11 @@ const displayPerformers = (isAdmin || isStoreKeeper)
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {/* ===== DESKTOP HEADER (Hidden on Mobile) ===== */}
-        <div className="hidden lg:block mb-8">
+        <div className="hidden lg:block mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-black text-slate-800">
+                <h1 className="text-2xl font-black text-slate-800">
                   {dashboardTitle}
                 </h1>
                 {isStoreKeeper && (
@@ -1302,30 +1332,34 @@ const displayPerformers = (isAdmin || isStoreKeeper)
                   </span>
                 )}
                 {isAdmin && (
-                  <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                  <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 border border-blue-100">
                     <Shield size={12} />
                     Admin
                   </span>
                 )}
               </div>
-              <p className="text-slate-600 flex items-center gap-2">
-                <Clock size={16} />
-                {format(new Date(), 'EEEE, MMMM do, yyyy')}
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                Last refreshed: {format(lastRefreshed, 'hh:mm:ss a')}
-              </p>
+              <div className="flex items-center gap-4 text-sm text-slate-500">
+                <p className="flex items-center gap-1.5">
+                  <Calendar size={14} className="text-slate-400" />
+                  {format(new Date(), 'EEEE, MMMM do, yyyy')}
+                </p>
+                <div className="w-1 h-1 rounded-full bg-slate-300"></div>
+                <p className="flex items-center gap-1.5">
+                  <Clock size={14} className="text-slate-400" />
+                  Last refreshed: {format(lastRefreshed, 'hh:mm:ss a')}
+                </p>
+              </div>
             </div>
 
             {/* Desktop Filter Buttons */}
-            <div className="flex flex-wrap gap-2 bg-white p-2 rounded-xl shadow-sm">
+            <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
               <button
                 onClick={() => {
                   setDateRange('today');
                   setShowCustomPicker(false);
                 }}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  dateRange === 'today' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+                className={`px-4 py-2 text-sm rounded-lg font-semibold transition-all ${
+                  dateRange === 'today' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-white hover:text-slate-800 hover:shadow-sm'
                 }`}
               >
                 Today
@@ -1335,8 +1369,8 @@ const displayPerformers = (isAdmin || isStoreKeeper)
                   setDateRange('week');
                   setShowCustomPicker(false);
                 }}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  dateRange === 'week' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+                className={`px-4 py-2 text-sm rounded-lg font-semibold transition-all ${
+                  dateRange === 'week' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-white hover:text-slate-800 hover:shadow-sm'
                 }`}
               >
                 This Week
@@ -1346,27 +1380,28 @@ const displayPerformers = (isAdmin || isStoreKeeper)
                   setDateRange('month');
                   setShowCustomPicker(false);
                 }}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  dateRange === 'month' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+                className={`px-4 py-2 text-sm rounded-lg font-semibold transition-all ${
+                  dateRange === 'month' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-white hover:text-slate-800 hover:shadow-sm'
                 }`}
               >
                 This Month
               </button>
+              <div className="w-px h-6 bg-slate-200 mx-1"></div>
               <button
                 onClick={() => setShowCustomPicker(!showCustomPicker)}
-                className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1 ${
-                  showCustomPicker || dateRange === 'custom' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+                className={`px-4 py-2 text-sm rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                  showCustomPicker || dateRange === 'custom' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-white hover:text-slate-800 hover:shadow-sm'
                 }`}
               >
-                <Calendar size={16} />
+                <Calendar size={14} />
                 Custom
               </button>
               <button
                 onClick={loadDashboardData}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-all"
-                title="Refresh"
+                className="p-2 bg-white text-slate-500 hover:text-blue-600 border border-slate-200 hover:border-blue-200 shadow-sm rounded-lg transition-all ml-1"
+                title="Refresh Data"
               >
-                <RefreshCw size={18} className={isLoading ? 'animate-spin text-blue-600' : ''} />
+                <RefreshCw size={16} className={isLoading ? 'animate-spin text-blue-600' : ''} />
               </button>
             </div>
           </div>
@@ -1475,900 +1510,402 @@ const displayPerformers = (isAdmin || isStoreKeeper)
             }
           </p>
         </div>
-        {/* ===== QUICK ACTIONS ===== */}
-<div className="bg-white rounded-xl shadow-sm p-4 sm:p-5 lg:p-6 mb-6 lg:mb-8">
-  <div className="flex items-center justify-between mb-4">
-    <h2 className="text-sm sm:text-base lg:text-lg font-bold text-slate-800 flex items-center gap-2">
-      <Zap size={18} className="text-yellow-500" />
-      Quick Actions
-    </h2>
-  </div>
 
-  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3">
-    {quickActions.slice(0, 4).map((action, index) => {
-      const IconComponent = action.icon;
-
-      return (
-        <button
-          key={index}
-          onClick={() => navigate(action.path)}
-          className="flex flex-col items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-4 transition-all duration-200 hover:shadow-md"
-        >
-          <div className="p-3 rounded-full bg-white shadow-sm">
-            <IconComponent size={22} className="text-blue-600" />
-          </div>
-
-          <div className="text-center">
-            <p className="text-sm font-semibold text-slate-800">
-              {action.label}
-            </p>
-
-            <p className="text-[11px] text-slate-500 mt-1">
-              {action.description}
-            </p>
-          </div>
-        </button>
-      );
-    })}
-  </div>
-</div>
-        {/* ===== KPI CARDS - Fully Responsive ===== */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
-          {/* Card 1 - Total Orders */}
-          <StatCard
-            title="Total Orders"
-            value={<CountUp end={orderStats?.total || 0} separator="," duration={1.5} />}
-            icon={<ShoppingCart className="text-blue-600" size={20} />}
-            bgColor="bg-blue-50"
-            borderColor="border-blue-200"
-            onClick={() => navigate(`${basePath}/orders`)}
-            className="cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
-          >
-            <div className="mt-2 sm:mt-3 grid grid-cols-3 gap-1 sm:gap-2 text-[10px] sm:text-xs">
-              <div className="bg-white p-1 sm:p-2 rounded-lg text-center">
-                <span className="text-slate-500 block">Pending</span>
-                <p className="font-bold text-orange-600 text-xs sm:text-sm">
-                  {(orderStats?.confirmed || 0) + (orderStats?.draft || 0)}
-                </p>
-              </div>
-              <div className="bg-white p-1 sm:p-2 rounded-lg text-center">
-                <span className="text-slate-500 block">Progress</span>
-                <p className="font-bold text-blue-600 text-xs sm:text-sm">
-                  {(orderStats?.cutting || 0) + (orderStats?.stitching || 0) + (orderStats?.['in-progress'] || 0)}
-                </p>
-              </div>
-              <div className="bg-white p-1 sm:p-2 rounded-lg text-center">
-                <span className="text-slate-500 block">Completed</span>
-                <p className="font-bold text-green-600 text-xs sm:text-sm">{orderStats?.delivered || 0}</p>
-              </div>
-            </div>
-          </StatCard>
-
-          {/* Card 2 - Revenue */}
-          <StatCard
-            title="Revenue"
-            value={<CountUp end={dailyRevenueSummary?.totalRevenue || 0} prefix="₹" separator="," duration={1.5} />}
-            icon={<IndianRupee className="text-green-600" size={20} />}
-            bgColor="bg-green-50"
-            borderColor="border-green-200"
+        {/* ===== KPI CARDS - Exact Match ===== */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6 mb-6 lg:mb-8">
+          {/* Card 1 - Total Revenue (Blue Gradient) */}
+          <div 
             onClick={() => navigate(`${basePath}/banking/overview`)}
-            className="cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
+            className="cursor-pointer bg-gradient-to-br from-[#3b82f6] to-[#4f46e5] rounded-[24px] p-5 lg:p-6 shadow-[0_8px_30px_rgb(59,130,246,0.3)] flex flex-col justify-between h-[160px] relative overflow-hidden transition-transform hover:-translate-y-1"
           >
-            <div className="mt-2 sm:mt-3 flex gap-1 sm:gap-2 text-[10px] sm:text-xs">
-              <div className="bg-white p-1 sm:p-2 rounded-lg flex-1 text-center">
-                <span className="text-slate-500 block">Expense</span>
-                <p className="font-bold text-red-600 text-xs sm:text-sm">₹{safeFormat(dailyRevenueSummary?.totalExpense || 0)}</p>
+            {/* Top Row: Icon + Badge */}
+            <div className="flex justify-between items-start w-full relative z-10">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10">
+                <IndianRupee className="text-white w-5 h-5" />
               </div>
-              <div className="bg-white p-1 sm:p-2 rounded-lg flex-1 text-center">
-                <span className="text-slate-500 block">Profit</span>
-                <p className="font-bold text-green-600 text-xs sm:text-sm">₹{safeFormat(dailyRevenueSummary?.netProfit || 0)}</p>
+              <div className="px-2 py-1 bg-[#10b981] text-white text-[11px] font-bold rounded-full shadow-sm flex items-center gap-1">
+                +2.08%
               </div>
             </div>
-          </StatCard>
+            
+            {/* Bottom Row: Title + Value */}
+            <div className="relative z-10 mt-auto">
+              <h3 className="text-white/80 font-medium text-sm mb-1">Total Revenue</h3>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-white tracking-tight">
+                  <CountUp end={dailyRevenueSummary?.totalRevenue || 0} prefix="₹" separator="," duration={1.5} />
+                </span>
+                <span className="text-white/70 text-[10px] w-20 leading-tight">Products vs last month</span>
+              </div>
+            </div>
+            
+            {/* Background Glow Effect */}
+            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+          </div>
+
+          {/* Card 2 - Total Orders */}
+          <div 
+            onClick={() => navigate(`${basePath}/orders`)}
+            className="cursor-pointer bg-white rounded-[24px] p-5 lg:p-6 shadow-sm border border-slate-100 flex flex-col justify-between h-[160px] transition-transform hover:-translate-y-1"
+          >
+            <div className="flex justify-between items-start">
+              <h3 className="text-slate-700 font-semibold text-sm">Total Orders</h3>
+              <div className="px-2 py-1 bg-green-50 text-green-600 text-[11px] font-bold rounded-full flex items-center gap-1">
+                +2.4%
+              </div>
+            </div>
+            
+            <div>
+              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+                <CountUp end={orderStats?.total || 0} separator="," duration={1.5} />
+              </span>
+            </div>
+            
+            {/* Bottom Badges */}
+            <div className="flex flex-wrap gap-2 mt-auto">
+              <span className="bg-[#fef3c7] text-[#92400e] text-[10px] font-bold px-2 py-1 rounded-md">Pending: {orderStats?.pending || 0}</span>
+              <span className="bg-[#ccfbf1] text-[#0f766e] text-[10px] font-bold px-2 py-1 rounded-md">Users: 2</span>
+              <span className="bg-[#f3e8ff] text-[#6b21a8] text-[10px] font-bold px-2 py-1 rounded-md">Completed: {orderStats?.delivered || 0}</span>
+            </div>
+          </div>
 
           {/* Card 3 - Overdue Orders */}
-          <StatCard
-            title="Overdue Orders"
-            value={<CountUp end={orderStats?.overdueOrders || 0} separator="," duration={1.5} />}
-            icon={<AlertCircle className="text-red-600" size={20} />}
-            bgColor="bg-red-50"
-            borderColor="border-red-200"
+          <div 
             onClick={() => navigate(`${basePath}/orders?status=__overdue`)}
-            className="cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
+            className="cursor-pointer bg-white rounded-[24px] p-5 lg:p-6 shadow-sm border border-slate-100 flex flex-col justify-between h-[160px] transition-transform hover:-translate-y-1"
           >
-            <div className="flex gap-2 text-[10px] sm:text-xs">
-              <div className="bg-white p-1 rounded-lg text-center flex-1">
-                <span className="text-slate-500 block">Status</span>
-                <p className="font-bold text-red-600 text-xs">⚠️ High Priority</p>
-              </div>
-              <div className="bg-white p-1 rounded-lg text-center flex-1">
-                <span className="text-slate-500 block">Action</span>
-                <p className="font-bold text-red-600 text-xs">Needs Attention</p>
+            <div className="flex justify-between items-start">
+              <h3 className="text-slate-700 font-semibold text-sm">Overdue Orders</h3>
+              <div className="px-2 py-1 bg-green-50 text-green-600 text-[11px] font-bold rounded-full flex items-center gap-1">
+                +2.4%
               </div>
             </div>
-          </StatCard>
+            
+            <div>
+              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+                {orderStats?.overdueOrders || 0}
+              </span>
+            </div>
+            
+            {/* Bottom Badge */}
+            <div className="mt-auto">
+              <span className="inline-flex items-center gap-1 bg-[#fee2e2] text-[#b91c1c] text-[10px] font-bold px-2.5 py-1 rounded-md">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                Critical
+              </span>
+            </div>
+          </div>
 
           {/* Card 4 - Appointments */}
-          <StatCard
-            title="Appointments"
-            value={appointmentsLoading ? (
-              <Loader className="w-5 h-5 animate-spin text-indigo-600" />
-            ) : <CountUp end={appointments?.length || 0} separator="," duration={1.5} />}
-            icon={<Calendar className="text-indigo-600" size={20} />}
-            bgColor="bg-indigo-50"
-            borderColor="border-indigo-200"
+          <div 
             onClick={() => navigate(`${basePath}/appointments`)}
-            className="cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
+            className="cursor-pointer bg-white rounded-[24px] p-5 lg:p-6 shadow-sm border border-slate-100 flex flex-col justify-between h-[160px] transition-transform hover:-translate-y-1"
           >
-            <div className="mt-2 sm:mt-3 flex items-center justify-between text-[10px] sm:text-xs text-indigo-600 font-medium">
-              <span>View Schedule</span>
-              <ArrowRight size={14} />
-            </div>
-          </StatCard>
-        </div>
-
-        {/* ===== ROW 1: ORDERS OVERVIEW + RECENT ORDERS - Responsive ===== */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 lg:gap-6 mb-6 lg:mb-8">
-          {/* Orders Status Chart */}
-          <div className="bg-white rounded-xl p-4 sm:p-5 lg:p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <h2 className="text-sm sm:text-base lg:text-lg font-bold text-slate-800 flex items-center gap-2">
-                <Package size={16} className="text-blue-600 sm:w-5 sm:h-5" />
-                <span>Orders Overview</span>
-                <span className="text-[8px] sm:text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
-                  {dateRange === 'today' ? 'Today' : 
-                   dateRange === 'week' ? 'This Week' : 
-                   dateRange === 'month' ? 'This Month' : 'Custom'}
-                </span>
-              </h2>
-              <Link to={`${basePath}/orders`} className="text-blue-600 text-xs sm:text-sm hover:underline flex items-center gap-1">
-                <span className="hidden xs:inline">View All</span>
-                <ArrowRight size={12} className="sm:w-4 sm:h-4" />
-              </Link>
+            <div className="flex justify-between items-start">
+              <h3 className="text-slate-700 font-semibold text-sm">Appointments</h3>
             </div>
             
-            {hasOrderData ? (
-              <>
-                {/* <div className="h-48 sm:h-56 lg:h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RePieChart>
-                      <Pie
-                        data={orderStatusData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={40}
-                        outerRadius={60}
-                        paddingAngle={3}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {orderStatusData.map((entry) => (
-                          <Cell key={`cell-${entry.name}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: '10px' }} />
-                    </RePieChart>
-                  </ResponsiveContainer>
-                </div>
-                 */}
-                 <div className="h-48 sm:h-56 lg:h-64">
-  <ResponsiveContainer width="100%" height="100%">
-    <RePieChart>
-      <Pie
-        data={orderStatusData}
-        cx="50%"
-        cy="50%"
-        innerRadius={40}
-        outerRadius={60}
-        paddingAngle={3}
-        dataKey="value"
-        // ✅ CRITICAL PERFORMANCE FIX: Disable animation to stop lagging
-        isAnimationActive={false} 
-        labelLine={false}
-        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-      >
-        {orderStatusData.map((entry, index) => (
-          <Cell 
-            key={`cell-${index}`} 
-            fill={entry.color} 
-            stroke="none" // Remove stroke for faster rendering
-            style={{ outline: 'none' }}
-          />
-        ))}
-      </Pie>
-      
-      {/* Tooltip lag fix */}
-      <Tooltip isAnimationActive={false} />
-      
-      <Legend 
-        wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} 
-        iconType="circle"
-      />
-    </RePieChart>
-  </ResponsiveContainer>
-</div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 sm:gap-2 mt-3 sm:mt-4">
-                  {Object.entries(STATUS_CONFIG).map(([status, config]) => {
-                    const count = orderStats[status] || 0;
-                    if (count === 0) return null;
-                    return (
-                      <div key={status} className="flex items-center gap-1 text-[8px] sm:text-xs">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: config.color }}></span>
-                        <span className="text-slate-600 truncate">{config.label}</span>
-                        <span className="font-bold text-slate-800 ml-auto">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            ) : (
-              <div className="h-48 sm:h-64 flex items-center justify-center text-slate-400">
-                <Package size={32} className="opacity-30 sm:w-12 sm:h-12" />
-                <p className="text-xs sm:text-sm ml-2">No orders for this period</p>
-              </div>
-            )}
-          </div>
-
-          {/* Recent Orders */}
-          <div className="bg-white rounded-xl shadow-sm">
-            <div className="p-4 sm:p-5 lg:p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="font-bold text-slate-800 text-sm sm:text-base lg:text-lg flex items-center gap-2">
-                <ShoppingCart size={14} className="text-blue-600 sm:w-5 sm:h-5" />
-                <span>Recent Orders</span>
-                <span className="text-[8px] sm:text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
-                  {dateRange === 'today' ? 'Today' : 
-                   dateRange === 'week' ? 'This Week' : 
-                   dateRange === 'month' ? 'This Month' : 'Custom'}
-                </span>
-              </h2>
-              <Link to={`${basePath}/orders`} className="text-blue-600 text-xs sm:text-sm hover:underline">View All</Link>
+            <div>
+              {appointmentsLoading ? (
+                <div className="h-9 w-12 bg-slate-200 rounded animate-pulse"></div>
+              ) : (
+                <span className="text-3xl font-bold text-slate-800 tracking-tight">{appointments.length}</span>
+              )}
             </div>
             
-            {recentOrders.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-medium text-slate-500">Order ID</th>
-                      <th className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-medium text-slate-500">Customer</th>
-                      <th className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-medium text-slate-500">Items</th>
-                      <th className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-medium text-slate-500">Status</th>
-                      <th className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-medium text-slate-500">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {recentOrders.slice(0, 5).map((order) => (
-                      <tr key={order._id} className="hover:bg-slate-50">
-                        <td className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium">#{order.orderId}</td>
-                        <td className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">{order.customer?.name || 'N/A'}</td>
-                        <td className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 text-xs sm:text-sm">{order.garments?.length || 0}</td>
-                        <td className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3">
-                          <span className={`${getStatusBadge(order.status)} text-[8px] sm:text-xs`}>
-                            {STATUS_CONFIG[order.status]?.label || order.status}
-                          </span>
-                        </td>
-                        <td className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3">
-                          <Link to={`${basePath}/orders/${order._id}`} className="text-blue-600">
-                            <Eye size={12} className="sm:w-4 sm:h-4" />
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="p-6 sm:p-8 text-center text-slate-400">
-                <ShoppingCart size={24} className="mx-auto mb-2 opacity-30 sm:w-8 sm:h-8" />
-                <p className="text-xs sm:text-sm">No recent orders</p>
-              </div>
-            )}
+            {/* Bottom Date */}
+            <div className="mt-auto border border-slate-200 rounded-lg px-3 py-1.5 inline-flex items-center gap-2 self-start bg-slate-50">
+              <Calendar size={14} className="text-blue-600" />
+              <span className="text-[11px] font-bold text-slate-600">
+                {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* ===== ROW 2: REVENUE TREND CHART - Responsive ===== */}
-        <div className="mb-6 lg:mb-8">
-          <div className="bg-white rounded-xl p-4 sm:p-5 lg:p-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
-              <h2 className="text-sm sm:text-base lg:text-lg font-bold text-slate-800 flex items-center gap-2">
-                <TrendingUp size={16} className="text-green-600 sm:w-5 sm:h-5" />
+        {/* ===== ANALYTICS GRID ===== */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 lg:mb-8">
+          {/* LEFT: Revenue Trend (Span 2) */}
+          <div className="lg:col-span-2 bg-white rounded-2xl p-5 lg:p-6 shadow-sm border border-slate-100 flex flex-col">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <TrendingUp size={20} className="text-blue-600" />
                 <span>Revenue Trend</span>
-                <span className="text-[8px] sm:text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full">
+                <span className="text-[10px] bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full font-bold">
                   {dateRange === 'today' ? 'Today (Hourly)' : 
                    dateRange === 'week' ? 'Last 7 Days' : 
                    dateRange === 'month' ? 'This Month' : 'Custom'}
                 </span>
               </h2>
               
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="flex items-center gap-1 sm:gap-2">
-                  <div className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-600 rounded-full"></div>
-                  <span className="text-[8px] sm:text-xs text-slate-600">Revenue</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 bg-blue-600 rounded-full"></div>
+                  <span className="text-xs font-semibold text-slate-600">Revenue</span>
                 </div>
-                <div className="flex items-center gap-1 sm:gap-2">
-                  <div className="w-2 h-2 sm:w-3 sm:h-3 bg-red-500 rounded-full"></div>
-                  <span className="text-[8px] sm:text-xs text-slate-600">Expense</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 bg-red-500 rounded-full"></div>
+                  <span className="text-xs font-semibold text-slate-600">Expense</span>
                 </div>
               </div>
             </div>
             
             {revenueLoading ? (
-              <div className="h-48 sm:h-64 lg:h-80 flex items-center justify-center">
-                <Loader size={20} className="animate-spin text-blue-600 sm:w-8 sm:h-8" />
-                <span className="ml-2 text-xs sm:text-sm text-slate-600">Loading...</span>
+              <div className="flex-1 min-h-[300px] flex items-center justify-center">
+                <Loader size={24} className="animate-spin text-blue-600" />
+                <span className="ml-2 text-sm text-slate-500">Loading chart...</span>
               </div>
             ) : dailyRevenueData && dailyRevenueData.length > 0 ? (
-              <>
-                {/* <div className="h-48 sm:h-64 lg:h-80">
+              <div className="flex-1 flex flex-col">
+                <div className="h-[280px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={dailyRevenueData}>
-                   
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey={dateRange === 'today' ? 'time' : 'day'} tick={{ fontSize: 10 }} />
-                      <YAxis tickFormatter={(value) => `₹${value/1000}K`} tick={{ fontSize: 10 }} />
-                      <Tooltip formatter={(value) => `₹${value}`} />
-                      <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={2} dot={false} />
+                    <LineChart data={dailyRevenueData.map(d => ({
+                      ...d,
+                      revenue: Number(d.revenue || 0),
+                      expense: Number(d.expense || 0)
+                    }))}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis 
+                        dataKey={dateRange === 'today' ? 'time' : 'day'} 
+                        tick={{ fontSize: 11, fill: '#64748b' }} 
+                        axisLine={false}
+                        tickLine={false}
+                        dy={10}
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 11, fill: '#64748b' }}
+                        tickFormatter={(val) => `₹${val}`} 
+                        axisLine={false}
+                        tickLine={false}
+                        dx={-10}
+                      />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        formatter={(value) => [`₹${value}`, '']} 
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="revenue" 
+                        name="Revenue"
+                        stroke="#3b82f6" 
+                        strokeWidth={3} 
+                        dot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#3b82f6' }}
+                        activeDot={{ r: 6, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }}
+                        isAnimationActive={true}
+                        animationDuration={1500}
+                        animationEasing="ease-in-out"
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="expense" 
+                        name="Expense"
+                        stroke="#ef4444" 
+                        strokeWidth={3} 
+                        dot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#ef4444' }}
+                        activeDot={{ r: 6, fill: '#ef4444', stroke: '#fff', strokeWidth: 2 }}
+                        isAnimationActive={true}
+                        animationDuration={1500}
+                        animationEasing="ease-in-out"
+                      />
                     </LineChart>
                   </ResponsiveContainer>
-                </div> */}
-   {/* 🔴 Intha block-ah mattum replace pannunga */}
-<div className="h-48 sm:h-64 lg:h-80">
-  <ResponsiveContainer width="100%" height="100%">
-    {/* Number format mismatch solve panna .map() use panroam */}
-    <LineChart data={dailyRevenueData.map(d => ({
-      ...d,
-      revenue: Number(d.revenue || 0), // 🔴 String-ah iruntha Number-ah mathum
-      expense: Number(d.expense || 0)
-    }))}>
-      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-      
-      <XAxis 
-        dataKey={dateRange === 'today' ? 'time' : 'day'} 
-        tick={{ fontSize: 10 }} 
-      />
-      
-      <YAxis 
-        tick={{ fontSize: 10 }}
-        // Simple formatter to avoid 'K' issues for now
-        tickFormatter={(val) => `₹${val}`} 
-      />
-      
-      <Tooltip formatter={(value) => [`₹${value}`, 'Amount']} />
-      <Legend verticalAlign="top" align="right" />
+                </div>
 
-      {/* Blue Line - Revenue */}
-      <Line 
-        type="monotone" 
-        dataKey="revenue" 
-        name="Revenue"
-        stroke="#3b82f6" 
-        strokeWidth={3} 
-        dot={{ r: 4, fill: '#3b82f6' }}
-        isAnimationActive={true}
-        connectNulls={true}
-      />
-
-      {/* Red Line - Expense */}
-      <Line 
-        type="monotone" 
-        dataKey="expense" 
-        name="Expense"
-        stroke="#ef4444" 
-        strokeWidth={3} 
-        dot={{ r: 4, fill: '#ef4444' }}
-        isAnimationActive={true}
-        connectNulls={true}
-      />
-    </LineChart>
-  </ResponsiveContainer>
-</div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 lg:gap-6 mt-4 sm:mt-6 lg:mt-8">
-                  <div className="bg-blue-50 p-2 sm:p-3 lg:p-4 rounded-lg">
-                    <p className="text-[8px] sm:text-xs text-blue-600">Total Revenue</p>
-                    <p className="text-sm sm:text-base lg:text-lg xl:text-xl font-bold text-blue-800 break-words">
+                {/* Sub Cards below chart */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+                  <div className="bg-white border border-slate-100 p-4 rounded-[16px] shadow-sm">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Revenue</p>
+                    <p className="text-xl font-black text-blue-600 break-words">
                       ₹{safeFormat(dailyRevenueSummary?.totalRevenue || 0)}
                     </p>
                   </div>
-                  <div className="bg-red-50 p-2 sm:p-3 lg:p-4 rounded-lg">
-                    <p className="text-[8px] sm:text-xs text-red-600">Total Expense</p>
-                    <p className="text-sm sm:text-base lg:text-lg xl:text-xl font-bold text-red-800 break-words">
+                  <div className="bg-[#fef2f2] border border-[#fecaca] p-4 rounded-[16px] shadow-sm">
+                    <p className="text-xs font-bold text-[#f87171] uppercase tracking-wider mb-1">Total Expense</p>
+                    <p className="text-xl font-black text-[#dc2626] break-words">
                       ₹{safeFormat(dailyRevenueSummary?.totalExpense || 0)}
                     </p>
                   </div>
-                  <div className="bg-green-50 p-2 sm:p-3 lg:p-4 rounded-lg">
-                    <p className="text-[8px] sm:text-xs text-green-600">Net Profit</p>
-                    <p className="text-sm sm:text-base lg:text-lg xl:text-xl font-bold text-green-800 break-words">
+                  <div className="bg-[#ecfdf5] border border-[#a7f3d0] p-4 rounded-[16px] shadow-sm">
+                    <p className="text-xs font-bold text-[#34d399] uppercase tracking-wider mb-1">Net Profit</p>
+                    <p className="text-xl font-black text-[#059669] break-words">
                       ₹{safeFormat(dailyRevenueSummary?.netProfit || 0)}
                     </p>
                   </div>
                 </div>
-              </>
+              </div>
             ) : (
-              <div className="h-48 sm:h-64 lg:h-80 flex items-center justify-center text-slate-400">
-                <TrendingUp size={32} className="opacity-30 sm:w-12 sm:h-12" />
-                <p className="text-xs sm:text-sm ml-2">No revenue data available</p>
+              <div className="flex-1 min-h-[300px] flex items-center justify-center text-slate-400 flex-col gap-3">
+                <TrendingUp size={40} className="text-slate-200" />
+                <p className="text-sm font-medium">No revenue data available</p>
               </div>
             )}
           </div>
-        </div>
 
+          {/* RIGHT: Orders Overview & Tailor Summary (Span 1) */}
+          <div className="lg:col-span-1 flex flex-col gap-6">
+            {/* Orders Overview */}
+            <div className="bg-white rounded-[24px] p-5 lg:p-6 shadow-sm border border-slate-100 flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-4 relative">
+                <h2 className="text-lg font-bold text-slate-800">
+                  Order
+                </h2>
+                
+                <div className="relative">
+                  <div 
+                    onClick={() => setIsWidgetDropdownOpen(!isWidgetDropdownOpen)}
+                    className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 flex items-center gap-1 cursor-pointer hover:bg-slate-100 transition-colors"
+                  >
+                    {dateRange === 'today' ? 'Today' : dateRange === 'week' ? 'This Week' : dateRange === 'month' ? 'This Month' : 'Custom'} <ChevronDown size={12} />
+                  </div>
+                  
+                  {isWidgetDropdownOpen && (
+                    <div className="absolute right-0 top-full mt-1 bg-white border border-slate-100 rounded-xl shadow-lg z-10 w-32 py-1 overflow-hidden">
+                      <div 
+                        className={`px-4 py-2 text-xs font-semibold cursor-pointer hover:bg-slate-50 ${dateRange === 'today' ? 'text-blue-600 bg-blue-50' : 'text-slate-600'}`}
+                        onClick={() => { setDateRange('today'); setIsWidgetDropdownOpen(false); }}
+                      >
+                        Today
+                      </div>
+                      <div 
+                        className={`px-4 py-2 text-xs font-semibold cursor-pointer hover:bg-slate-50 ${dateRange === 'week' ? 'text-blue-600 bg-blue-50' : 'text-slate-600'}`}
+                        onClick={() => { setDateRange('week'); setIsWidgetDropdownOpen(false); }}
+                      >
+                        This Week
+                      </div>
+                      <div 
+                        className={`px-4 py-2 text-xs font-semibold cursor-pointer hover:bg-slate-50 ${dateRange === 'month' ? 'text-blue-600 bg-blue-50' : 'text-slate-600'}`}
+                        onClick={() => { setDateRange('month'); setIsWidgetDropdownOpen(false); }}
+                      >
+                        This Month
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {isLoading ? (
+                <div className="h-48 flex items-center justify-center flex-col text-slate-400 gap-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="text-xs font-medium">Loading...</p>
+                </div>
+              ) : (displayStats?.total > 0) ? (
+                <div className="flex flex-col items-center">
+                  <div className="h-48 w-full relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadialBarChart 
+                        cx="50%" 
+                        cy="50%" 
+                        innerRadius="30%" 
+                        outerRadius="100%" 
+                        barSize={12} 
+                        data={[
+                          { name: 'Pending', count: (displayStats?.confirmed || 0) + (displayStats?.draft || 0), fill: '#3b82f6' },
+                          { name: 'Completed', count: displayStats?.delivered || 0, fill: '#ef4444' },
+                          { name: 'Progress', count: (displayStats?.cutting || 0) + (displayStats?.stitching || 0) + (displayStats?.['in-progress'] || 0), fill: '#94a3b8' }
+                        ]}
+                      >
+                        <RadialBar
+                          minAngle={15}
+                          background
+                          clockWise
+                          dataKey="count"
+                          cornerRadius={10}
+                        />
+                        <Tooltip />
+                      </RadialBarChart>
+                    </ResponsiveContainer>
+                    {/* Center Text */}
+                    <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+                      <span className="text-2xl font-black text-slate-800">{displayStats?.total || 0}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Orders</span>
+                    </div>
+                  </div>
+                  
+                  {/* Legend below the radial chart */}
+                  <div className="flex justify-center gap-4 mt-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]"></div>
+                      <span className="text-xs font-bold text-slate-600">Pending: {(displayStats?.confirmed || 0) + (displayStats?.draft || 0)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></div>
+                      <span className="text-xs font-bold text-slate-600">Completed: {displayStats?.delivered || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#94a3b8]"></div>
+                      <span className="text-xs font-bold text-slate-600">Progress: {(displayStats?.cutting || 0) + (displayStats?.stitching || 0) + (displayStats?.['in-progress'] || 0)}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-48 flex items-center justify-center flex-col text-slate-400 gap-2">
+                  <Package size={32} className="text-slate-200" />
+                  <p className="text-xs font-medium">No orders for this period</p>
+                </div>
+              )}
+            </div>
+
+            {/* Recent Orders Table */}
+            <div className="bg-white rounded-[24px] p-5 lg:p-6 shadow-sm border border-slate-100 flex-1 flex flex-col min-w-0">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <ShoppingCart size={18} className="text-blue-600" />
+                  <span>Recent Orders</span>
+                </h2>
+                <Link to={`${basePath}/orders`} className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 flex items-center gap-1 cursor-pointer hover:bg-slate-100 transition-colors">
+                  View All <ArrowRight size={12} />
+                </Link>
+              </div>
+
+              <div className="overflow-x-auto flex-1">
+                <table className="w-full text-left border-collapse min-w-[300px]">
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      <th className="pb-3 text-xs font-bold text-slate-400 uppercase font-medium">Order ID</th>
+                      <th className="pb-3 text-xs font-bold text-slate-400 uppercase font-medium">Customer</th>
+                      <th className="pb-3 text-xs font-bold text-slate-400 uppercase font-medium text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentOrders.length > 0 ? (
+                      recentOrders.slice(0, 5).map((order) => (
+                        <tr key={order._id} className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                          <td className="py-3 pr-2">
+                            <Link to={`${basePath}/orders/${order._id}`} className="text-sm font-bold text-blue-600 hover:underline whitespace-nowrap">
+                              #{order.orderId}
+                            </Link>
+                          </td>
+                          <td className="py-3 pr-2">
+                            <span className="text-sm font-semibold text-slate-800 truncate block max-w-[120px]">
+                              {order.customer?.name || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="py-3 text-right">
+                            <span className={`${getStatusBadge(order.status)} text-[10px] px-2.5 py-1 rounded-md font-bold whitespace-nowrap uppercase`}>
+                              {STATUS_CONFIG[order.status]?.label || order.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="3" className="text-center py-6">
+                          <ShoppingCart size={24} className="text-slate-200 mx-auto mb-2" />
+                          <p className="text-xs text-slate-400 font-medium">No recent orders</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* ===== DELIVERY PIPELINE ===== */}
         <DeliveryPipelineSection works={recentWorks} basePath={basePath} />
 
-        {/* ===== ROW 4: WORK QUEUE - Responsive ===== */}
-        <div className="mb-6 lg:mb-8">
-          <div className="bg-white rounded-xl p-4 sm:p-5 lg:p-6 shadow-sm">
-            <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-4 lg:mb-6">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-800 flex items-center gap-2">
-                  <Layers size={16} className="text-purple-600 sm:w-5 sm:h-5" />
-                  <span>Work Queue</span>
-                </h2>
-                <span className="px-2 py-1 bg-purple-100 text-purple-800 text-[8px] sm:text-xs rounded-full">
-                  {prioritizedQueue.length} items
-                </span>
-              </div>
 
-              <div className="flex flex-wrap gap-2">
-                {/* View Filters */}
-                <div className="flex bg-gray-100 rounded-lg p-1">
-                  <button
-                    onClick={() => setSelectedView("all")}
-                    className={`px-2 sm:px-3 py-1 text-[8px] sm:text-xs rounded-md transition ${
-                      selectedView === "all" ? "bg-purple-600 text-white" : "text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    All ({recentWorks.length})
-                  </button>
-                  <button
-                    onClick={() => setSelectedView("new")}
-                    className={`px-2 sm:px-3 py-1 text-[8px] sm:text-xs rounded-md transition flex items-center gap-1 ${
-                      selectedView === "new" ? "bg-yellow-500 text-white" : "text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    <span className="hidden xs:inline">🆕</span>
-                    <span className="xs:hidden">🆕</span>
-                    <span
-                      className={`ml-1 px-1 py-0.5 text-[8px] rounded-full ${
-                        selectedView === "new" ? "bg-yellow-600 text-white" : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {workStats.pending || 0}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setSelectedView("need-tailor")}
-                    className={`px-2 sm:px-3 py-1 text-[8px] sm:text-xs rounded-md transition flex items-center gap-1 ${
-                      selectedView === "need-tailor" ? "bg-orange-500 text-white" : "text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    <span className="hidden xs:inline">👔</span>
-                    <span className="xs:hidden">👔</span>
-                    <span
-                      className={`ml-1 px-1 py-0.5 text-[8px] rounded-full ${
-                        selectedView === "need-tailor" ? "bg-orange-600 text-white" : "bg-orange-100 text-orange-700"
-                      }`}
-                    >
-                      {recentWorks.filter(w => w.status === "accepted" && !w.tailor).length}
-                    </span>
-                  </button>
-                </div>
-
-                {/* ✅ FIXED: Search input with properly centered icon */}
-                {/* ✅ FIXED: Search input with properly centered icon inside the input */}
-        <div className="relative w-full">
-  {/* Search Icon */}
-  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-
-  {/* Input */}
-  <input
-    type="text"
-    value={queueSearch}
-    onChange={(e) => setQueueSearch(e.target.value)}
-    placeholder="Search..."
-    className="w-full h-9 sm:h-10 pl-9 pr-9 border border-gray-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-  />
-
-  {/* Clear Button */}
-  {queueSearch && (
-    <button
-      onClick={() => setQueueSearch("")}
-      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-    >
-      <X className="w-4 h-4" />
-    </button>
-  )}
-</div>
-                {/* Status Filter */}
-                <select
-                  value={queueStatus}
-                  onChange={(e) => setQueueStatus(e.target.value)}
-                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg text-[8px] sm:text-xs focus:ring-2 focus:ring-purple-500 w-20 sm:w-24 lg:w-32"
-                >
-                  <option value="all">All</option>
-                  <option value="pending">⏳ Pending</option>
-                  <option value="accepted">✅ Accepted</option>
-                  <option value="cutting-started">✂️ Cutting</option>
-                </select>
-
-                {/* Sort By */}
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg text-[8px] sm:text-xs focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="priority">Priority</option>
-                  <option value="due">Due Date</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Queue List - Responsive with properly centered action button */}
-            <div className="space-y-2 sm:space-y-3 max-h-[400px] lg:max-h-[600px] overflow-y-auto pr-1 sm:pr-2">
-              {prioritizedQueue.length > 0 ? (
-                prioritizedQueue.slice(0, 5).map((work) => {
-                  const dueStatus = getDueStatus(work.estimatedDelivery);
-                  const priority = getWorkPriority(work);
-                  const isHighPriority = priority === "high";
-
-                  return (
-                    <div
-                      key={work._id}
-                      className={`border-2 rounded-lg p-3 sm:p-4 transition-all hover:shadow-md ${getWorkStatusBadge(work.status)} ${
-                        isHighPriority ? "border-l-8 border-l-red-500" : ""
-                      }`}
-                      onClick={() => handleViewWork(work._id)}
-                    >
-                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
-                        <div className="flex-1">
-                          {/* Top Row */}
-                          <div className="flex items-center gap-1 sm:gap-2 mb-2 flex-wrap">
-                            <span className="font-mono text-[10px] sm:text-xs font-bold text-purple-600 bg-white px-2 py-1 rounded">
-                              #{work.workId}
-                            </span>
-                            <span
-                              className={`px-2 py-1 rounded-full text-[8px] sm:text-xs font-medium ${getWorkStatusBadge(work.status)}`}
-                            >
-                              {getWorkStatusDisplay(work.status)}
-                            </span>
-                            {getPriorityBadge(work)}
-                          </div>
-
-                          <h3 className="font-bold text-gray-800 text-xs sm:text-sm mb-1">
-                            {typeof work.garment === 'object' ? work.garment?.name : work.garmentName || "N/A"}
-                          </h3>
-
-                          <div className="grid grid-cols-1 xs:grid-cols-2 gap-1 sm:gap-2 text-[8px] sm:text-xs">
-                            <div className="flex items-center gap-1">
-                              <UserIcon size={10} className="text-gray-400 sm:w-3 sm:h-3" />
-                              <span className="truncate">{work.order?.customer?.name || "Unknown"}</span>
-                            </div>
-
-                            <div className={`flex items-center gap-1 ${dueStatus.color}`}>
-                              {dueStatus.icon}
-                              <span className="truncate">{dueStatus.label}</span>
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              <Package size={10} className="text-purple-500 sm:w-3 sm:h-3" />
-                              <span className="truncate">
-                                {typeof work.garment === 'object' ? work.garment?.garmentId : work.garmentId || "N/A"}
-                              </span>
-                            </div>
-
-                            {work.tailor && (
-                              <div className="flex items-center gap-1">
-                                <UserCheckIcon size={10} className="text-green-500 sm:w-3 sm:h-3" />
-                                <span className="truncate">Tailor: {work.tailor.name}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* ✅ FIXED: Action button with properly centered icon */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewWork(work._id);
-                          }}
-                          className="w-7 h-7 sm:w-8 sm:h-8 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center justify-center self-end md:self-center"
-                          title="View Details"
-                        >
-                          <Eye size={12} className="sm:w-4 sm:h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-8 sm:py-12 text-gray-500">
-                  <Layers className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-xs sm:text-sm font-medium">No items in work queue</p>
-                  <p className="text-[8px] sm:text-xs text-gray-400 mt-1">
-                    Try adjusting your filters
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ===== ROW 5: TAILOR PERFORMANCE - Responsive ===== */}
-        {/* <div className="mb-6 lg:mb-8">
-          <div className="bg-white rounded-xl p-4 sm:p-5 lg:p-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <h2 className="text-sm sm:text-base lg:text-lg font-bold text-gray-800 flex items-center gap-2">
-                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
-                <span>Tailor Performance</span>
-              </h2>
-              {tailorStats?.active > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="px-2 sm:px-3 py-1 bg-green-100 text-green-700 text-[8px] sm:text-xs rounded-full flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse"></span>
-                    {tailorStats?.active || 0} Available
-                  </span>
-                  <span className="px-2 sm:px-3 py-1 bg-orange-100 text-orange-700 text-[8px] sm:text-xs rounded-full">
-                    {tailorStats?.onLeave || 0} On Leave
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[600px] lg:min-w-0">
-                <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="text-left py-2 sm:py-3 px-1 sm:px-2 text-[8px] sm:text-xs font-medium text-gray-500">Tailor</th>
-                    <th className="text-center py-2 sm:py-3 px-1 sm:px-2 text-[8px] sm:text-xs font-medium text-gray-500">Assigned</th>
-                    <th className="text-center py-2 sm:py-3 px-1 sm:px-2 text-[8px] sm:text-xs font-medium text-gray-500">Completed</th>
-                    <th className="text-center py-2 sm:py-3 px-1 sm:px-2 text-[8px] sm:text-xs font-medium text-gray-500">Pending</th>
-                    <th className="text-center py-2 sm:py-3 px-1 sm:px-2 text-[8px] sm:text-xs font-medium text-gray-500">In Progress</th>
-                    <th className="text-center py-2 sm:py-3 px-1 sm:px-2 text-[8px] sm:text-xs font-medium text-gray-500">Efficiency</th>
-                    <th className="text-center py-2 sm:py-3 px-1 sm:px-2 text-[8px] sm:text-xs font-medium text-gray-500">Status</th>
-                    <th className="text-right py-2 sm:py-3 px-1 sm:px-2 text-[8px] sm:text-xs font-medium text-gray-500">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {performanceLoading ? (
-                    <tr>
-                      <td colSpan="8" className="text-center py-6 sm:py-8">
-                        <Loader size={16} className="animate-spin text-purple-600 mx-auto sm:w-6 sm:h-6" />
-                      </td>
-                    </tr>
-                  ) : displayPerformers.length > 0 ? (
-                    displayPerformers.slice(0, 5).map((tailor, index) => {
-                      const assigned = tailor.assignedWorks || tailor.assignedOrders || tailor.totalAssigned || 0;
-                      const completed = tailor.completedWorks || tailor.completedOrders || tailor.totalCompleted || 0;
-                      const inProgress = tailor.inProgressWorks || tailor.currentWorks || 0;
-                      const pending = assigned - completed - inProgress;
-                      const efficiency = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
-                      
-                      const isAvailable = tailor.status === 'available' || tailor.isAvailable === true;
-                      const isBusy = tailor.status === 'busy' || tailor.isAvailable === false;
-                      
-                      return (
-                        <tr key={tailor._id || index} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-2 sm:py-3 px-1 sm:px-2">
-                            <div className="font-medium text-gray-800 text-[8px] sm:text-xs truncate max-w-[60px] sm:max-w-none">
-                              {tailor.name || tailor.tailorName || 'Tailor'}
-                            </div>
-                            <div className="text-[6px] sm:text-[10px] text-gray-500 truncate max-w-[60px] sm:max-w-none">
-                              {tailor.specialization || tailor.specializations?.join(', ') || 'General'}
-                            </div>
-                          </td>
-                          <td className="text-center py-2 sm:py-3 px-1 sm:px-2 font-bold text-[8px] sm:text-xs">{assigned}</td>
-                          <td className="text-center py-2 sm:py-3 px-1 sm:px-2 text-green-600 font-bold text-[8px] sm:text-xs">{completed}</td>
-                          <td className="text-center py-2 sm:py-3 px-1 sm:px-2 text-yellow-600 font-bold text-[8px] sm:text-xs">{pending}</td>
-                          <td className="text-center py-2 sm:py-3 px-1 sm:px-2 text-purple-600 font-bold text-[8px] sm:text-xs">{inProgress}</td>
-                          <td className="text-center py-2 sm:py-3 px-1 sm:px-2">
-                            <span className={`px-1 sm:px-2 py-0.5 rounded-full text-[6px] sm:text-[10px] font-medium ${
-                              efficiency >= 80 ? 'bg-green-100 text-green-700' :
-                              efficiency >= 60 ? 'bg-blue-100 text-blue-700' :
-                              efficiency >= 40 ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-red-100 text-red-700'
-                            }`}>
-                              {efficiency}%
-                            </span>
-                          </td>
-                          <td className="text-center py-2 sm:py-3 px-1 sm:px-2">
-                            {isAvailable ? (
-                              <span className="px-1 sm:px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[6px] sm:text-[10px] flex items-center justify-center gap-0.5">
-                                <span className="w-1 h-1 bg-green-500 rounded-full"></span>
-                                <span className="hidden xs:inline">Available</span>
-                              </span>
-                            ) : isBusy ? (
-                              <span className="px-1 sm:px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-[6px] sm:text-[10px]">
-                                Busy
-                              </span>
-                            ) : (
-                              <span className="px-1 sm:px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-[6px] sm:text-[10px]">
-                                {tailor.status || 'Unknown'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="text-right py-2 sm:py-3 px-1 sm:px-2">
-                            <button
-                              onClick={() => handleViewTailor(tailor._id)}
-                              className="text-[6px] sm:text-[10px] px-1 sm:px-2 py-0.5 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition"
-                            >
-                              View
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan="8" className="text-center py-6 sm:py-8 text-gray-500">
-                        <Scissors size={20} className="mx-auto mb-2 opacity-30 sm:w-8 sm:h-8" />
-                        <p className="text-xs sm:text-sm">No tailors found</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {tailorStats && (
-              <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-200 grid grid-cols-3 gap-2 sm:gap-3 lg:gap-4 text-center text-[8px] sm:text-xs">
-                <div className="bg-blue-50 p-1 sm:p-2 rounded-lg">
-                  <span className="block font-bold text-blue-700 text-xs sm:text-sm">{tailorStats?.total || 0}</span>
-                  <span className="text-gray-500 text-[6px] sm:text-xs">Total</span>
-                </div>
-                <div className="bg-green-50 p-1 sm:p-2 rounded-lg">
-                  <span className="block font-bold text-green-600 text-xs sm:text-sm">{tailorStats?.active || 0}</span>
-                  <span className="text-gray-500 text-[6px] sm:text-xs">Available</span>
-                </div>
-                <div className="bg-orange-50 p-1 sm:p-2 rounded-lg">
-                  <span className="block font-bold text-orange-600 text-xs sm:text-sm">{tailorStats?.onLeave || 0}</span>
-                  <span className="text-gray-500 text-[6px] sm:text-xs">On Leave</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div> */}
-{/* ===== ROW 5: TAILOR PERFORMANCE - Responsive with Full Width Table ===== */}
-<div className="mb-6 lg:mb-8">
-  <div className="bg-white rounded-xl p-4 sm:p-5 lg:p-6 shadow-sm">
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-      <h2 className="text-sm sm:text-base lg:text-lg font-bold text-gray-800 flex items-center gap-2">
-        <Users className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
-        <span>Tailor Performance</span>
-      </h2>
-      {tailorStats?.active > 0 && (
-        <div className="flex items-center gap-2">
-          <span className="px-2 sm:px-3 py-1 bg-green-100 text-green-700 text-[8px] sm:text-xs rounded-full flex items-center gap-1">
-            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse"></span>
-            {tailorStats?.active || 0} Available
-          </span>
-          <span className="px-2 sm:px-3 py-1 bg-orange-100 text-orange-700 text-[8px] sm:text-xs rounded-full">
-            {tailorStats?.onLeave || 0} On Leave
-          </span>
-        </div>
-      )}
-    </div>
-
-    {/* ✅ FIXED: Full width table with proper scrolling */}
-    <div className="overflow-x-auto overflow-y-hidden -mx-4 sm:-mx-5 lg:mx-0">
-      <div className="min-w-[1000px] lg:min-w-full">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Tailor</th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Assigned</th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Completed</th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Pending</th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">In Progress</th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Efficiency</th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Status</th>
-              <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Action</th>
-             </tr>
-          </thead>
-          <tbody>
-            {performanceLoading ? (
-              <tr>
-                <td colSpan="8" className="text-center py-8">
-                  <Loader size={20} className="animate-spin text-purple-600 mx-auto" />
-                </td>
-              </tr>
-            ) : displayPerformers.length > 0 ? (
-              displayPerformers.slice(0, 5).map((tailor, index) => {
-                const assigned = tailor.assignedWorks || tailor.assignedOrders || tailor.totalAssigned || 0;
-                const completed = tailor.completedWorks || tailor.completedOrders || tailor.totalCompleted || 0;
-                const inProgress = tailor.inProgressWorks || tailor.currentWorks || 0;
-                const pending = assigned - completed - inProgress;
-                const efficiency = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
-                
-                const isAvailable = tailor.status === 'available' || tailor.isAvailable === true;
-                const isBusy = tailor.status === 'busy' || tailor.isAvailable === false;
-                
-                return (
-                  <tr key={tailor._id || index} className="border-b border-gray-100 hover:bg-gray-50 transition-all">
-                    <td className="py-3 px-4 whitespace-nowrap">
-                      <div className="font-medium text-gray-800 text-sm">
-                        {tailor.name || tailor.tailorName || 'Tailor'}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {tailor.specialization || tailor.specializations?.join(', ') || 'General'}
-                      </div>
-                    </td>
-                    <td className="text-center py-3 px-4 font-bold text-sm whitespace-nowrap">{assigned}</td>
-                    <td className="text-center py-3 px-4 text-green-600 font-bold text-sm whitespace-nowrap">{completed}</td>
-                    <td className="text-center py-3 px-4 text-yellow-600 font-bold text-sm whitespace-nowrap">{pending}</td>
-                    <td className="text-center py-3 px-4 text-purple-600 font-bold text-sm whitespace-nowrap">{inProgress}</td>
-                    <td className="text-center py-3 px-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        efficiency >= 80 ? 'bg-green-100 text-green-700' :
-                        efficiency >= 60 ? 'bg-blue-100 text-blue-700' :
-                        efficiency >= 40 ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {efficiency}%
-                      </span>
-                    </td>
-                    <td className="text-center py-3 px-4 whitespace-nowrap">
-                      {isAvailable ? (
-                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs flex items-center justify-center gap-1">
-                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                          <span>Available</span>
-                        </span>
-                      ) : isBusy ? (
-                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                          Busy
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                          {tailor.status || 'Unknown'}
-                        </span>
-                      )}
-                    </td>
-                    <td className="text-right py-3 px-4 whitespace-nowrap">
-                      <button
-                        onClick={() => handleViewTailor(tailor._id)}
-                        className="text-xs px-3 py-1.5 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition whitespace-nowrap"
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan="8" className="text-center py-8 text-gray-500">
-                  <Scissors size={32} className="mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No tailors found</p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    {/* Stats Summary */}
-    {tailorStats && (
-      <div className="mt-4 pt-3 border-t border-gray-200 grid grid-cols-3 gap-3 text-center">
-        <div className="bg-blue-50 p-2 rounded-lg">
-          <span className="block font-bold text-blue-700 text-base">{tailorStats?.total || 0}</span>
-          <span className="text-gray-500 text-xs">Total</span>
-        </div>
-        <div className="bg-green-50 p-2 rounded-lg">
-          <span className="block font-bold text-green-600 text-base">{tailorStats?.active || 0}</span>
-          <span className="text-gray-500 text-xs">Available</span>
-        </div>
-        <div className="bg-orange-50 p-2 rounded-lg">
-          <span className="block font-bold text-orange-600 text-base">{tailorStats?.onLeave || 0}</span>
-          <span className="text-gray-500 text-xs">On Leave</span>
-        </div>
-      </div>
-    )}
-  </div>
-</div>
 
 
         {/* ===== STORE KEEPER SECTION (if not admin) - Responsive ===== */}
@@ -2521,43 +2058,7 @@ const displayPerformers = (isAdmin || isStoreKeeper)
         </div>
       </div>
 
-      {/* Quick Links for Store Keeper */}
-      <div className="mt-4 sm:mt-6">
-        <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center gap-2">
-          <Zap size={12} className="text-yellow-500 sm:w-4 sm:h-4" />
-          Quick Actions
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-          <Link 
-            to={`${basePath}/banking/income`}
-            className="bg-gradient-to-br from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 p-3 sm:p-4 rounded-xl text-center transition-all border border-green-200 group"
-          >
-            <TrendingUp size={16} className="text-green-600 mx-auto mb-1.5 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
-            <span className="text-[10px] sm:text-xs font-medium text-green-700">Add Income</span>
-          </Link>
-          <Link 
-            to={`${basePath}/banking/expense`}
-            className="bg-gradient-to-br from-red-50 to-red-100 hover:from-red-100 hover:to-red-200 p-3 sm:p-4 rounded-xl text-center transition-all border border-red-200 group"
-          >
-            <TrendingDown size={16} className="text-red-600 mx-auto mb-1.5 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
-            <span className="text-[10px] sm:text-xs font-medium text-red-700">Add Expense</span>
-          </Link>
-          <Link 
-            to={`${basePath}/orders/new`}
-            className="bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 p-3 sm:p-4 rounded-xl text-center transition-all border border-blue-200 group"
-          >
-            <ShoppingCart size={16} className="text-blue-600 mx-auto mb-1.5 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
-            <span className="text-[10px] sm:text-xs font-medium text-blue-700">New Order</span>
-          </Link>
-          <Link 
-            to={`${basePath}/add-customer`}
-            className="bg-gradient-to-br from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 p-3 sm:p-4 rounded-xl text-center transition-all border border-purple-200 group"
-          >
-            <UserPlus size={16} className="text-purple-600 mx-auto mb-1.5 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
-            <span className="text-[10px] sm:text-xs font-medium text-purple-700">Add Customer</span>
-          </Link>
-        </div>
-      </div>
+
 
       {/* Today's Transactions Preview (if any) */}
       {todaySummary?.count > 0 && (
@@ -2618,62 +2119,7 @@ const displayPerformers = (isAdmin || isStoreKeeper)
   </div>
 )}
 
-        {/* ===== ROLE-BASED QUICK ACTIONS FLOATING MENU - Responsive ===== */}
-        <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-50">
-          <div className="relative group">
-            {/* Main FAB Button */}
-            <button className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg flex items-center justify-center text-white transition-all group-hover:scale-110 group-hover:shadow-xl">
-              <Plus size={16} className="sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
-            </button>
-            
-            {/* Quick Actions Menu - Appears on hover */}
-            <div className="absolute bottom-12 sm:bottom-14 lg:bottom-16 right-0 bg-white rounded-xl shadow-xl p-2 min-w-[200px] sm:min-w-[220px] lg:min-w-[240px] hidden group-hover:block animate-fade-in-up">
-              {/* Header */}
-              <div className="text-xs sm:text-sm font-medium text-slate-700 px-2 sm:px-3 py-2 border-b border-slate-100 mb-1">
-                Quick Actions
-                {isStoreKeeper && (
-                  <span className="ml-2 text-[8px] sm:text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
-                    Store
-                  </span>
-                )}
-                {isAdmin && (
-                  <span className="ml-2 text-[8px] sm:text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">
-                    Admin
-                  </span>
-                )}
-              </div>
-              
-              {/* Menu Items - Dynamically generated based on role */}
-              {quickActions.map((action, index) => (
-                <Link 
-                  key={index}
-                  to={action.path} 
-                  className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 hover:bg-slate-50 rounded-lg text-slate-600 transition-all group/item"
-                >
-                  <div className={`w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 bg-${action.color}-100 rounded-lg flex items-center justify-center group-hover/item:bg-${action.color}-200 transition-all`}>
-                    <action.icon size={12} className={`text-${action.color}-600 sm:w-4 sm:h-4`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs sm:text-sm font-medium block truncate">{action.label}</span>
-                    <p className="text-[8px] sm:text-xs text-slate-400 truncate">{action.description}</p>
-                  </div>
-                </Link>
-              ))}
 
-              {/* Divider */}
-              <div className="border-t border-slate-100 my-1"></div>
-
-              {/* View All Link */}
-              <Link 
-                to={`${basePath}/quick-actions`} 
-                className="flex items-center justify-between px-2 sm:px-3 py-2 hover:bg-slate-50 rounded-lg text-blue-600 text-xs sm:text-sm"
-              >
-                <span>View all actions</span>
-                <ArrowRight size={10} className="sm:w-3 sm:h-3" />
-              </Link>
-            </div>
-          </div>
-        </div>
 
         {/* Loading Overlay */}
         {isLoading && (

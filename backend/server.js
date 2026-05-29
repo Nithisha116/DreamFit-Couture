@@ -479,6 +479,7 @@
 
 // backend/server.js
 import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -540,8 +541,7 @@ import invoiceRoutes from "./routes/invoice.routes.js";
 // IMPORT ERROR HANDLING MIDDLEWARE
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
 
-// Load env variables
-dotenv.config();
+// Load env variables (already loaded at top)
 
 // Create app
 const app = express();
