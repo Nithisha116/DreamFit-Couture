@@ -93,9 +93,14 @@ const PaymentReceipt = forwardRef(({
 
   // Running totals after this payment
   const totalPaidAfterThis = previousTotal + currentAmount;
-  const isReceiptFullyPaid = summary.totalAmountMin > 0 && totalPaidAfterThis >= summary.totalAmountMin;
-  const balanceMin = isReceiptFullyPaid ? 0 : Math.max(0, summary.totalAmountMin - totalPaidAfterThis);
-  const balanceMax = isReceiptFullyPaid ? 0 : Math.max(0, summary.totalAmountMax - totalPaidAfterThis);
+  const isFinalized = summary.finalizedAmount > 0;
+
+  const isReceiptFullyPaid = isFinalized 
+    ? totalPaidAfterThis >= summary.finalizedAmount
+    : summary.totalAmountMin > 0 && totalPaidAfterThis >= summary.totalAmountMin;
+
+  const balanceMin = isReceiptFullyPaid ? 0 : Math.max(0, (isFinalized ? summary.finalizedAmount : summary.totalAmountMin) - totalPaidAfterThis);
+  const balanceMax = isReceiptFullyPaid ? 0 : Math.max(0, (isFinalized ? summary.finalizedAmount : summary.totalAmountMax) - totalPaidAfterThis);
 
   // Payment status
   const getPaymentStatus = () => {
@@ -268,9 +273,13 @@ const PaymentReceipt = forwardRef(({
             </thead>
             <tbody>
               <tr style={{ borderBottom: "1px solid #fbcfe8" }}>
-                <td style={{ padding: "12px 14px" }}>Order Price Range</td>
+                <td style={{ padding: "12px 14px" }}>
+                  {isFinalized ? "Final Bill Amount" : "Order Price Range"}
+                </td>
                 <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: "600" }}>
-                  {summary.totalAmountMin === summary.totalAmountMax ? (
+                  {isFinalized ? (
+                    formatCurrency(summary.finalizedAmount)
+                  ) : summary.totalAmountMin === summary.totalAmountMax ? (
                     formatCurrency(summary.totalAmountMax)
                   ) : (
                     `${formatCurrency(summary.totalAmountMin)} – ${formatCurrency(summary.totalAmountMax)}`

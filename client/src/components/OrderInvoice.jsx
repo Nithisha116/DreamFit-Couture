@@ -824,7 +824,7 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                     fontWeight: "600",
                   }}
                 >
-                  Subtotal Range
+                  {summary.finalizedAmount > 0 ? "Final Bill Amount" : "Estimated Subtotal Range"}
                 </td>
                 <td
                   style={{
@@ -835,7 +835,9 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                     color: "#be185d",
                   }}
                 >
-                  {summary.totalAmountMin === summary.totalAmountMax ? (
+                  {summary.finalizedAmount > 0 ? (
+                    <>₹{summary.finalizedAmount.toLocaleString('en-IN')}</>
+                  ) : summary.totalAmountMin === summary.totalAmountMax ? (
                     <>₹{summary.totalAmountMin.toLocaleString('en-IN')}</>
                   ) : (
                     <>₹{summary.totalAmountMin.toLocaleString('en-IN')} – ₹{summary.totalAmountMax.toLocaleString('en-IN')}</>
@@ -929,7 +931,7 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                 }}
               >
                 <span style={{ fontWeight: "600", color: summary.isFullyPaid ? "#059669" : "#be185d" }}>
-                  Balance Due
+                  {summary.finalizedAmount > 0 || summary.balanceDueMin === summary.balanceDueMax ? "Balance Due" : "Balance Due Range"}
                 </span>
                 <span
                   style={{
@@ -940,8 +942,8 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                 >
                   {summary.isFullyPaid ? (
                     "Paid"
-                  ) : summary.balanceDueMin === summary.balanceDueMax ? (
-                    `₹${summary.balanceDueMin.toLocaleString('en-IN')}`
+                  ) : summary.finalizedAmount > 0 || summary.balanceDueMin === summary.balanceDueMax ? (
+                    `₹${summary.balanceDueMax.toLocaleString('en-IN')}`
                   ) : (
                     `₹${summary.balanceDueMin.toLocaleString('en-IN')} – ₹${summary.balanceDueMax.toLocaleString('en-IN')}`
                   )}

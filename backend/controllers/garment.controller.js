@@ -2323,7 +2323,7 @@ export const createGarment = async (req, res) => {
       estimatedDelivery,
       priority: priority || "normal",
       priceRange: parsedPriceRange || { min: 0, max: 0 },
-      finalizedPrice: finalizedPrice !== undefined && finalizedPrice !== null && finalizedPrice !== "" ? Number(finalizedPrice) : (parsedPriceRange?.max ? Number(parsedPriceRange.max) : (parsedPriceRange?.min ? Number(parsedPriceRange.min) : 0)),
+      finalizedPrice: finalizedPrice !== undefined && finalizedPrice !== null && finalizedPrice !== "" ? Number(finalizedPrice) : 0,
     });
 
     console.log("💾 Saving garment with images:", {
@@ -2582,7 +2582,7 @@ export const updateGarment = async (req, res) => {
     const incomingFinalized = finalizedAmount !== undefined ? finalizedAmount : finalizedPrice;
     if (incomingFinalized !== undefined) {
       const finalVal = (incomingFinalized === "" || incomingFinalized === null || incomingFinalized === "null")
-        ? (priceRange?.max || garment.priceRange?.max || priceRange?.min || garment.priceRange?.min || 0)
+        ? 0
         : Number(incomingFinalized);
       garment.finalizedPrice = finalVal;
       garment.finalizedAmount = finalVal;

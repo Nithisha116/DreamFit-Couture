@@ -2067,6 +2067,8 @@ export default function OrderDetails() {
     return { min, max };
   }, [garments]);
 
+  const isFinalized = summary.finalizedAmount > 0;
+  
   const finalizedAmount = {
     min: summary.totalAmountMin,
     max: summary.totalAmountMax
@@ -2807,8 +2809,9 @@ const handleSavePayment = async (paymentData) => {
           onSave={handleSavePayment}
           orderTotalMin={priceSummary.totalMin}
           orderTotalMax={priceSummary.totalMax}
-          remainingAmount={balanceAmount.max}
+          balanceAmount={balanceAmount}
           alreadyPaid={paymentStats.totalPaid}
+          finalizedAmount={summary.finalizedAmount}
           orderId={id}
           customerId={currentOrder?.customer?._id}
           initialData={editingPayment}
@@ -3310,13 +3313,15 @@ const handleSavePayment = async (paymentData) => {
 
               <div className="space-y-3 sm:space-y-4">
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-blue-100 shadow-sm">
-                  <p className="text-[9px] sm:text-[10px] text-blue-600 font-black uppercase mb-0.5">Estimated Billing Amount Range</p>
+                  <p className="text-[9px] sm:text-[10px] text-blue-600 font-black uppercase mb-0.5">
+                    {isFinalized ? "Final Bill Amount" : "Estimated Billing Amount Range"}
+                  </p>
                   <p className="text-lg sm:text-xl lg:text-2xl font-black text-blue-700 break-words">
-                    {finalizedAmount.min === finalizedAmount.max
-                      ? formatCurrency(finalizedAmount.max)
+                    {isFinalized 
+                      ? formatCurrency(summary.finalizedAmount)
                       : `${formatCurrency(finalizedAmount.min)} - ${formatCurrency(finalizedAmount.max)}`}
                   </p>
-                  {estimatedRange.min > 0 && estimatedRange.max > 0 && (
+                  {estimatedRange.min > 0 && estimatedRange.max > 0 && !isFinalized && (
                     <div className="mt-2 pt-2 border-t border-blue-200/50 flex justify-between text-[8px] sm:text-[9px] text-slate-500 font-bold">
                       <span>ESTIMATED RANGE:</span>
                       <span>{formatCurrency(estimatedRange.min)} – {formatCurrency(estimatedRange.max)}</span>
@@ -3434,11 +3439,13 @@ const handleSavePayment = async (paymentData) => {
                 )}
 
                 <div className="bg-orange-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
-                  <p className="text-[10px] sm:text-xs text-orange-600 font-black uppercase mb-1">Balance Amount</p>
+                  <p className="text-[10px] sm:text-xs text-orange-600 font-black uppercase mb-1">
+                    {isFinalized || balanceAmount.min === balanceAmount.max ? "Balance Amount" : "Remaining Balance Range"}
+                  </p>
                   <p className="text-base sm:text-lg lg:text-xl font-black text-orange-700 break-words">
                     {summary.isFullyPaid ? (
                       formatCurrency(0)
-                    ) : balanceAmount.min === balanceAmount.max ? (
+                    ) : isFinalized || balanceAmount.min === balanceAmount.max ? (
                       formatCurrency(balanceAmount.max)
                     ) : (
                       `${formatCurrency(balanceAmount.min)} - ${formatCurrency(balanceAmount.max)}`

@@ -10311,6 +10311,7 @@ export const selectOrderStats = (state) => {
     thisMonth: stats.thisMonth || 0,
     inProgress: stats.inProgress || stats.cutting || 0,
     overdueOrders: stats.overdueOrders || 0,
+    paymentBreakdown: stats.paymentBreakdown || [],
     deliveries: stats.deliveries || {
       today: 0,
       tomorrow: 0,

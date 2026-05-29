@@ -157,7 +157,7 @@ async function updateOrderPaymentSummary(orderId) {
           ? g.finalizedAmount
           : (g.finalizedPrice !== undefined && g.finalizedPrice !== null
             ? g.finalizedPrice
-            : maxVal);
+            : 0); // DO NOT DEFAULT TO maxVal!
 
         totalMin += minVal;
         totalMax += maxVal;
@@ -166,7 +166,7 @@ async function updateOrderPaymentSummary(orderId) {
       order.minPrice = totalMin;
       order.maxPrice = totalMax;
       order.finalizedAmount = totalFinalized;
-      order.priceSummary = { totalMin, totalMax: totalFinalized };
+      order.priceSummary = { totalMin, totalMax };
     }
 
     const payments = await Payment.find({
@@ -181,12 +181,37 @@ async function updateOrderPaymentSummary(orderId) {
     );
     const lastPayment = sorted[0];
 
-    const totalAmount = order.finalizedAmount || order.priceSummary?.totalMax || order.totalAmount || 0;
-    // Balance can NEVER be negative
-    const balanceAmount = Math.max(0, totalAmount - totalPaid);
+    // ============================================
+    // NEW BUSINESS LOGIC: DYNAMIC FINALIZATION
+    // ============================================
+    let finalizedAmount = order.finalizedAmount || 0;
+    
+    // Auto-finalize if paid amount reaches or exceeds minimum
+    if (totalMin > 0 && totalPaid >= totalMin) {
+      finalizedAmount = totalPaid;
+    } else if (totalPaid < totalMin) {
+      // Forcefully un-finalize if it drops below the minimum bound (e.g. adding new garments)
+      finalizedAmount = 0;
+    }
+
+    let balanceMin = 0;
+    let balanceMax = 0;
+    let balanceAmount = 0; // Legacy fallback
+
+    if (finalizedAmount > 0) {
+      // ORDER IS FINALIZED
+      balanceAmount = Math.max(0, finalizedAmount - totalPaid);
+      balanceMin = balanceAmount;
+      balanceMax = balanceAmount;
+    } else {
+      // ORDER IS NOT FINALIZED -> REMAINS A RANGE
+      balanceMin = Math.max(0, totalMin - totalPaid);
+      balanceMax = Math.max(0, totalMax - totalPaid);
+      balanceAmount = balanceMax; // For backward compatibility if needed elsewhere
+    }
 
     let paymentStatus = 'pending';
-    if (balanceAmount === 0 && totalPaid > 0) {
+    if (finalizedAmount > 0 && balanceAmount === 0 && totalPaid > 0) {
       paymentStatus = 'paid';
     } else if (totalPaid > 0) {
       paymentStatus = 'partial';
@@ -195,7 +220,7 @@ async function updateOrderPaymentSummary(orderId) {
     await Order.findByIdAndUpdate(orderId, {
       minPrice: order.minPrice,
       maxPrice: order.maxPrice,
-      finalizedAmount: order.finalizedAmount,
+      finalizedAmount,
       dueAmount: balanceAmount,
       priceSummary: order.priceSummary,
       paymentSummary: {
@@ -206,6 +231,8 @@ async function updateOrderPaymentSummary(orderId) {
         paymentStatus,
       },
       balanceAmount,
+      balanceMin,
+      balanceMax
     });
 
     console.log(
@@ -262,38 +289,54 @@ export const createPayment = async (req, res) => {
     });
 
     const alreadyPaid = existingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-    const totalAmount = order.priceSummary?.totalMax || order.totalAmount || 0;
-    const remainingBalance = Math.max(0, totalAmount - alreadyPaid);
+    
+    // Get minimum and maximum constraints
+    const totalMin = order.minPrice || order.priceSummary?.totalMin || 0;
+    const totalMax = order.maxPrice || order.priceSummary?.totalMax || order.totalAmount || 0;
+    let finalizedAmount = order.finalizedAmount || 0;
+    
+    // SELF-HEALING before calculating remaining
+    if (totalMin > 0 && alreadyPaid >= totalMin) {
+      finalizedAmount = alreadyPaid;
+    } else if (finalizedAmount === totalMax && alreadyPaid < totalMax && totalMin !== totalMax) {
+      finalizedAmount = 0;
+    }
+
+    let remainingMax = 0;
+    let remainingMin = 0;
+
+    if (finalizedAmount > 0) {
+      remainingMin = Math.max(0, finalizedAmount - alreadyPaid);
+      remainingMax = remainingMin;
+    } else {
+      remainingMin = Math.max(0, totalMin - alreadyPaid);
+      remainingMax = Math.max(0, totalMax - alreadyPaid);
+    }
 
     console.log(
-      `💰 Total: ₹${totalAmount} | Paid: ₹${alreadyPaid} | Remaining: ₹${remainingBalance}`
+      `💰 Range: ₹${totalMin}-₹${totalMax} | Paid: ₹${alreadyPaid} | Remaining: ₹${remainingMin}-₹${remainingMax}`
     );
 
     // ── Block if already fully paid ──────────────────────────────────────────
-    if (remainingBalance <= 0) {
+    if (remainingMax <= 0 || (totalMin > 0 && alreadyPaid >= totalMin)) {
       return res.status(400).json({
         success: false,
-        message: 'Payment already completed. This order has no outstanding balance.',
+        message: 'Payment already completed. This order is finalized and has no outstanding balance.',
       });
     }
 
     // ── Resolve payment amount and type ─────────────────────────────────────
-    // ┌──────────────────────────────────────────────────────────────────────┐
-    // │  CORE FIX: "full" type ALWAYS settles the remaining balance only.   │
-    // │  If an advance exists → type becomes "final-settlement".            │
-    // │  This prevents totalPaid from ever exceeding totalAmount.           │
-    // └──────────────────────────────────────────────────────────────────────┘
     let paymentAmount;
     let resolvedType = type || 'advance';
 
     if (resolvedType === 'full') {
       if (alreadyPaid > 0) {
-        // Advance already exists → settle what remains
-        paymentAmount = remainingBalance;
+        // Advance already exists → settle what remains to hit the minimum
+        paymentAmount = remainingMin;
         resolvedType = 'final-settlement';
       } else {
-        // No prior payments → direct full payment (settle everything)
-        paymentAmount = totalAmount > 0 ? totalAmount : Number(amount);
+        // No prior payments → direct full payment (settle everything at minimum)
+        paymentAmount = remainingMin > 0 ? remainingMin : Number(amount);
       }
     } else {
       // advance / final-settlement entered manually
@@ -303,11 +346,11 @@ export const createPayment = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Valid amount is required' });
       }
 
-      // Clamp to remaining balance — never allow overpayment
-      if (paymentAmount > remainingBalance) {
+      // Clamp to absolute remaining balance (max boundary) — never allow overpayment past the highest possible price
+      if (paymentAmount > remainingMax && remainingMax > 0) {
         return res.status(400).json({
           success: false,
-          message: `Amount exceeds remaining balance of ₹${remainingBalance}. Please enter ₹${remainingBalance} or less.`,
+          message: `Amount exceeds maximum possible remaining balance of ₹${remainingMax}. Please enter ₹${remainingMax} or less.`,
         });
       }
     }
@@ -430,13 +473,24 @@ export const updatePayment = async (req, res) => {
       });
       const otherPaid = otherPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
       const order = await Order.findById(payment.order);
-      const totalAmount = order?.priceSummary?.totalMax || order?.totalAmount || 0;
-      const maxAllowed = Math.max(0, totalAmount - otherPaid);
+      
+      const totalMax = order?.maxPrice || order?.priceSummary?.totalMax || order?.totalAmount || 0;
+      let finalizedAmount = order?.finalizedAmount || 0;
+      
+      // SELF-HEALING before calculating remaining
+      if (totalMin > 0 && otherPaid >= totalMin) {
+        finalizedAmount = otherPaid;
+      } else if (finalizedAmount === totalMax && otherPaid < totalMax && totalMin !== totalMax) {
+        finalizedAmount = 0;
+      }
 
-      if (newAmount > maxAllowed) {
+      const absoluteMaxAllowed = finalizedAmount > 0 ? finalizedAmount : totalMax;
+      const maxAllowed = Math.max(0, absoluteMaxAllowed - otherPaid);
+
+      if (newAmount > maxAllowed && maxAllowed > 0) {
         return res.status(400).json({
           success: false,
-          message: `Amount exceeds remaining balance of ₹${maxAllowed}.`,
+          message: `Amount exceeds maximum remaining balance of ₹${maxAllowed}.`,
         });
       }
     }

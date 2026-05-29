@@ -141,13 +141,14 @@ export const updateOrderPaymentSummary = async (orderId) => {
     // Legacy support
     order.balanceAmount = balanceMax;
     order.dueAmount = balanceMax;
-    order.finalizedAmount = totalMax;
 
     let paymentStatus = 'pending';
     if (totalPaid >= totalMin) {
       paymentStatus = 'paid';
-    } else if (totalPaid > 0) {
-      paymentStatus = 'partial';
+      order.finalizedAmount = totalPaid; // AUTO-FINALIZE
+    } else {
+      if (totalPaid > 0) paymentStatus = 'partial';
+      order.finalizedAmount = 0; // RANGE-BASED
     }
 
     order.paymentSummary = {
@@ -333,11 +334,13 @@ export const getOrderStats = async (req, res) => {
 
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    const [todayCount, weekCount, monthCount, totalCount] = await Promise.all([
+    const [todayCount, weekCount, monthCount, totalCount, overdueCount, paymentPendingCount] = await Promise.all([
       Order.countDocuments({ createdAt: { $gte: today }, isActive: true }),
       Order.countDocuments({ createdAt: { $gte: startOfWeek }, isActive: true }),
       Order.countDocuments({ createdAt: { $gte: startOfMonth }, isActive: true }),
-      Order.countDocuments({ isActive: true })
+      Order.countDocuments({ isActive: true }),
+      Order.countDocuments({ deliveryDate: { $lt: today }, status: { $nin: ['delivered', 'cancelled'] }, isActive: true }),
+      Order.countDocuments({ 'paymentSummary.paymentStatus': 'pending', isActive: true })
     ]);
 
     const statusStats = await Order.aggregate([
@@ -354,6 +357,23 @@ export const getOrderStats = async (req, res) => {
         totalPaid: { $sum: "$paymentSummary.totalPaid" }
       }}
     ]);
+    
+    // Calculate total revenue across all payment statuses
+    const revenue = paymentStats.reduce((sum, stat) => sum + stat.totalPaid, 0);
+    
+    // Map status breakdown to flat object
+    const statusCounts = {};
+    let inProgressCount = 0;
+    
+    statusStats.forEach(stat => {
+      const status = stat._id ? stat._id.toLowerCase() : 'unknown';
+      statusCounts[status] = stat.count;
+      
+      // In Production logic: active production stages
+      if (['in-progress', 'progress', 'cutting', 'stitching', 'trial', 'finishing'].includes(status)) {
+        inProgressCount += stat.count;
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -362,6 +382,18 @@ export const getOrderStats = async (req, res) => {
         thisWeek: weekCount,
         thisMonth: monthCount,
         total: totalCount,
+        
+        // Exact flat fields for OrdersKPI.jsx (handle synonyms)
+        pending: paymentPendingCount,
+        inProgress: inProgressCount,
+        ready: (statusCounts['ready-to-delivery'] || 0) + (statusCounts['ready-to-deliver'] || 0) + (statusCounts['ready'] || 0),
+        overdue: overdueCount,
+        revenue: revenue,
+        
+        // Exact flat fields for OrderFilterTabs.jsx
+        ...statusCounts,
+        
+        // Legacy fallback
         statusBreakdown: statusStats,
         paymentBreakdown: paymentStats
       }
@@ -506,7 +538,7 @@ export const createOrder = async (req, res) => {
       },
       minPrice: totalMin,
       maxPrice: totalMax,
-      finalizedAmount: totalMax,
+      finalizedAmount: 0,
       dueAmount: totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMax - totalInitialPaid),
       balanceMin: totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMin - totalInitialPaid),
       balanceMax: totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMax - totalInitialPaid),
@@ -600,8 +632,8 @@ export const createOrder = async (req, res) => {
             estimatedDelivery: g.estimatedDelivery || deliveryDate,
             priority: g.priority || 'normal',
             priceRange: { min: Number(g.priceRange?.min) || 0, max: Number(g.priceRange?.max) || 0 },
-            finalizedPrice: Number(g.finalizedAmount || g.finalizedPrice || g.priceRange?.max) || 0,
-            finalizedAmount: Number(g.finalizedAmount || g.finalizedPrice || g.priceRange?.max) || 0,
+            finalizedPrice: Number(g.finalizedAmount || g.finalizedPrice) || 0,
+            finalizedAmount: Number(g.finalizedAmount || g.finalizedPrice) || 0,
             minPrice: Number(g.minPrice || g.priceRange?.min) || 0,
             maxPrice: Number(g.maxPrice || g.priceRange?.max) || 0,
             fabricSource: g.fabricSource || 'customer',
@@ -684,7 +716,17 @@ export const getAllOrders = async (req, res) => {
       ];
     }
 
-    if (status && status !== "all") query.status = status;
+    if (status && status !== "all") {
+      if (status === 'draft') {
+        query.status = { $in: ['draft', 'pending'] };
+      } else if (status === 'in-progress') {
+        query.status = { $in: ['in-progress', 'progress', 'cutting', 'stitching', 'trial', 'finishing'] };
+      } else if (status === 'ready-to-delivery') {
+        query.status = { $in: ['ready-to-delivery', 'ready-to-deliver', 'ready'] };
+      } else {
+        query.status = status;
+      }
+    }
     if (paymentStatus && paymentStatus !== "all") query['paymentSummary.paymentStatus'] = paymentStatus;
 
     if (timeFilter !== "all") {
@@ -822,7 +864,7 @@ export const updateOrderStatus = async (req, res) => {
     const { status } = req.body;
     const { id } = req.params;
     
-    const validStatuses = ["draft", "confirmed", "in-progress", "ready-to-deliver", "delivered", "cancelled"];
+    const validStatuses = ["draft", "confirmed", "in-progress", "ready-to-delivery", "delivered", "cancelled"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: `Invalid status.` });
     }

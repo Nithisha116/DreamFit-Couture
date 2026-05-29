@@ -5314,12 +5314,12 @@ const renderDayContents = useCallback((day, date) => {
               ? Number(g.finalizedAmount)
               : (g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
                 ? Number(g.finalizedPrice)
-                : maxPrice),
+                : 0),
             finalizedAmount: g.finalizedAmount !== undefined && g.finalizedAmount !== null && g.finalizedAmount !== ""
               ? Number(g.finalizedAmount)
               : (g.finalizedPrice !== undefined && g.finalizedPrice !== null && g.finalizedPrice !== ""
                 ? Number(g.finalizedPrice)
-                : maxPrice),
+                : 0),
             minPrice: minPrice,
             maxPrice: maxPrice,
             fabricSource: g.fabricSource || 'customer',

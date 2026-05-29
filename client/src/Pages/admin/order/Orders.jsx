@@ -328,7 +328,16 @@ export default function Orders() {
       )}
 
       {/* ── KPI Cards ── */}
-      <OrdersKPI stats={stats} />
+      <OrdersKPI 
+        stats={stats} 
+        onCardClick={(type) => {
+          if (type === 'pending') { setActiveTab('all'); setPayFilter('pending'); setCurrentPage(1); }
+          else if (type === 'inProgress') { setActiveTab('in-progress'); setPayFilter('all'); setCurrentPage(1); }
+          else if (type === 'ready') { setActiveTab('ready-to-delivery'); setPayFilter('all'); setCurrentPage(1); }
+          else if (type === 'overdue') { setActiveTab('__overdue'); setPayFilter('all'); setCurrentPage(1); }
+          else if (type === 'total') { setActiveTab('all'); setPayFilter('all'); setCurrentPage(1); }
+        }} 
+      />
 
       {/* ── Workflow Filter Tabs ── */}
       <OrderFilterTabs stats={stats} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setCurrentPage(1); }} />

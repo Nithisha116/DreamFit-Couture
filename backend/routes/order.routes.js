@@ -312,7 +312,7 @@ import {
 
   
   // ===== ONLY THESE TWO FOR ADMIN DASHBOARD =====
-  getOrderStatsForDashboard,  // For pie chart & KPI cards (GET /api/orders/stats)
+  getOrderStats,  // For pie chart & KPI cards (GET /api/orders/stats)
   getRecentOrders      ,      // For recent orders table (GET /api/orders/recent)
   
 } from "../controllers/order.controller.js";
@@ -358,7 +358,7 @@ router.use(protect);
  * @query   ?period=today|week|month&startDate=...&endDate=...
  * @access  Admin, Store Keeper, Cutting Master
  */
-router.get("/stats", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getOrderStatsForDashboard);
+router.get("/stats", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getOrderStats);
 
 /**
  * @route   GET /api/orders/recent

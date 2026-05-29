@@ -11,8 +11,8 @@ export default function AddPaymentModal({
   orderTotal = 0,       // ✅ Backward compatibility (older pages)
   existingPayments = [],// ✅ Used for payment-type workflow
   balanceAmount = null, // ✅ number OR {min,max} from pages
-  remainingAmount = 0,   // ✅ How much is still owed
   alreadyPaid = 0,       // ✅ What's been paid so far
+  finalizedAmount = 0,   // ✅ If the order has a final amount
   orderId,
   customerId,
   initialData = null,
@@ -97,6 +97,9 @@ export default function AddPaymentModal({
     }
     const minPrice = Number(orderTotalMin) || Number(orderTotal) || 0;
     const maxPrice = Number(orderTotalMax) || Number(orderTotal) || 0;
+    if (finalizedAmount > 0) {
+      return { min: Math.max(0, finalizedAmount - totalPaid), max: Math.max(0, finalizedAmount - totalPaid) };
+    }
     if (totalPaid >= minPrice && minPrice > 0) {
       return { min: 0, max: 0 };
     }
@@ -105,11 +108,15 @@ export default function AddPaymentModal({
     return { min, max };
   })();
 
+  const isFinalized = finalizedAmount > 0 || (balance.min === 0 && balance.max === 0 && totalPaid > 0);
+  const remainingMin = balance.min;
+  const remainingMax = balance.max;
+
   const hasAnyPayment = (existingPayments || []).length > 0 || totalPaid > 0;
   const hasAdvance = (existingPayments || []).some((p) => p?.type === "advance");
-  const fullyPaid = balance.min <= 0 && balance.max <= 0;
+  const fullyPaid = remainingMin <= 0 && remainingMax <= 0;
   const canShowAdvanceOrFull = !hasAnyPayment && !fullyPaid;
-  const shouldShowFinalOnly = hasAdvance && (balance.min > 0 || balance.max > 0);
+  const shouldShowFinalOnly = hasAdvance && (remainingMin > 0 || remainingMax > 0);
 
   const allowedTypes = (() => {
     if (initialData) return ["advance", "full"]; // editing: preserve access
@@ -140,10 +147,10 @@ export default function AddPaymentModal({
       newErrors.amount = "Please enter a valid amount";
     }
 
-    // Validate against remaining balance
-    if (formData.type === 'advance' && remainingAmount > 0) {
-      if (Number(formData.amount) > remainingAmount) {
-        newErrors.amount = `Amount cannot exceed remaining balance of ₹${remainingAmount}`;
+    // Validate against remaining balance maximum ceiling
+    if (formData.type === 'advance' && remainingMax > 0) {
+      if (Number(formData.amount) > remainingMax) {
+        newErrors.amount = `Amount cannot exceed maximum possible balance of ₹${remainingMax}`;
       }
     }
 
@@ -257,12 +264,14 @@ export default function AddPaymentModal({
         </div>
 
         {/* Order info: remaining balance */}
-        {!initialData && remainingAmount > 0 && (
+        {!initialData && !fullyPaid && (
           <div className="space-y-2 mb-4">
             {(orderTotalMin > 0 || orderTotalMax > 0) && (
               <div className="bg-blue-50 p-3 rounded-xl">
-                <p className="text-xs text-blue-600 font-bold">Order Total</p>
-                <p className="text-lg font-black text-blue-700">₹{orderTotalMin} — ₹{orderTotalMax}</p>
+                <p className="text-xs text-blue-600 font-bold">{isFinalized ? "Final Bill Amount" : "Estimated Price Range"}</p>
+                <p className="text-lg font-black text-blue-700">
+                  {isFinalized ? `₹${finalizedAmount}` : `₹${orderTotalMin} — ₹${orderTotalMax}`}
+                </p>
               </div>
             )}
             {alreadyPaid > 0 && (
@@ -272,15 +281,19 @@ export default function AddPaymentModal({
               </div>
             )}
             <div className="bg-orange-50 p-3 rounded-xl flex justify-between items-center border border-orange-200">
-              <p className="text-xs text-orange-700 font-bold">Remaining Balance</p>
-              <p className="font-black text-orange-700">₹{remainingAmount.toLocaleString('en-IN')}</p>
+              <p className="text-xs text-orange-700 font-bold">{isFinalized || remainingMin === remainingMax ? "Remaining Balance" : "Remaining Balance Range"}</p>
+              <p className="font-black text-orange-700">
+                {isFinalized || remainingMin === remainingMax 
+                  ? `₹${remainingMin.toLocaleString('en-IN')}` 
+                  : `₹${remainingMin.toLocaleString('en-IN')} — ₹${remainingMax.toLocaleString('en-IN')}`}
+              </p>
             </div>
           </div>
         )}
 
-        {!initialData && remainingAmount <= 0 && orderTotalMax > 0 && (
+        {!initialData && fullyPaid && (
           <div className="bg-green-50 border border-green-200 p-3 rounded-xl mb-4 text-center">
-            <p className="text-green-700 font-black">Enter the amount to be paid  </p>
+            <p className="text-green-700 font-black">Order is Fully Paid ✓</p>
           </div>
         )}
 
@@ -343,8 +356,8 @@ export default function AddPaymentModal({
                     <button
                       type="button"
                       onClick={() => {
-                        // Auto-fill amount with remaining balance when Full is selected
-                        const currentRemaining = remainingAmount > 0 ? remainingAmount : (balance.min > 0 ? balance.min : 0);
+                        // Auto-fill amount with minimum remaining balance to finalize
+                        const currentRemaining = remainingMin > 0 ? remainingMin : 0;
                         const autoAmount = currentRemaining > 0 ? String(currentRemaining) : "";
                         setFormData({ ...formData, type: "full", amount: autoAmount });
                       }}
@@ -358,9 +371,9 @@ export default function AddPaymentModal({
                     </button>
                   )}
                 </div>
-                {formData.type === 'full' && (remainingAmount > 0 || balance.min > 0) && (
+                {formData.type === 'full' && remainingMin > 0 && (
                   <p className="text-xs text-green-600 mt-2 font-bold">
-                    ✅ Will settle remaining ₹{((remainingAmount > 0 ? remainingAmount : balance.min) || 0).toLocaleString('en-IN')}
+                    ✅ Will settle minimum to finalize: ₹{remainingMin.toLocaleString('en-IN')}
                   </p>
                 )}
               </>

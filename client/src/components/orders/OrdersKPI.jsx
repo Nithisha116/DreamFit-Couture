@@ -1,9 +1,11 @@
 import React, { useMemo } from 'react';
 import { ShoppingBag, Clock, Scissors, Package, AlertTriangle, IndianRupee } from 'lucide-react';
 
-function KPICard({ icon: Icon, label, value, color, bg, border, sub }) {
+function KPICard({ icon: Icon, label, value, color, bg, border, sub, onClick }) {
   return (
-    <div style={{
+    <div 
+    onClick={onClick}
+    style={{
       background: '#fff',
       border: `1px solid ${border}`,
       borderRadius: 14,
@@ -15,9 +17,16 @@ function KPICard({ icon: Icon, label, value, color, bg, border, sub }) {
       minWidth: 0,
       boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
       transition: 'box-shadow 0.2s',
+      cursor: onClick ? 'pointer' : 'default'
     }}
-    onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.10)'}
-    onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)'}
+    onMouseEnter={e => {
+      e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.10)';
+      if (onClick) e.currentTarget.style.transform = 'translateY(-2px)';
+    }}
+    onMouseLeave={e => {
+      e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)';
+      if (onClick) e.currentTarget.style.transform = 'translateY(0)';
+    }}
     >
       <div style={{
         width: 44, height: 44, borderRadius: 12,
@@ -34,7 +43,7 @@ function KPICard({ icon: Icon, label, value, color, bg, border, sub }) {
   );
 }
 
-export default function OrdersKPI({ stats }) {
+export default function OrdersKPI({ stats, onCardClick }) {
   const displayStats = useMemo(() => {
     if (!stats) return { total: 0, pending: 0, inProgress: 0, ready: 0, overdue: 0, revenue: 0 };
     return {
@@ -51,11 +60,11 @@ export default function OrdersKPI({ stats }) {
 
   return (
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-      <KPICard icon={ShoppingBag} label="Total Orders"    value={displayStats.total}               color="#2563eb" bg="#eff6ff" border="#dbeafe" />
-      <KPICard icon={Clock}       label="Pending"          value={displayStats.pending}             color="#d97706" bg="#fffbeb" border="#fde68a" />
-      <KPICard icon={Scissors}    label="In Production"    value={displayStats.inProgress}          color="#7c3aed" bg="#f5f3ff" border="#ddd6fe" />
-      <KPICard icon={Package}     label="Ready to Deliver" value={displayStats.ready}               color="#059669" bg="#ecfdf5" border="#a7f3d0" />
-      <KPICard icon={AlertTriangle} label="Overdue"        value={displayStats.overdue}             color="#dc2626" bg="#fef2f2" border="#fecaca"
+      <KPICard icon={ShoppingBag} label="Total Orders"    value={displayStats.total}               color="#2563eb" bg="#eff6ff" border="#dbeafe" onClick={() => onCardClick?.('total')} />
+      <KPICard icon={Clock}       label="Pending Payment"          value={displayStats.pending}             color="#d97706" bg="#fffbeb" border="#fde68a" onClick={() => onCardClick?.('pending')} />
+      <KPICard icon={Scissors}    label="In Production"    value={displayStats.inProgress}          color="#7c3aed" bg="#f5f3ff" border="#ddd6fe" onClick={() => onCardClick?.('inProgress')} />
+      <KPICard icon={Package}     label="Ready to Deliver" value={displayStats.ready}               color="#059669" bg="#ecfdf5" border="#a7f3d0" onClick={() => onCardClick?.('ready')} />
+      <KPICard icon={AlertTriangle} label="Overdue"        value={displayStats.overdue}             color="#dc2626" bg="#fef2f2" border="#fecaca" onClick={() => onCardClick?.('overdue')}
         sub={displayStats.overdue > 0 ? 'Needs attention' : undefined} />
       <KPICard icon={IndianRupee} label="Revenue Collected" value={fmt(displayStats.revenue)}       color="#0891b2" bg="#ecfeff" border="#a5f3fc" />
     </div>

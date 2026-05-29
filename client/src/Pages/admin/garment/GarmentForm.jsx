@@ -188,11 +188,11 @@ export default function GarmentForm({
 
           // Auto-populate with catalog max price if not already set, or handle bounds reset
           if (!newFinalized) {
-            newFinalized = newMax;
+            newFinalized = "";
           } else if (newFinalized && (newFinalized < newMin || newFinalized > newMax)) {
-            newFinalized = newMax; // Auto-replace with new upper limit if out of new item range
+            newFinalized = ""; // Auto-replace with empty string if out of bounds to preserve range logic
             setTimeout(() => {
-              showToast.info(`Custom price ₹${prev.finalizedPrice} was outside the new garment range. Reset to new maximum ₹${newMax}.`);
+              showToast.info(`Custom price ₹${prev.finalizedPrice} was outside the new garment range. Reset to open range.`);
             }, 100);
           }
 
@@ -333,7 +333,7 @@ export default function GarmentForm({
           editingGarment.estimatedDelivery?.split("T")[0] || "",
         priority: editingGarment.priority || "normal",
         priceRange: editingGarment.priceRange || { min: "", max: "" },
-        finalizedPrice: (editingGarment.finalizedPrice !== undefined && editingGarment.finalizedPrice !== null && editingGarment.finalizedPrice !== "") ? editingGarment.finalizedPrice : (editingGarment.priceRange?.max || ""),
+        finalizedPrice: (editingGarment.finalizedPrice !== undefined && editingGarment.finalizedPrice !== null && editingGarment.finalizedPrice !== "" && editingGarment.finalizedPrice !== 0) ? editingGarment.finalizedPrice : "",
         fabricSource: editingGarment.fabricSource || "customer",
         selectedFabric: editingGarment.selectedFabric || "",
         fabricMeters: editingGarment.fabricMeters || "",
@@ -926,7 +926,9 @@ const renderDayContents = useCallback(
       formDataToSend.append("priceRange", JSON.stringify(formData.priceRange));
       formDataToSend.append("minPrice", String(formData.priceRange.min));
       formDataToSend.append("maxPrice", String(formData.priceRange.max));
-      formDataToSend.append("finalizedPrice", String(formData.priceRange.max));
+      if (formData.finalizedPrice !== undefined && formData.finalizedPrice !== null && formData.finalizedPrice !== "") {
+        formDataToSend.append("finalizedPrice", String(formData.finalizedPrice));
+      }
 
       // Add fabric data
       formDataToSend.append("fabricSource", formData.fabricSource);

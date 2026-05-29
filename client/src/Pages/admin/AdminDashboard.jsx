@@ -1550,9 +1550,6 @@ const displayPerformers = (isAdmin || isStoreKeeper)
           >
             <div className="flex justify-between items-start">
               <h3 className="text-slate-700 font-semibold text-sm">Total Orders</h3>
-              <div className="px-2 py-1 bg-green-50 text-green-600 text-[11px] font-bold rounded-full flex items-center gap-1">
-                +2.4%
-              </div>
             </div>
             
             <div>
@@ -1563,9 +1560,9 @@ const displayPerformers = (isAdmin || isStoreKeeper)
             
             {/* Bottom Badges */}
             <div className="flex flex-wrap gap-2 mt-auto">
-              <span className="bg-[#fef3c7] text-[#92400e] text-[10px] font-bold px-2 py-1 rounded-md">Pending: {orderStats?.pending || 0}</span>
-              <span className="bg-[#ccfbf1] text-[#0f766e] text-[10px] font-bold px-2 py-1 rounded-md">Users: 2</span>
-              <span className="bg-[#f3e8ff] text-[#6b21a8] text-[10px] font-bold px-2 py-1 rounded-md">Completed: {orderStats?.delivered || 0}</span>
+              <span className="bg-[#fef3c7] text-[#92400e] text-[10px] font-bold px-2 py-1 rounded-md">Pending: {orderStats?.paymentBreakdown?.find(p => p._id === 'pending')?.count || 0}</span>
+              <span className="bg-[#e0f2fe] text-[#0369a1] text-[10px] font-bold px-2 py-1 rounded-md">Partial: {orderStats?.paymentBreakdown?.find(p => p._id === 'partial')?.count || 0}</span>
+              <span className="bg-[#dcfce3] text-[#166534] text-[10px] font-bold px-2 py-1 rounded-md">Paid: {orderStats?.paymentBreakdown?.find(p => p._id === 'paid')?.count || 0}</span>
             </div>
           </div>
 

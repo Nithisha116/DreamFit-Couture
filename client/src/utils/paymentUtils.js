@@ -22,6 +22,7 @@ export function calculatePaymentSummary(order, garments = [], payments = []) {
   // 1. Calculate order total amount range
   let totalAmountMin = 0;
   let totalAmountMax = 0;
+  let finalizedAmount = Number(order.finalizedAmount) || 0;
   
   if (Array.isArray(garments) && garments.length > 0) {
     const activeGarments = garments.filter(g => g && g.isActive !== false);
@@ -33,9 +34,12 @@ export function calculatePaymentSummary(order, garments = [], payments = []) {
   } else if (order.priceSummary?.totalMin !== undefined) {
     totalAmountMin = Number(order.priceSummary.totalMin) || 0;
     totalAmountMax = Number(order.priceSummary.totalMax) || 0;
-  } else if (order.finalizedAmount !== undefined && order.finalizedAmount !== null && order.finalizedAmount !== "") {
-    totalAmountMin = Number(order.finalizedAmount) || 0;
-    totalAmountMax = Number(order.finalizedAmount) || 0;
+  }
+
+  // If we already know the finalized amount, then both min and max converge to it
+  if (finalizedAmount > 0) {
+    totalAmountMin = finalizedAmount;
+    totalAmountMax = finalizedAmount;
   }
 
   // 2. Aggregate payments list
@@ -68,26 +72,30 @@ export function calculatePaymentSummary(order, garments = [], payments = []) {
   let balanceDueMax = 0;
   let isFullyPaid = false;
 
-  if (totalAmountMin > 0) {
-    if (totalPaid >= totalAmountMin) {
-      balanceDueMin = 0;
-      balanceDueMax = 0;
-      isFullyPaid = true;
-    } else {
-      balanceDueMin = Math.max(0, totalAmountMin - totalPaid);
-      balanceDueMax = Math.max(0, totalAmountMax - totalPaid);
-      isFullyPaid = false;
-    }
+  // Auto-finalize logic: If totalPaid reaches or exceeds the minimum acceptable price,
+  // the order is fully settled at exactly what was paid. This overrides any legacy 
+  // finalizedAmount (e.g. if it was incorrectly set to maxPrice).
+  if (totalAmountMin > 0 && totalPaid >= totalAmountMin) {
+    finalizedAmount = totalPaid;
+    totalAmountMin = finalizedAmount;
+    totalAmountMax = finalizedAmount;
+  } else if (totalPaid < totalAmountMin) {
+    // Forcefully un-finalize if it drops below the minimum bound (e.g. adding new garments)
+    finalizedAmount = 0;
+  }
+
+  if (finalizedAmount > 0) {
+    balanceDueMin = Math.max(0, finalizedAmount - totalPaid);
+    balanceDueMax = balanceDueMin;
+    isFullyPaid = balanceDueMin <= 0;
+  } else if (totalAmountMin > 0) {
+    balanceDueMin = Math.max(0, totalAmountMin - totalPaid);
+    balanceDueMax = Math.max(0, totalAmountMax - totalPaid);
+    isFullyPaid = false;
   } else if (totalAmountMax > 0) {
-    if (totalPaid >= totalAmountMax) {
-      balanceDueMin = 0;
-      balanceDueMax = 0;
-      isFullyPaid = true;
-    } else {
-      balanceDueMin = 0;
-      balanceDueMax = Math.max(0, totalAmountMax - totalPaid);
-      isFullyPaid = false;
-    }
+    balanceDueMin = 0;
+    balanceDueMax = Math.max(0, totalAmountMax - totalPaid);
+    isFullyPaid = false;
   } else {
     balanceDueMin = 0;
     balanceDueMax = 0;
@@ -117,6 +125,7 @@ export function calculatePaymentSummary(order, garments = [], payments = []) {
     totalAmount: totalAmountMax, // Legacy fallback
     totalAmountMin,
     totalAmountMax,
+    finalizedAmount,
     totalPaid,
     balanceDue: balanceDueMax, // Legacy fallback
     balanceDueMin,
