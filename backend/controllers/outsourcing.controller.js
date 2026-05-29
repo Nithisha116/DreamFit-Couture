@@ -1,4 +1,5 @@
 import Outsourcing from "../models/Outsourcing.js";
+import mongoose from "mongoose";
 
 // @desc    Get all outsourcing records with search, filter, pagination
 // @route   GET /api/outsourcing
@@ -10,7 +11,8 @@ export const getAllOutsourcing = async (req, res) => {
       limit = 10,
       search = "",
       status,
-      employee,
+      employee, // legacy support
+      vendor, // new vendor filter
       sortBy = "createdAt",
       sortOrder = "desc",
     } = req.query;
@@ -40,9 +42,18 @@ export const getAllOutsourcing = async (req, res) => {
       query.status = status;
     }
 
-    // Filter by employee
+    // Filter by employee (legacy)
     if (employee && employee !== "all") {
       query.employeeName = employee;
+    }
+
+    // Filter by vendor or employee (fallback)
+    if (vendor && vendor !== "all") {
+      if (mongoose.Types.ObjectId.isValid(vendor)) {
+        query.vendor = vendor;
+      } else {
+        query.employeeName = vendor;
+      }
     }
 
     // Count total
@@ -57,7 +68,8 @@ export const getAllOutsourcing = async (req, res) => {
       .sort(sort)
       .skip((Number(page) - 1) * Number(limit))
       .limit(Number(limit))
-      .populate("createdBy", "name");
+      .populate("createdBy", "name")
+      .populate("vendor", "vendorName workSpecialization");
 
     // Get unique employees for filter dropdown
     const employees = await Outsourcing.distinct("employeeName");
@@ -96,6 +108,9 @@ export const createOutsourcing = async (req, res) => {
       notes,
       status,
       referenceImage,
+      vendor, // new field
+      order, // new field
+      product, // new field
     } = req.body;
 
     const outsourcing = new Outsourcing({
@@ -107,6 +122,9 @@ export const createOutsourcing = async (req, res) => {
       notes: notes || "",
       status: status || "Given",
       referenceImage: referenceImage || "",
+      vendor: vendor || undefined,
+      order: order || undefined,
+      product: product || undefined,
       createdBy: req.user?._id,
     });
 
@@ -150,6 +168,9 @@ export const updateOutsourcing = async (req, res) => {
       "notes",
       "status",
       "referenceImage",
+      "vendor",
+      "order",
+      "product",
     ];
 
     fieldsToUpdate.forEach((field) => {

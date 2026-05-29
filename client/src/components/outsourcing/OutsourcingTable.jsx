@@ -12,7 +12,7 @@ export default function OutsourcingTable({
   const columns = [
     "Order Number",
     "Product",
-    "Employee",
+    "Vendor Name",
     "Given Date",
     "Expected Date",
     "Notes",
@@ -124,7 +124,7 @@ export default function OutsourcingTable({
                   {item.productName || "-"}
                 </td>
                 <td className="py-4 px-5 text-slate-600">
-                  {item.employeeName || "-"}
+                  {item.vendor?.vendorName || item.employeeName || "-"}
                 </td>
                 <td className="py-4 px-5 text-slate-500 whitespace-nowrap">
                   {formatDate(item.givenDate)}

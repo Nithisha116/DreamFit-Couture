@@ -1523,9 +1523,6 @@ const displayPerformers = (isAdmin || isStoreKeeper)
               <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10">
                 <IndianRupee className="text-white w-5 h-5" />
               </div>
-              <div className="px-2 py-1 bg-[#10b981] text-white text-[11px] font-bold rounded-full shadow-sm flex items-center gap-1">
-                +2.08%
-              </div>
             </div>
             
             {/* Bottom Row: Title + Value */}

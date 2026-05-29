@@ -25,6 +25,7 @@ import transactionReducer from '../features/transaction/transactionSlice';
 import paymentReducer from "../features/payment/paymentSlice";
 import appointmentReducer from "../features/appointment/appointmentSlice";
 import outsourcingReducer from "../features/outsourcing/outsourcingSlice";
+import outsourcingVendorReducer from "../features/outsourcingVendor/outsourcingVendorSlice";
 import attendanceReducer from "../features/attendance/attendanceSlice";
 import workerReducer from "../features/worker/workerSlice";
 import leaveReducer from "../features/leave/leaveSlice";
@@ -58,6 +59,7 @@ notification: notificationReducer,
      payment: paymentReducer,
   appointment: appointmentReducer,
   outsourcing: outsourcingReducer,
+  outsourcingVendor: outsourcingVendorReducer,
   salary: salaryReducer,
   invoice: invoiceReducer,
 });

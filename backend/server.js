@@ -531,6 +531,7 @@ import appointmentRoutes from "./routes/appointment.routes.js";
 
 // OUTSOURCING ROUTES
 import outsourcingRoutes from "./routes/outsourcing.routes.js";
+import outsourcingVendorRoutes from "./routes/outsourcingVendor.routes.js";
 import salaryRoutes from "./routes/salary.routes.js";
 import workerRoutes from "./routes/worker.routes.js";
 import workflowRoutes from "./routes/workflow.routes.js";
@@ -884,6 +885,7 @@ app.use("/api/workflow", workflowRoutes);
 // 🚚 OUTSOURCING MANAGEMENT - COMPLETE ✅
 // ====================================================
 app.use("/api/outsourcing", outsourcingRoutes);
+app.use("/api/outsourcing-vendors", outsourcingVendorRoutes);
 
 // ====================================================
 // 💳 BILLING & INVOICING MANAGEMENT - COMPLETE ✅

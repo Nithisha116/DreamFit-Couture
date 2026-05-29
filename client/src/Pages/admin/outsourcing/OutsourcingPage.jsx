@@ -10,16 +10,18 @@ import {
   createOutsourcing,
   reset,
 } from "../../../features/outsourcing/outsourcingSlice";
+import { fetchVendors } from "../../../features/outsourcingVendor/outsourcingVendorSlice";
 
-const STATUS_OPTIONS = ["all", "Given", "In Progress", "Completed", "Pending"];
+const STATUS_OPTIONS = ["all", "Given", "In Progress", "Received", "Completed", "Pending"];
 
 export default function OutsourcingPage() {
   const dispatch = useDispatch();
   const { outsourcings, employees, pagination, isLoading, isError, isSuccess, message } =
     useSelector((state) => state.outsourcing);
+  const { vendors } = useSelector((state) => state.outsourcingVendor);
 
   const [statusFilter, setStatusFilter] = useState("all");
-  const [employeeFilter, setEmployeeFilter] = useState("all");
+  const [vendorFilter, setVendorFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -42,14 +44,15 @@ export default function OutsourcingPage() {
     };
     if (debouncedSearch) params.search = debouncedSearch;
     if (statusFilter !== "all") params.status = statusFilter;
-    if (employeeFilter !== "all") params.employee = employeeFilter;
+    if (vendorFilter !== "all") params.vendor = vendorFilter;
 
     dispatch(fetchOutsourcing(params));
-  }, [dispatch, pagination.page, pagination.limit, debouncedSearch, statusFilter, employeeFilter]);
+  }, [dispatch, pagination.page, pagination.limit, debouncedSearch, statusFilter, vendorFilter]);
 
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    dispatch(fetchVendors({ status: "Active" }));
+  }, [loadData, dispatch]);
 
   // Toast on error
   useEffect(() => {
@@ -97,7 +100,7 @@ export default function OutsourcingPage() {
         limit: pagination.limit,
         search: debouncedSearch,
         status: statusFilter !== "all" ? statusFilter : undefined,
-        employee: employeeFilter !== "all" ? employeeFilter : undefined,
+        vendor: vendorFilter !== "all" ? vendorFilter : undefined,
       })
     );
   };
@@ -110,7 +113,7 @@ export default function OutsourcingPage() {
         limit: newLimit,
         search: debouncedSearch,
         status: statusFilter !== "all" ? statusFilter : undefined,
-        employee: employeeFilter !== "all" ? employeeFilter : undefined,
+        vendor: vendorFilter !== "all" ? vendorFilter : undefined,
       })
     );
   };
@@ -151,18 +154,29 @@ export default function OutsourcingPage() {
             ))}
           </select>
 
-          {/* Employee Filter */}
+          {/* Vendor Filter */}
           <select
-            value={employeeFilter}
-            onChange={(e) => setEmployeeFilter(e.target.value)}
+            value={vendorFilter}
+            onChange={(e) => setVendorFilter(e.target.value)}
             className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition-all min-w-[140px]"
           >
-            <option value="all">All Employees</option>
-            {employees.map((emp) => (
-              <option key={emp} value={emp}>
-                {emp}
-              </option>
-            ))}
+            <option value="all">All Vendors / Employees</option>
+            <optgroup label="Vendors">
+              {vendors?.map((v) => (
+                <option key={v._id} value={v._id}>
+                  {v.vendorName}
+                </option>
+              ))}
+            </optgroup>
+            {employees && employees.length > 0 && (
+              <optgroup label="Legacy Employees">
+                {employees.map((emp) => (
+                  <option key={emp} value={emp}>
+                    {emp}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 
@@ -200,7 +214,7 @@ export default function OutsourcingPage() {
         }}
         onSubmit={handleModalSubmit}
         editData={editingItem}
-        employees={employees}
+        vendors={vendors}
         isSubmitting={isSubmitting}
       />
     </div>
