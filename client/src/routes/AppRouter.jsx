@@ -15,7 +15,8 @@
 // import Orders from "../Pages/admin/order/Orders";
 // import Customer from "../Pages/admin/Customers/Customers";
 // import AddCustomer from "../Pages/admin/Customers/AddCustomer";
-// import CustomerDetails from "../Pages/admin/Customers/CustomerDetails";
+// import CustomerDetails from "./Pages/admin/customers/CustomerDetails";
+// import CustomerSizePage from "./Pages/admin/customer-size/CustomerSizePage";
 // import Staff from "../Pages/admin/staff/Staff";
 // import StaffDetails from "../Pages/admin/staff/StaffDetails";
 // import AddStaff from "../Pages/admin/staff/AddStaff";
@@ -504,6 +505,9 @@ const InvoiceList = lazy(() => import("../Pages/admin/billing/InvoiceList"));
 const CreateInvoice = lazy(() => import("../Pages/admin/billing/CreateInvoice"));
 const InvoiceDetails = lazy(() => import("../Pages/admin/billing/InvoiceDetails"));
 
+// 🚀 LAZY LOADING - CUSTOMER SIZE PROFILES
+const CustomerSizePage = lazy(() => import("../Pages/admin/customer-size/CustomerSizePage"));
+
 // 🚀 LAZY LOADING - ATTENDANCE
 const AttendancePage = lazy(() =>
   import("../Pages/admin/attendance/AttendancePage")
@@ -713,6 +717,7 @@ export default function AppRouter() {
             {/* Customers */}
             <Route path="customers" element={<Customer />} />
             <Route path="customers/:id" element={<CustomerDetails />} />
+            <Route path="customer-size/:customerId" element={<CustomerSizePage />} />
             <Route path="add-customer" element={<AddCustomer />} />
             
             {/* Staff Management */}

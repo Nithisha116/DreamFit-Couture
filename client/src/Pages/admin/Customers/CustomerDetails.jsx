@@ -2753,13 +2753,16 @@ export default function CustomerDetails() {
                     {customerTemplates?.length === 0 ? (
                       <div className="text-center py-8 sm:py-12 bg-slate-50 rounded-xl px-4">
                         <Ruler size={40} className="text-slate-300 mx-auto mb-3 sm:mb-4" />
-                        <p className="text-base sm:text-lg font-black text-slate-400">No Saved Templates</p>
+                        <p className="text-base sm:text-lg font-black text-slate-400">No Saved Profiles</p>
                         <p className="text-xs sm:text-sm text-slate-300 mt-2">
-                          This customer hasn't saved any measurement templates yet.
+                          This customer hasn't saved any measurement profiles yet.
                         </p>
-                        <p className="text-[10px] sm:text-xs text-slate-400 mt-4">
-                          Templates can be saved when creating garments using the "Save as Template" button.
-                        </p>
+                        <button
+                          onClick={handleViewMeasurements}
+                          className="mt-4 bg-purple-100 text-purple-700 hover:bg-purple-200 px-6 py-2.5 rounded-xl font-bold transition-colors"
+                        >
+                          Manage Measurement Profiles
+                        </button>
                       </div>
                     ) : (
                       <>
