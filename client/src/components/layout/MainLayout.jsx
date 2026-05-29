@@ -534,7 +534,8 @@ import {
   Flag, Target, TrendingUp, UserPlus, UserCheck, UserX,
   HardHat, ClipboardList, Wallet, IndianRupee, Download, Filter,
   PieChart, Activity, DollarSign, Receipt, Banknote, PiggyBank,
-  Menu, ChevronLeft, Gauge, CalendarRange, PackageSearch, Handshake
+  Menu, ChevronLeft, Gauge, CalendarRange, PackageSearch, Handshake,
+  CalendarPlus, PackagePlus
 } from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../../features/auth/authSlice";
@@ -798,7 +799,7 @@ export default function MainLayout() {
   }, [sidebarSearchNorm]);
 
   return (
-    <div className="flex h-screen bg-[#F1F5F9] overflow-hidden font-sans relative">
+    <div className="flex h-screen bg-[#eff6ff] overflow-hidden font-sans relative">
       {/* ✅ Mobile Header - Only visible on mobile */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-20 shadow-sm">
         <button
@@ -841,7 +842,7 @@ export default function MainLayout() {
         className={`
          fixed lg:relative top-0 bottom-0 z-40
          ${desktopSidebarOpen ? "w-72" : "lg:w-20"}
-         bg-[#0F172A] text-slate-300 flex flex-col shadow-2xl
+         bg-white text-slate-600 border-r border-slate-100 flex flex-col shadow-2xl
          transition-all duration-300 ease-in-out
          ${
           sidebarOpen
@@ -853,7 +854,7 @@ export default function MainLayout() {
         `}
       >
         {/* Sidebar Header */}
-        <div className={`border-b border-slate-800 bg-[#0F172A] flex items-center transition-all duration-300 ${
+        <div className={`border-b border-slate-100 bg-white flex items-center transition-all duration-300 ${
           !desktopSidebarOpen && isDesktop ? 'justify-center px-0 py-4' : 'justify-between px-6 py-5'
         }`}>
           <div className={`flex items-center gap-4 transition-all duration-200 ${
@@ -865,10 +866,10 @@ export default function MainLayout() {
               className="w-12 h-12 object-contain rounded-lg"
             />
             <div className="flex flex-col">
-              <h2 className="text-xl font-black text-white tracking-wide uppercase leading-tight">
+              <h2 className="text-xl font-black text-slate-800 tracking-wide uppercase leading-tight">
                 Dreamfit
               </h2>
-              <h2 className="text-lg font-black text-blue-500 tracking-wide uppercase italic leading-tight -mt-1">
+              <h2 className="text-lg font-black text-indigo-600 tracking-wide uppercase italic leading-tight -mt-1">
                 Couture
               </h2>
             </div>
@@ -894,7 +895,7 @@ export default function MainLayout() {
         </div>
 
         {/* User Profile Section */}
-        <div className={`py-5 flex items-center border-b border-slate-800 bg-[#1e293b]/30 transition-all duration-300 ${
+        <div className={`py-5 flex items-center border-b border-slate-100 bg-slate-50/50 transition-all duration-300 ${
           !desktopSidebarOpen && isDesktop ? 'justify-center px-0' : 'justify-between px-6'
         }`}>
           <div className="flex items-center gap-3">
@@ -903,7 +904,7 @@ export default function MainLayout() {
             </div>
             {(desktopSidebarOpen || !isDesktop) && (
               <div className="flex flex-col min-w-0">
-                <span className="text-sm font-bold text-white truncate w-24 leading-none mb-1">
+                <span className="text-sm font-bold text-slate-800 truncate w-24 leading-none mb-1">
                   {user?.name || "User"}
                 </span>
                 <div className="flex items-center gap-1">
@@ -922,20 +923,20 @@ export default function MainLayout() {
           !desktopSidebarOpen && isDesktop ? 'hidden' : 'block'
         }`}>
           <div className="relative group">
-            <Search className="absolute left-3 top-3 text-slate-500 group-focus-within:text-blue-400" size={18} />
+            <Search className="absolute left-3 top-3 text-slate-400 group-focus-within:text-indigo-500" size={18} />
             <input
               type="text"
               placeholder="Search menu..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               autoComplete="off"
-              className="w-full bg-[#1e293b]/50 border border-slate-700 rounded-xl py-2.5 pl-10 pr-10 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all text-white placeholder:text-slate-500"
+              className="w-full bg-slate-100 border border-transparent rounded-xl py-2.5 pl-10 pr-10 text-sm focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all text-slate-800 placeholder:text-slate-400"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-3 text-slate-500 hover:text-white transition-colors"
+                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition-colors"
                 aria-label="Clear menu search"
               >
                 <X size={16} />
@@ -978,10 +979,10 @@ export default function MainLayout() {
                        if (item.id === 'ordersOutsourcing') setOrdersOutsourcingOpen(!ordersOutsourcingOpen);
                        if (item.id === 'employeeManagement') setEmployeeManagementOpen(!employeeManagementOpen);
                       }}
-                      className={`w-full flex justify-between items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm cursor-pointer ${
+                      className={`w-full flex justify-between items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-semibold text-sm cursor-pointer ${
                         isItemActive
-                          ? 'bg-blue-600 text-white shadow-lg'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                          : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100/80'
                       } ${!desktopSidebarOpen && isDesktop ? 'justify-center px-2' : ''}`}
                       title={!desktopSidebarOpen && isDesktop ? item.label : ""}
                     >
@@ -1181,10 +1182,10 @@ export default function MainLayout() {
                 ) : (
                   <Link 
                     to={item.path} 
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm ${
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-semibold text-sm ${
                       isActive(item.path) 
-                        ? 'bg-blue-600 text-white shadow-lg' 
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' 
+                        : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100/80'
                     } ${!desktopSidebarOpen && isDesktop ? 'justify-center px-2' : ''}`}
                     onClick={closeSidebar}
                     title={!desktopSidebarOpen && isDesktop ? item.label : ""}
@@ -1208,7 +1209,7 @@ export default function MainLayout() {
         </nav>
 
         {/* Footer */}
-        <div className={`px-4 py-3 border-t border-slate-800 bg-[#0F172A] transition-all duration-300 ${
+        <div className={`px-4 py-3 border-t border-slate-100 bg-white transition-all duration-300 ${
           !desktopSidebarOpen && isDesktop ? 'hidden' : 'block'
         }`}>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-slate-500 gap-2">
@@ -1218,12 +1219,12 @@ export default function MainLayout() {
         </div>
 
         {/* Logout Button */}
-        <div className={`p-4 border-t border-slate-800 bg-[#0F172A] transition-all duration-300 ${
+        <div className={`p-4 border-t border-slate-100 bg-slate-50/50 transition-all duration-300 ${
           !desktopSidebarOpen && isDesktop ? 'px-2' : 'p-4'
         }`}>
           <button 
             onClick={handleLogout} 
-            className={`flex items-center gap-3 text-slate-500 hover:text-red-400 w-full p-3 rounded-xl transition-all hover:bg-red-400/10 font-bold ${
+            className={`flex items-center gap-3 text-slate-500 hover:text-red-500 w-full p-3 rounded-xl transition-all hover:bg-red-50 font-bold ${
               !desktopSidebarOpen && isDesktop ? 'justify-center' : ''
             }`}
             title={!desktopSidebarOpen && isDesktop ? "Log Out" : ""}
@@ -1241,64 +1242,62 @@ export default function MainLayout() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
         {/* ✅ Desktop Header - Bell Icon on RIGHT side */}
-        <header className="hidden md:flex h-16 bg-white border-b border-slate-200 px-8 items-center justify-between shadow-sm sticky top-0 z-10 flex-shrink-0">
+        <header className="hidden md:flex h-16 bg-white/80 backdrop-blur-md border-b border-slate-100 px-8 items-center justify-between sticky top-0 z-10 flex-shrink-0">
           <div className={`flex items-center gap-3 transition-all duration-300 ${!desktopSidebarOpen ? 'ml-12' : ''}`}>
             <div className="w-2.5 h-2.5 bg-blue-600 rounded-full"></div>
-            <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">
-              {user?.role?.replace('_', ' ')} Control Panel
+            <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest">
+              {user?.role?.replace('_', ' ')} CONTROL PANEL
             </h2>
           </div>
           
-          {/* ✅ Right side - Notification Bell and other icons */}
-          <div className="flex items-center gap-4">
-            {/* Notification Bell */}
-            <NotificationBell />
+          {/* ✅ Right side - Quick Actions, Notification Bell, Refresh, Branch, Help, Date */}
+          <div className="flex items-center gap-3 lg:gap-5">
+            {/* Quick Actions (Moved from Dashboard) */}
+            <div className="hidden lg:flex items-center gap-2">
+              <Link to={`/${rolePath}/add-customer`} className="flex items-center justify-center w-9 h-9 bg-white hover:bg-slate-50 hover:-translate-y-0.5 rounded-lg text-slate-500 hover:text-blue-600 transition-all border border-slate-200 shadow-sm hover:shadow-md relative group" title="Add Customer">
+                <UserPlus size={16} />
+              </Link>
+              <Link to={`/${rolePath}/orders/new`} className="flex items-center justify-center w-9 h-9 bg-white hover:bg-slate-50 hover:-translate-y-0.5 rounded-lg text-slate-500 hover:text-blue-600 transition-all border border-slate-200 shadow-sm hover:shadow-md relative group" title="New Order">
+                <ShoppingCart size={16} />
+              </Link>
+              <Link to={`/${rolePath}/appointments`} className="flex items-center justify-center w-9 h-9 bg-white hover:bg-slate-50 hover:-translate-y-0.5 rounded-lg text-slate-500 hover:text-blue-600 transition-all border border-slate-200 shadow-sm hover:shadow-md relative group" title="Add Appointment">
+                <CalendarPlus size={16} />
+              </Link>
+              <Link to={`/${rolePath}/products/new`} className="flex items-center justify-center w-9 h-9 bg-white hover:bg-slate-50 hover:-translate-y-0.5 rounded-lg text-slate-500 hover:text-blue-600 transition-all border border-slate-200 shadow-sm hover:shadow-md relative group" title="Add Product">
+                <PackagePlus size={16} />
+              </Link>
+            </div>
+            
+            {/* Divider */}
+            <div className="w-px h-5 bg-slate-200 hidden lg:block"></div>
 
-            {/* Boutique / Branch selector */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setBranchOpen((v) => !v)}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all"
-                aria-haspopup="menu"
-                aria-expanded={branchOpen}
-              >
-                <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-                  Branch
-                </span>
-                <span className="text-sm font-black text-slate-800">
-                  Urapakkam
-                </span>
-                <ChevronDown size={16} className="text-slate-400" />
+            <div className="flex items-center gap-3">
+              {/* Notification Bell */}
+              <NotificationBell />
+
+              {/* Refresh Global Button */}
+              <button className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition-colors" title="Refresh">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-refresh-cw"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
               </button>
-              {branchOpen && (
-                <div
-                  className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-20"
-                  role="menu"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setBranchOpen(false)}
-                    className="w-full text-left px-3 py-2 rounded-xl bg-blue-50 text-blue-700 font-bold text-sm flex items-center justify-between"
-                    role="menuitem"
-                  >
-                    Urapakkam
-                    <span className="text-xs font-black">✓</span>
-                  </button>
-                </div>
-              )}
+            </div>
+            
+            {/* Divider */}
+            <div className="w-px h-5 bg-slate-200 hidden sm:block"></div>
+
+            {/* Branch Selector */}
+            <div className="hidden lg:flex items-center gap-2 border border-slate-200 rounded-full px-4 py-1.5 cursor-pointer hover:bg-slate-50 transition-colors">
+              <span className="text-[10px] font-black text-slate-400">BRANCH</span>
+              <span className="text-xs font-bold text-slate-800">Urapakkam</span>
+              <ChevronDown size={14} className="text-slate-400" />
             </div>
             
             {/* Help Button */}
-            <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-600">
-              <HelpCircle size={18} />
+            <button className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition-colors border border-slate-200 hidden sm:flex items-center justify-center">
+              <HelpCircle size={16} />
             </button>
             
-            {/* Divider */}
-            <div className="w-px h-6 bg-slate-200"></div>
-            
             {/* Date */}
-            <div className="text-[11px] font-black text-slate-400 bg-slate-50 px-4 py-2 rounded-lg border border-slate-100 uppercase">
+            <div className="text-[11px] font-bold text-slate-500 bg-slate-50 px-4 py-1.5 rounded-full border border-slate-200 uppercase tracking-wide">
               {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
             </div>
           </div>

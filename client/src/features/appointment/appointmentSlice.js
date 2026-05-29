@@ -14,7 +14,7 @@ export const fetchAppointments = createAsyncThunk(
       const { auth } = thunkAPI.getState();
       const config = {
         headers: {
-          Authorization: `Bearer ${auth.user.token}`,
+          Authorization: `Bearer ${auth.token}`,
         },
         params: filters, // passed filters (start, end, status, etc)
       };
@@ -37,7 +37,7 @@ export const fetchUpcomingAppointments = createAsyncThunk(
       const { auth } = thunkAPI.getState();
       const config = {
         headers: {
-          Authorization: `Bearer ${auth.user.token}`,
+          Authorization: `Bearer ${auth.token}`,
         },
       };
       const response = await axios.get(`${getApiUrl()}/api/appointments/dashboard/upcoming`, config);
@@ -59,7 +59,7 @@ export const createAppointment = createAsyncThunk(
       const { auth } = thunkAPI.getState();
       const config = {
         headers: {
-          Authorization: `Bearer ${auth.user.token}`,
+          Authorization: `Bearer ${auth.token}`,
           "Content-Type": "application/json",
         },
       };
@@ -82,7 +82,7 @@ export const updateAppointment = createAsyncThunk(
       const { auth } = thunkAPI.getState();
       const config = {
         headers: {
-          Authorization: `Bearer ${auth.user.token}`,
+          Authorization: `Bearer ${auth.token}`,
           "Content-Type": "application/json",
         },
       };
@@ -109,7 +109,7 @@ export const deleteAppointment = createAsyncThunk(
       const { auth } = thunkAPI.getState();
       const config = {
         headers: {
-          Authorization: `Bearer ${auth.user.token}`,
+          Authorization: `Bearer ${auth.token}`,
         },
       };
       await axios.delete(`${getApiUrl()}/api/appointments/${id}`, config);

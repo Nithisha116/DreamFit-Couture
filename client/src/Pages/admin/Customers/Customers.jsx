@@ -22,7 +22,6 @@ import showToast from "../../../utils/toast";
 
 export default function Customers() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchType, setSearchType] = useState("phone");
   const [showPaymentInfo, setShowPaymentInfo] = useState({});
   const [customerOrders, setCustomerOrders] = useState({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -102,38 +101,22 @@ export default function Customers() {
     setCurrentPage(1);
   }, [searchTerm, customers]);
 
-  // 🚀 OPTIMIZED: Debounced Search - Prevents API calls on every keystroke
+  // 🚀 OPTIMIZED: Debounced Search - Removed API calls for search since all customers are loaded
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      if (searchTerm && searchTerm.length >= (searchType === "phone" ? 3 : 1)) {
-        if (searchType === "phone") {
-          const cleanPhone = searchTerm.replace(/\D/g, '');
-          if (cleanPhone.length === 10) {
-            dispatch(searchCustomerByPhone(cleanPhone));
-          }
-        } else {
-          dispatch(searchCustomerByCustomerId(searchTerm.trim()));
-        }
-      } else if (!searchTerm) {
+      if (!searchTerm) {
         dispatch(clearCustomerState());
         dispatch(fetchCustomersWithPayments());
       }
-    }, 500); // 500ms delay before searching
+    }, 500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, searchType, dispatch]);
+  }, [searchTerm, dispatch]);
 
-  // 🚀 OPTIMIZED: Handle input change - no immediate search
+  // 🚀 OPTIMIZED: Handle input change
   const handleInputChange = useCallback((e) => {
-    const value = e.target.value;
-    
-    if (searchType === "phone") {
-      const cleaned = value.replace(/\D/g, '').slice(0, 10);
-      setSearchTerm(cleaned);
-    } else {
-      setSearchTerm(value);
-    }
-  }, [searchType]);
+    setSearchTerm(e.target.value);
+  }, []);
 
   // 🚀 OPTIMIZED: Search handler removed - now using debounced effect
   const handleSearch = useCallback((e) => {
@@ -141,17 +124,23 @@ export default function Customers() {
     // Search is now handled by debounced useEffect
   }, []);
 
-  // 🚀 OPTIMIZED: Filter customers using useMemo
+  // 🚀 OPTIMIZED: Filter customers using useMemo by Name, Phone, and ID
   const filteredCustomers = useMemo(() => {
     if (searchTerm && customers?.length > 0) {
-      return customers.filter(c => 
-        searchType === "phone" 
-          ? c.phone?.includes(searchTerm)
-          : c.customerId?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const lowerSearch = searchTerm.toLowerCase();
+      return customers.filter(c => {
+        const fullName = `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase();
+        return (
+          c.phone?.includes(searchTerm) ||
+          c.customerId?.toLowerCase().includes(lowerSearch) ||
+          fullName.includes(lowerSearch) ||
+          c.firstName?.toLowerCase().includes(lowerSearch) ||
+          c.lastName?.toLowerCase().includes(lowerSearch)
+        );
+      });
     }
     return customers;
-  }, [customers, searchTerm, searchType]);
+  }, [customers, searchTerm]);
 
   // 🚀 OPTIMIZED: Pagination calculations using useMemo
   const totalItems = useMemo(() => filteredCustomers?.length || 0, [filteredCustomers]);
@@ -374,47 +363,16 @@ export default function Customers() {
             </div>
 
             <div className="space-y-3 sm:space-y-4 lg:space-y-0 lg:flex lg:items-center lg:gap-3">
-              {/* Search Type Toggle */}
-              <div className="flex bg-slate-100 p-1 rounded-xl sm:rounded-2xl w-full lg:w-auto">
-                <button
-                  onClick={() => setSearchType("phone")}
-                  className={`flex-1 lg:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition-all ${
-                    searchType === "phone" 
-                      ? "bg-white text-blue-600 shadow-sm" 
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <Phone size={14} className="inline mr-1 sm:mr-1.5" />
-                  <span className="hidden xs:inline">Phone</span>
-                </button>
-                <button
-                  onClick={() => setSearchType("id")}
-                  className={`flex-1 lg:flex-none px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition-all ${
-                    searchType === "id" 
-                      ? "bg-white text-blue-600 shadow-sm" 
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <Hash size={14} className="inline mr-1 sm:mr-1.5" />
-                  <span className="hidden xs:inline">ID</span>
-                </button>
-              </div>
-
               {/* Search Form */}
               <form onSubmit={handleSearch} className="flex gap-2 w-full lg:w-auto">
                 <div className="relative flex-1 lg:w-80">
-                  {searchType === "phone" ? (
-                    <Phone className="absolute left-3 sm:left-4 top-2.5 sm:top-3.5 text-slate-400" size={16} />
-                  ) : (
-                    <Hash className="absolute left-3 sm:left-4 top-2.5 sm:top-3.5 text-slate-400" size={16} />
-                  )}
+                  <Search className="absolute left-3 sm:left-4 top-2.5 sm:top-3.5 text-slate-400" size={16} />
                   <input 
                     type="text" 
-                    placeholder={searchType === "phone" ? "Phone number..." : "Customer ID..."}
+                    placeholder="Search by Name, Phone or ID..."
                     className="w-full pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm sm:text-base"
                     value={searchTerm} 
                     onChange={handleInputChange}
-                    maxLength={searchType === "phone" ? 10 : undefined}
                   />
                 </div>
                 <button 
@@ -470,11 +428,7 @@ export default function Customers() {
         {searchTerm && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
             <div className="flex items-center gap-2">
-              {searchType === "phone" ? (
-                <Phone size={16} className="text-blue-600" />
-              ) : (
-                <Hash size={16} className="text-blue-600" />
-              )}
+              <Search size={16} className="text-blue-600" />
               <span className="text-xs sm:text-sm font-medium text-slate-700">
                 Search results for <span className="font-black text-blue-600">{searchTerm}</span>
               </span>
@@ -760,7 +714,7 @@ export default function Customers() {
               <p className="text-lg sm:text-xl font-black text-slate-400">No Customers Found</p>
               <p className="text-sm sm:text-base text-slate-300 mt-2 max-w-sm mx-auto">
                 {searchTerm 
-                  ? `No customer with ${searchType === "phone" ? "phone" : "ID"} ${searchTerm}` 
+                  ? `No customer matches "${searchTerm}"` 
                   : 'Register your first customer to get started'}
               </p>
               <button
