@@ -17,7 +17,20 @@ export default function AssignedTaskCards({ jobs, basePath }) {
     <div className="space-y-4">
       {jobs.map((job) => {
         const activeKey = job.currentStageKey;
-        const assignee = job.stages?.[activeKey]?.assignedTo;
+        // Extract all unique assignees across all stages
+        const allAssignees = Object.values(job.stages || {})
+          .map((s) => s.assignedTo)
+          .filter((a) => a && a.name);
+          
+        const uniqueAssignees = [];
+        const seenNames = new Set();
+        for (const a of allAssignees) {
+          if (!seenNames.has(a.name)) {
+            seenNames.add(a.name);
+            uniqueAssignees.push(a);
+          }
+        }
+
         const dueLabel = job.dueDate
           ? format(new Date(job.dueDate), "dd MMM yyyy")
           : "—";
@@ -43,16 +56,21 @@ export default function AssignedTaskCards({ jobs, basePath }) {
                   )}
                 </div>
                 <h3 className="text-base font-bold text-slate-900">{job.garmentName}</h3>
-                <p className="text-xs text-slate-600">
+                <p className="text-xs text-slate-600 mb-2">
                   {job.customerName}
-                  {assignee?.name && (
-                    <>
-                      {" "}
-                      · <span className="font-medium text-slate-800">{assignee.name}</span>
-                      <span className="text-slate-400"> ({assignee.role})</span>
-                    </>
-                  )}
                 </p>
+                
+                {uniqueAssignees.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-1 mb-2">
+                    {uniqueAssignees.map((assignee, idx) => (
+                      <span key={idx} className="inline-flex items-center text-[10px] bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
+                        <span className="font-semibold text-slate-700">{assignee.name}</span>
+                        <span className="text-slate-400 ml-1 capitalize">({assignee.role})</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
                 <p className="text-[11px] text-slate-500 mt-1">Due {dueLabel}</p>
               </div>
                 <div className="flex flex-col sm:flex-row gap-2 shrink-0">

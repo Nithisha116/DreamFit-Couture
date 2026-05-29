@@ -15,6 +15,8 @@ import {
   filterJobsForPipeline,
   sortJobsForPipeline,
 } from "../../utils/deliveryPipelineUtils";
+import { filterAssignedJobs } from "../../workflow/workflowSelectors";
+import { useNavigate } from "react-router-dom";
 
 function StageNode({ stage, isLast }) {
   const { state, label, shortLabel } = stage;
@@ -60,12 +62,20 @@ function StageNode({ stage, isLast }) {
 }
 
 function PipelineRow({ model, basePath }) {
+  const navigate = useNavigate();
+  const targetUrl = model.workflowTrackingId
+    ? `${basePath}/tasks/job/${model.workflowTrackingId}`
+    : `${basePath}/works/${model.workId}`;
+
   const deliveryLabel = model.deliveryDate
     ? format(new Date(model.deliveryDate), "dd MMM yyyy")
     : "—";
 
   return (
-    <div className="group rounded-xl border border-slate-100 bg-gradient-to-br from-white via-white to-slate-50/80 p-4 shadow-sm transition-all duration-300 hover:border-violet-100 hover:shadow-md">
+    <div 
+      onClick={() => navigate(targetUrl)}
+      className="group cursor-pointer rounded-xl border border-slate-100 bg-gradient-to-br from-white via-white to-slate-50/80 p-4 shadow-sm transition-all duration-300 hover:border-violet-100 hover:shadow-md"
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -142,11 +152,13 @@ export default function DeliveryPipelineSection({
   const { jobs } = useWorkflowJobs();
 
   const pipelineItems = useMemo(() => {
-    const openJobs = jobs.filter((j) => j.lifecycleStatus !== "completed");
-    const filtered = filterJobsForPipeline(openJobs.length ? openJobs : jobs, daysAhead);
+    // ONLY show assigned tasks
+    const assignedJobs = filterAssignedJobs(jobs);
+    // Remove maxItems slicing entirely or set a high limit so scrolling works
+    const filtered = filterJobsForPipeline(assignedJobs, daysAhead);
     const sorted = sortJobsForPipeline(filtered);
-    return sorted.slice(0, maxItems).map((job) => buildPipelineViewModelFromJob(job));
-  }, [jobs, maxItems, daysAhead]);
+    return sorted.map((job) => buildPipelineViewModelFromJob(job));
+  }, [jobs, daysAhead]);
 
   const overdueCount = pipelineItems.filter((p) => p.overdue).length;
 
@@ -181,11 +193,13 @@ export default function DeliveryPipelineSection({
           </div>
         </div>
 
-        <div className="space-y-3 p-4 sm:p-5 lg:p-6">
+        <div className="p-4 sm:p-5 lg:p-6">
           {pipelineItems.length > 0 ? (
-            pipelineItems.map((model) => (
-              <PipelineRow key={model.workId} model={model} basePath={basePath} />
-            ))
+            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-slate-50 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-200 hover:[&::-webkit-scrollbar-thumb]:bg-slate-300 transition-colors">
+              {pipelineItems.map((model) => (
+                <PipelineRow key={model.workId} model={model} basePath={basePath} />
+              ))}
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-12 text-center">
               <Package className="mb-3 h-10 w-10 text-slate-300" />
