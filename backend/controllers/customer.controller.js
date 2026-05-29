@@ -2593,3 +2593,180 @@ export const recalculateCustomerTotals = async (req, res) => {
     });
   }
 };
+// ============================================
+// 📊 CRM DATA — Dynamic from real DB
+// GET /api/customers/crm
+// ============================================
+export const getCrmData = async (req, res) => {
+  try {
+    console.log("📊 Fetching CRM data from real DB...");
+
+    // 1. Fetch all customers
+    const customers = await Customer.find().lean();
+
+    if (!customers || customers.length === 0) {
+      return res.status(200).json({ success: true, customers: [] });
+    }
+
+    const customerIds = customers.map((c) => c._id);
+
+    // 2. Fetch all active orders for these customers in one query
+    const orders = await Order.find({
+      customer: { $in: customerIds },
+      isActive: true,
+      status: { $ne: "cancelled" },
+    })
+      .select("customer orderDate deliveryDate priceSummary status createdAt")
+      .lean();
+
+    // 3. Build per-customer order stats map
+    const orderMap = {};
+    orders.forEach((o) => {
+      const cid = o.customer.toString();
+      if (!orderMap[cid]) {
+        orderMap[cid] = {
+          count: 0,
+          totalSpend: 0,
+          lastOrderDate: null,
+        };
+      }
+      orderMap[cid].count += 1;
+      orderMap[cid].totalSpend += o.priceSummary?.totalMax || 0;
+
+      // Track most recent order date
+      const oDate = o.orderDate || o.createdAt;
+      if (
+        oDate &&
+        (!orderMap[cid].lastOrderDate ||
+          new Date(oDate) > new Date(orderMap[cid].lastOrderDate))
+      ) {
+        orderMap[cid].lastOrderDate = oDate;
+      }
+    });
+
+    // 4. Build enriched CRM records
+    const MS_DAY = 86400000;
+
+    const enriched = customers.map((c) => {
+      const cid = c._id.toString();
+      const stats = orderMap[cid] || {
+        count: 0,
+        totalSpend: 0,
+        lastOrderDate: null,
+      };
+
+      // Use DB-stored values as fallback if order aggregation gives 0
+      const orderCount = stats.count || c.totalOrders || 0;
+      const totalSpend = stats.totalSpend || c.totalSpent || 0;
+      const lastPurchaseDate = stats.lastOrderDate
+        ? new Date(stats.lastOrderDate).toISOString().slice(0, 10)
+        : null;
+
+      // Days since last purchase
+      const daysSince = lastPurchaseDate
+        ? (Date.now() - new Date(lastPurchaseDate).getTime()) / MS_DAY
+        : 9999;
+
+      // --- CRM Category ---
+      let category;
+      if (daysSince > 90) {
+        category = "Inactive";
+      } else if (totalSpend >= 50000) {
+        category = "VIP";
+      } else if (totalSpend >= 30000 || orderCount >= 5) {
+        category = "High value";
+      } else if (orderCount <= 1 && daysSince < 45) {
+        category = "New";
+      } else if (orderCount >= 2) {
+        category = "Regular";
+      } else {
+        category = "New";
+      }
+
+      // --- Loyalty Points: 1 pt per ₹100 spent ---
+      const loyaltyPoints = Math.floor(totalSpend / 100);
+
+      // --- Loyalty Tier ---
+      let badge, discountPct, nextTier;
+      if (loyaltyPoints >= 250) {
+        badge = "Gold";
+        discountPct = 10;
+        nextTier = null;
+      } else if (loyaltyPoints >= 100) {
+        badge = "Silver";
+        discountPct = 5;
+        nextTier = { label: "Gold", minPoints: 250, discountPct: 10 };
+      } else {
+        badge = "Member";
+        discountPct = 0;
+        nextTier = { label: "Silver", minPoints: 100, discountPct: 5 };
+      }
+
+      const progressToNext = nextTier
+        ? Math.min(100, (loyaltyPoints / nextTier.minPoints) * 100)
+        : 100;
+
+      return {
+        // Identity
+        id: c.customerId,
+        _id: c._id,
+        name: c.name || `${c.salutation || ""} ${c.firstName || ""} ${c.lastName || ""}`.trim(),
+        phone: c.phone,
+        address: c.address || [c.addressLine1, c.city, c.state].filter(Boolean).join(", "),
+        referral: c.notes?.includes("Instagram")
+          ? "Instagram"
+          : c.notes?.includes("WhatsApp")
+          ? "WhatsApp"
+          : c.notes?.includes("Google")
+          ? "Google"
+          : c.notes?.includes("Referral")
+          ? "Referral"
+          : "Walk-in",
+
+        // Order stats
+        orderCount,
+        totalSpend,
+        lastPurchase: lastPurchaseDate,
+        firstPurchase: c.createdAt
+          ? new Date(c.createdAt).toISOString().slice(0, 10)
+          : null,
+        visitCount: orderCount,
+
+        // Loyalty
+        loyaltyPoints,
+        loyalty: {
+          badge,
+          discountPct,
+          nextTier,
+          progressToNext,
+          points: loyaltyPoints,
+        },
+
+        // CRM
+        category,
+      };
+    });
+
+    // 5. Aggregate dashboard stats
+    const stats = {
+      total: enriched.length,
+      active: enriched.filter((c) => c.category !== "Inactive").length,
+      new: enriched.filter((c) => c.category === "New").length,
+      inactive: enriched.filter((c) => c.category === "Inactive").length,
+      highValue: enriched.filter(
+        (c) => c.category === "High value" || c.category === "VIP"
+      ).length,
+    };
+
+    console.log(`✅ CRM data built for ${enriched.length} customers`);
+
+    return res.status(200).json({
+      success: true,
+      stats,
+      customers: enriched,
+    });
+  } catch (error) {
+    console.error("❌ getCrmData error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

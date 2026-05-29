@@ -190,6 +190,7 @@ import {
 
 } from "../controllers/customer.controller.js";
 import { protect, authorize } from "../middleware/auth.middleware.js";
+import { getCrmData } from "../controllers/customer.controller.js";
 
 console.log("📁 customer.routes.js is loading...");
 
@@ -209,6 +210,7 @@ router.use(protect);
 
 // 📤 Export all customers to Excel
 router.get("/export", authorize("ADMIN", "STORE_KEEPER"), exportCustomers);
+router.get("/crm", protect, getCrmData);
 
 // 📥 Import customers from Excel
 router.post("/import", authorize("ADMIN", "STORE_KEEPER"), upload.single("file"), importCustomers);

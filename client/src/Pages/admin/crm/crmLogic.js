@@ -1,4 +1,7 @@
-import { LOYALTY_TIERS } from "./crmDummyData";
+const LOYALTY_TIERS = [
+  { minPoints: 250, discountPct: 10, label: "Gold" },
+  { minPoints: 100, discountPct: 5, label: "Silver" },
+];
 
 const MS_DAY = 86400000;
 
@@ -9,32 +12,21 @@ export function classifyCustomer(c) {
     ? (Date.now() - last.getTime()) / MS_DAY
     : 9999;
 
-  // Inactive after 3 months
   if (daysSince > 90) return "Inactive";
 
-  // New customer
-  const isNew = c.orderCount <= 1 && daysSince < 45;
+  const totalSpend = c.totalSpend || c.totalSpent || 0;
+  const orderCount = c.orderCount || c.totalOrders || 0;
 
-  // VIP customer
-  const isVip = c.totalSpend >= 50000;
+  if (totalSpend >= 50000) return "VIP";
 
-  // High value customer
-  const isHighValue =
-    !isVip && (c.totalSpend >= 30000 || c.orderCount >= 5);
+  if (totalSpend >= 30000 || orderCount >= 5)
+    return "High value";
 
-  // Regular customer
-  const isRegular =
-    !isNew &&
-    c.orderCount >= 3 &&
-    daysSince < 90 &&
-    !isHighValue &&
-    !isVip;
+  if (orderCount <= 1 && daysSince < 45)
+    return "New";
 
-  if (isVip) return "VIP";
-  if (isHighValue) return "High value";
-  if (isRegular) return "Regular";
-  if (isNew) return "New";
-  if (c.orderCount >= 2) return "Regular";
+  if (orderCount >= 2)
+    return "Regular";
 
   return "New";
 }
