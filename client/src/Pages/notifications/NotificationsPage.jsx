@@ -1981,7 +1981,7 @@ export default function NotificationsPage() {
       case 'STORE_KEEPER':
         return '/storekeeper/dashboard';
       case 'CUTTING_MASTER':
-        return '/cuttingmaster/dashboard';
+        return '/cuttingmaster/works';
       case 'TAILOR':
         return '/tailor/dashboard';
       default:

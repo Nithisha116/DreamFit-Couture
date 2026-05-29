@@ -470,7 +470,6 @@ const TailorDetails = lazy(() => import("../Pages/admin/tailor/TailorDetails"));
 const EditTailor = lazy(() => import("../Pages/admin/tailor/EditTailor"));
 
 // 🚀 LAZY LOADING - CUTTING MASTER COMPONENTS
-const CuttingMasterDashboard = lazy(() => import("../Pages/CuttingMasterDashboard"));
 const CuttingMasters = lazy(() => import("../Pages/admin/cuttingMaster/CuttingMasters"));
 const AddCuttingMaster = lazy(() => import("../Pages/admin/cuttingMaster/AddCuttingMaster"));
 const CuttingMasterDetails = lazy(() => import("../Pages/admin/cuttingMaster/CuttingMasterDetails"));
@@ -847,7 +846,7 @@ export default function AppRouter() {
               </ProtectedRoute>
             }
           >
-            <Route path="dashboard" element={<CuttingMasterDashboard />} />
+            <Route path="" element={<Navigate to="works" replace />} />
             
             {/* Orders - View only */}
             <Route path="orders" element={<Orders />} />
@@ -892,7 +891,7 @@ export default function AppRouter() {
                       ? "/admin/dashboard"
                       : user?.role === "STORE_KEEPER"
                         ? "/storekeeper/dashboard"
-                        : "/cuttingmaster/dashboard"
+                        : "/cuttingmaster/works"
                   }
                   replace
                 />

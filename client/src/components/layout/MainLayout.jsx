@@ -693,7 +693,7 @@ export default function MainLayout() {
       : [];
 
     const items = [
-      { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: `/${rolePath}/dashboard`, show: true },
+      { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: `/${rolePath}/dashboard`, show: !isCuttingMaster },
       { id: 'customers', icon: Users, label: 'Customers', path: `/${rolePath}/customers`, show: canViewCustomers },
       { id: 'ordersOutsourcing', icon: ShoppingCart, label: 'Orders & Outsourcing', path: '#', show: canViewOrders, isDropdown: true },
       tasksOrWorks,
