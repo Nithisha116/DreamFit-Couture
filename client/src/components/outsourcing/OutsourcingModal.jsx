@@ -2,20 +2,21 @@ import { useState, useEffect } from "react";
 import { X, Loader2 } from "lucide-react";
 import ImageUploader from "./ImageUploader";
 
-const STATUS_OPTIONS = ["Given", "In Progress", "Completed", "Pending"];
+const STATUS_OPTIONS = ["Given", "In Progress", "Received", "Completed", "Pending"];
 
 export default function OutsourcingModal({
   isOpen,
   onClose,
   onSubmit,
   editData = null,
-  employees = [],
+  vendors = [],
   isSubmitting = false,
 }) {
   const [form, setForm] = useState({
     orderNumber: "",
     productName: "",
-    employeeName: "",
+    vendor: "",
+    employeeName: "", // for legacy
     givenDate: "",
     expectedDate: "",
     status: "Given",
@@ -30,6 +31,7 @@ export default function OutsourcingModal({
       setForm({
         orderNumber: editData.orderNumber || "",
         productName: editData.productName || "",
+        vendor: editData.vendor?._id || editData.vendor || "",
         employeeName: editData.employeeName || "",
         givenDate: editData.givenDate
           ? new Date(editData.givenDate).toISOString().split("T")[0]
@@ -45,6 +47,7 @@ export default function OutsourcingModal({
       setForm({
         orderNumber: "",
         productName: "",
+        vendor: "",
         employeeName: "",
         givenDate: "",
         expectedDate: "",
@@ -59,7 +62,7 @@ export default function OutsourcingModal({
   const validate = () => {
     const newErrors = {};
     if (!form.productName?.trim()) newErrors.productName = "Product name is required";
-    if (!form.employeeName?.trim()) newErrors.employeeName = "Employee is required";
+    if (!form.vendor && !form.employeeName?.trim()) newErrors.vendor = "Vendor is required";
     if (!form.givenDate) newErrors.givenDate = "Given date is required";
     if (!form.expectedDate) newErrors.expectedDate = "Expected date is required";
     setErrors(newErrors);
@@ -94,7 +97,7 @@ export default function OutsourcingModal({
         {/* Header */}
         <div className="flex items-center justify-between px-7 py-5 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-800">
-            {editData ? "Edit Outsourcing Employee" : "Add Outsourcing Employee"}
+            {editData ? "Edit Outsourcing Vendor" : "Add Outsourcing Vendor"}
           </h2>
           <button
             onClick={onClose}
@@ -143,40 +146,45 @@ export default function OutsourcingModal({
 
           {/* Row 2: Employee + Given Date */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Outsourcing Employee */}
+            {/* Outsourcing Vendor */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                 <span className="text-red-500 mr-0.5">*</span>
-                Outsourcing Employee
+                Outsourcing Vendor
               </label>
-              {employees.length > 0 ? (
+              {vendors?.length > 0 ? (
                 <select
-                  value={form.employeeName}
-                  onChange={(e) => handleChange("employeeName", e.target.value)}
+                  value={form.vendor || (form.employeeName ? "legacy" : "")}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "legacy") return; // Should not select legacy if they are changing it
+                    handleChange("vendor", val);
+                  }}
                   className={`w-full px-4 py-2.5 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition-all ${
-                    errors.employeeName ? "border-red-300" : "border-slate-200"
+                    errors.vendor ? "border-red-300" : "border-slate-200"
                   }`}
                 >
-                  <option value="">Select employee</option>
-                  {employees.map((emp) => (
-                    <option key={emp} value={emp}>
-                      {emp}
+                  <option value="">Select vendor</option>
+                  {form.employeeName && !form.vendor && <option value="legacy">{form.employeeName} (Legacy Employee)</option>}
+                  {vendors.map((v) => (
+                    <option key={v._id} value={v._id}>
+                      {v.vendorName}
                     </option>
                   ))}
                 </select>
               ) : (
                 <input
                   type="text"
-                  value={form.employeeName}
+                  value={form.vendor ? "Vendor Selected" : form.employeeName}
                   onChange={(e) => handleChange("employeeName", e.target.value)}
-                  placeholder="Enter employee name"
+                  placeholder="Enter vendor or employee name"
                   className={`w-full px-4 py-2.5 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition-all ${
-                    errors.employeeName ? "border-red-300" : "border-slate-200"
+                    errors.vendor ? "border-red-300" : "border-slate-200"
                   }`}
                 />
               )}
-              {errors.employeeName && (
-                <p className="text-xs text-red-500 mt-1">{errors.employeeName}</p>
+              {errors.vendor && (
+                <p className="text-xs text-red-500 mt-1">{errors.vendor}</p>
               )}
             </div>
 

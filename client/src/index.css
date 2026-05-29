@@ -200,3 +200,25 @@
   z-index: 10;
   background: white;
 }
+
+/* Ensure time labels and dates are black and visible */
+.custom-calendar-theme .rbc-time-gutter .rbc-label,
+.custom-calendar-theme .rbc-time-header .rbc-label,
+.custom-calendar-theme .rbc-header,
+.custom-calendar-theme .rbc-event-label,
+.custom-calendar-theme .rbc-slot-selection {
+  color: #0f172a !important;
+  font-weight: 600;
+}
+
+/* Ensure slot selection background provides contrast */
+.custom-calendar-theme .rbc-slot-selection {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  border: 1px solid rgba(59, 130, 246, 0.5) !important;
+}
+
+/* Ensure column headers (dates) are darker */
+.custom-calendar-theme .rbc-header {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}

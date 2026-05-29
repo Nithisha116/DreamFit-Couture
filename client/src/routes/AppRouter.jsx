@@ -494,6 +494,9 @@ const NotificationsPage = lazy(() => import("../Pages/notifications/Notification
 const OutsourcingPage = lazy(() =>
   import("../Pages/admin/outsourcing/OutsourcingPage")
 );
+const OutsourcingVendorsPage = lazy(() =>
+  import("../Pages/admin/outsourcingVendors/OutsourcingVendorsPage")
+);
 
 // 🚀 LAZY LOADING - BILLING COMPONENTS
 const BillingDashboard = lazy(() => import("../Pages/admin/billing/BillingDashboard"));
@@ -655,6 +658,7 @@ export default function AppRouter() {
             
             {/* Outsourcing Management */}
             <Route path="outsourcing" element={<OutsourcingPage />} />
+            <Route path="outsourcing-vendors" element={<OutsourcingVendorsPage />} />
             
             {/* Garment Management */}
             <Route path="garments/:id" element={<GarmentDetails />} />
@@ -781,6 +785,7 @@ export default function AppRouter() {
             
             {/* Outsourcing Management */}
             <Route path="outsourcing" element={<OutsourcingPage />} />
+            <Route path="outsourcing-vendors" element={<OutsourcingVendorsPage />} />
             
             {/* Garment Management */}
             <Route path="garments/:id" element={<GarmentDetails />} />

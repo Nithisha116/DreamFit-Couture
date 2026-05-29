@@ -13,7 +13,6 @@ const outsourcingSchema = new mongoose.Schema(
     },
     employeeName: {
       type: String,
-      required: [true, "Employee name is required"],
       trim: true,
     },
     givenDate: {
@@ -31,7 +30,7 @@ const outsourcingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Given", "In Progress", "Completed", "Pending"],
+      enum: ["Given", "In Progress", "Received", "Completed", "Pending"],
       default: "Given",
     },
     referenceImage: {
@@ -41,6 +40,18 @@ const outsourcingSchema = new mongoose.Schema(
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+    },
+    vendor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "OutsourcingVendor",
+    },
+    order: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+    },
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Garment",
     },
   },
   {

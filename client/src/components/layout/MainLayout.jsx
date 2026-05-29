@@ -663,6 +663,7 @@ export default function MainLayout() {
   const ordersOutsourcingItems = [
     { id: 'orders-sub', label: 'Orders', icon: ShoppingCart, path: `/${rolePath}/orders` },
     { id: 'outsourcing-sub', label: 'Outsourcing', icon: Truck, path: `/${rolePath}/outsourcing` },
+    { id: 'outsourcing-vendors-sub', label: 'Vendors', icon: Users, path: `/${rolePath}/outsourcing-vendors` },
   ];
 
   const employeeManagementItems = [
