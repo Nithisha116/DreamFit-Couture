@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   ArrowLeft, Save, User, Calendar, CreditCard,
   Package, Plus, Trash2, Image as ImageIcon, Phone,
   Wallet, Banknote, Smartphone, Landmark, Clock, X,
-  Receipt, Truck, Check, Menu, IndianRupee,
+  Receipt, Truck, Check, Menu, IndianRupee, Edit
 } from "lucide-react";
 
 import {
@@ -36,6 +36,8 @@ import GarmentForm from "../garment/GarmentForm";
 import AddPaymentModal from "../../../components/AddPaymentModal";
 import showToast from "../../../utils/toast";
 import RangeBadge from "../../../components/RangeBadge";
+import { calculatePaymentSummary } from "../../../utils/paymentUtils";
+import { FileDown } from "lucide-react";
 import "./CalendarStyles.css";
 
 // ─── Payment method icon ─────────────────────────────────────────────────────
@@ -192,48 +194,51 @@ export default function EditOrder() {
   }, [currentOrder]);
 
   // ── Payment calculations ───────────────────────────────────────────────────
-  const estimatedRange = garments?.reduce(
-    (acc, g) => {
-      return {
-        min: acc.min + (g.priceRange?.min || 0),
-        max: acc.max + (g.priceRange?.max || 0),
-      };
-    },
-    { min: 0, max: 0 }
-  ) || { min: 0, max: 0 };
+  const displayPayments = payments; // We just have payments in EditOrder
 
-  const finalizedAmount = garments?.reduce(
-    (sum, g) => {
-      const val = g.finalizedPrice !== undefined && g.finalizedPrice !== null ? g.finalizedPrice : (g.priceRange?.max || 0);
-      return sum + Number(val);
-    },
-    0
-  ) || 0;
+  // Calculate payment summary using centralized payment helper
+  const summary = calculatePaymentSummary(currentOrder, garments, displayPayments);
 
-  const totalAmount = finalizedAmount;
+  // Check if a full payment has already been recorded — no more payments needed
+  const hasFullPayment = summary.isFullyPaid || (summary.balanceDue <= 0 && summary.totalAmount > 0);
 
   const paymentStats = {
-    totalPaid: payments?.reduce((s, p) => s + (p.amount || 0), 0) || 0,
-    totalPayments: payments?.length || 0,
-    advanceTotal: payments?.filter((p) => p.type === "advance").reduce((s, p) => s + (p.amount || 0), 0) || 0,
-    fullTotal: payments?.filter((p) => p.type === "full").reduce((s, p) => s + (p.amount || 0), 0) || 0,
-    finalSettlementTotal: payments?.filter((p) => p.type === "final-settlement").reduce((s, p) => s + (p.amount || 0), 0) || 0,
+    totalPaid: summary.totalPaid,
+    totalPayments: summary.payments.length,
+    lastPayment: summary.payments.length > 0 ? summary.payments[summary.payments.length - 1] : null,
+    advanceTotal: summary.payments.filter(p => p.type === 'advance').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    fullTotal: summary.payments.filter(p => p.type === 'full').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    partialTotal: summary.payments.filter(p => p.type === 'partial').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    extraTotal: summary.payments.filter(p => p.type === 'extra').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     byMethod: {
-      cash: payments?.filter((p) => p.method === "cash").reduce((s, p) => s + (p.amount || 0), 0) || 0,
-      upi: payments?.filter((p) => p.method === "upi").reduce((s, p) => s + (p.amount || 0), 0) || 0,
-      "bank-transfer": payments?.filter((p) => p.method === "bank-transfer").reduce((s, p) => s + (p.amount || 0), 0) || 0,
-      card: payments?.filter((p) => p.method === "card").reduce((s, p) => s + (p.amount || 0), 0) || 0,
-    },
+      cash: summary.payments.filter(p => p.method === 'cash').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      upi: summary.payments.filter(p => p.method === 'upi').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      'bank-transfer': summary.payments.filter(p => p.method === 'bank-transfer').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      card: summary.payments.filter(p => p.method === 'card').reduce((sum, p) => sum + (p.amount || 0), 0) || 0
+    }
   };
 
-  // Balance can NEVER be negative
-  const balanceAmount = Math.max(0, totalAmount - paymentStats.totalPaid);
-  const isFullyPaid = balanceAmount === 0 && paymentStats.totalPaid > 0;
+  const estimatedRange = useMemo(() => {
+    const min = garments.reduce((sum, g) => sum + (Number(g.priceRange?.min) || 0), 0);
+    const max = garments.reduce((sum, g) => sum + (Number(g.priceRange?.max) || 0), 0);
+    return { min, max };
+  }, [garments]);
 
-  const paymentStatus =
-    isFullyPaid ? "paid"
-      : paymentStats.totalPaid > 0 ? "partial"
-        : "pending";
+  const isFinalized = summary.finalizedAmount > 0;
+  
+  const finalizedAmount = {
+    min: summary.totalAmountMin,
+    max: summary.totalAmountMax
+  };
+
+  const balanceAmount = {
+    min: summary.balanceDueMin,
+    max: summary.balanceDueMax
+  };
+  
+  const isFullyPaid = summary.isFullyPaid;
+
+  const paymentStatus = summary.status;
 
   const garmentDeliveryRange =
     garments?.length > 0
@@ -426,8 +431,8 @@ export default function EditOrder() {
             specialNotes: formData.specialNotes,
             advancePayment: { amount: Number(formData.advancePayment.amount) || 0, method: formData.advancePayment.method },
             status: formData.status,
-            priceSummary: { totalMin: finalizedAmount, totalMax: finalizedAmount },
-            balanceAmount,
+            priceSummary: { totalMin: finalizedAmount.min, totalMax: finalizedAmount.max },
+            balanceAmount: balanceAmount.max,
           },
         })
       ).unwrap();
@@ -548,9 +553,9 @@ export default function EditOrder() {
         isOpen={showPaymentModal}
         onClose={() => { setShowPaymentModal(false); setEditingPayment(null); }}
         onSave={handleSavePayment}
-        orderTotalMin={finalizedAmount}
-        orderTotalMax={finalizedAmount}
-        remainingAmount={balanceAmount}
+        orderTotalMin={finalizedAmount.min}
+        orderTotalMax={finalizedAmount.max}
+        remainingAmount={balanceAmount.max}
         alreadyPaid={paymentStats.totalPaid}
         orderId={id}
         customerId={currentOrder?.customer?._id}
@@ -786,71 +791,165 @@ export default function EditOrder() {
 
           {/* ── RIGHT COLUMN — Payment Summary ─────────────────────────────── */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sticky top-6">
-              <h2 className="text-lg font-black text-slate-800 mb-4">Payment Summary</h2>
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-6 sticky top-6">
+              <h2 className="text-base sm:text-lg font-black text-slate-800 mb-3 sm:mb-4">Payment Summary</h2>
 
-              <div className="space-y-4">
-                {/* Total Amount */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 shadow-sm">
-                  <p className="text-[10px] text-blue-600 font-black uppercase mb-0.5">Finalized Billing Amount</p>
-                  <p className="text-2xl font-black text-blue-700">
-                    ₹{finalizedAmount.toLocaleString('en-IN')}
+              <div className="space-y-3 sm:space-y-4">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-blue-100 shadow-sm">
+                  <p className="text-[9px] sm:text-[10px] text-blue-600 font-black uppercase mb-0.5">
+                    {isFinalized ? "Final Bill Amount" : "Estimated Billing Amount Range"}
                   </p>
-                  {estimatedRange.min > 0 && estimatedRange.max > 0 && (
-                    <div className="mt-2 pt-2 border-t border-blue-200/50 flex justify-between text-[9px] text-slate-500 font-bold">
+                  <p className="text-lg sm:text-xl lg:text-2xl font-black text-blue-700 break-words">
+                    {isFinalized 
+                      ? formatCurrency(summary.finalizedAmount)
+                      : `${formatCurrency(finalizedAmount.min)} - ${formatCurrency(finalizedAmount.max)}`}
+                  </p>
+                  {estimatedRange.min > 0 && estimatedRange.max > 0 && !isFinalized && (
+                    <div className="mt-2 pt-2 border-t border-blue-200/50 flex justify-between text-[8px] sm:text-[9px] text-slate-500 font-bold">
                       <span>ESTIMATED RANGE:</span>
-                      <span>₹{estimatedRange.min.toLocaleString('en-IN')} – ₹{estimatedRange.max.toLocaleString('en-IN')}</span>
+                      <span>{formatCurrency(estimatedRange.min)} – {formatCurrency(estimatedRange.max)}</span>
                     </div>
                   )}
                 </div>
 
-                {/* Payment Status Badge */}
                 <PaymentStatusBadge status={paymentStatus} />
 
-                {/* Stats cards */}
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-green-50 p-3 rounded-xl">
-                    <p className="text-xs text-green-600 font-bold">Total Paid</p>
-                    <p className="text-lg font-black text-green-700">{formatCurrency(paymentStats.totalPaid)}</p>
+                  <div className="bg-green-50 p-2 sm:p-3 rounded-lg sm:rounded-xl">
+                    <p className="text-[10px] sm:text-xs text-green-600 font-bold">Total Paid</p>
+                    <p className="text-base sm:text-lg font-black text-green-700 break-words">{formatCurrency(paymentStats.totalPaid)}</p>
                   </div>
-                  <div className="bg-purple-50 p-3 rounded-xl">
-                    <p className="text-xs text-purple-600 font-bold">Payments</p>
-                    <p className="text-lg font-black text-purple-700">{paymentStats.totalPayments}</p>
+                  <div className="bg-purple-50 p-2 sm:p-3 rounded-lg sm:rounded-xl">
+                    <p className="text-[10px] sm:text-xs text-purple-600 font-bold">Payments</p>
+                    <p className="text-base sm:text-lg font-black text-purple-700">{paymentStats.totalPayments}</p>
                   </div>
                 </div>
 
-                {/* Payment breakdown — only show categories that have value */}
-                {paymentStats.totalPayments > 0 && (
-                  <div className="bg-slate-50 p-4 rounded-xl">
-                    <p className="text-xs font-black uppercase text-slate-500 mb-2">Payment Breakdown</p>
-                    <div className="space-y-1.5">
-                      {paymentStats.advanceTotal > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-600">Advance</span>
-                          <span className="font-bold text-blue-600">{formatCurrency(paymentStats.advanceTotal)}</span>
+                <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
+                  <p className="text-[10px] sm:text-xs font-black uppercase text-slate-500 mb-2">Payment Breakdown</p>
+                  <div className="space-y-1.5">
+                    {paymentStats.advanceTotal > 0 && (
+                      <div className="flex justify-between items-center text-xs sm:text-sm">
+                        <span className="text-slate-600">Advance</span>
+                        <span className="font-bold text-blue-600">{formatCurrency(paymentStats.advanceTotal)}</span>
+                      </div>
+                    )}
+                    {paymentStats.partialTotal > 0 && (
+                      <div className="flex justify-between items-center text-xs sm:text-sm">
+                        <span className="text-slate-600">Partial</span>
+                        <span className="font-bold text-orange-600">{formatCurrency(paymentStats.partialTotal)}</span>
+                      </div>
+                    )}
+                    {paymentStats.fullTotal > 0 && (
+                      <div className="flex justify-between items-center text-xs sm:text-sm">
+                        <span className="text-slate-600">Full</span>
+                        <span className="font-bold text-green-600">{formatCurrency(paymentStats.fullTotal)}</span>
+                      </div>
+                    )}
+                    {paymentStats.extraTotal > 0 && (
+                      <div className="flex justify-between items-center text-xs sm:text-sm">
+                        <span className="text-slate-600">Extra</span>
+                        <span className="font-bold text-purple-600">{formatCurrency(paymentStats.extraTotal)}</span>
+                      </div>
+                    )}
+                    {paymentStats.totalPayments === 0 && (
+                      <div className="text-center text-slate-400 text-sm">No payments recorded yet</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
+                  <p className="text-[10px] sm:text-xs font-black uppercase text-slate-500 mb-2">Payment Methods</p>
+                  <div className="space-y-1.5">
+                    {paymentStats.byMethod.cash > 0 && (
+                      <div className="flex justify-between items-center text-xs sm:text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <Banknote size={12} className="text-green-600" />
+                          <span className="text-slate-600">Cash</span>
                         </div>
-                      )}
-                      {paymentStats.fullTotal > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-600">Full Payment</span>
-                          <span className="font-bold text-green-600">{formatCurrency(paymentStats.fullTotal)}</span>
+                        <span className="font-bold">{formatCurrency(paymentStats.byMethod.cash)}</span>
+                      </div>
+                    )}
+                    {paymentStats.byMethod.upi > 0 && (
+                      <div className="flex justify-between items-center text-xs sm:text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <Smartphone size={12} className="text-blue-600" />
+                          <span className="text-slate-600">UPI</span>
                         </div>
-                      )}
-                      {paymentStats.finalSettlementTotal > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-600">Final Settlement</span>
-                          <span className="font-bold text-green-600">{formatCurrency(paymentStats.finalSettlementTotal)}</span>
+                        <span className="font-bold">{formatCurrency(paymentStats.byMethod.upi)}</span>
+                      </div>
+                    )}
+                    {paymentStats.byMethod['bank-transfer'] > 0 && (
+                      <div className="flex justify-between items-center text-xs sm:text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <Landmark size={12} className="text-purple-600" />
+                          <span className="text-slate-600">Bank Transfer</span>
                         </div>
-                      )}
+                        <span className="font-bold">{formatCurrency(paymentStats.byMethod['bank-transfer'])}</span>
+                      </div>
+                    )}
+                    {paymentStats.byMethod.card > 0 && (
+                      <div className="flex justify-between items-center text-xs sm:text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <CreditCard size={12} className="text-orange-600" />
+                          <span className="text-slate-600">Card</span>
+                        </div>
+                        <span className="font-bold">{formatCurrency(paymentStats.byMethod.card)}</span>
+                      </div>
+                    )}
+                    {paymentStats.totalPayments === 0 && (
+                      <div className="text-center text-slate-400 text-sm">No payment methods</div>
+                    )}
+                  </div>
+                </div>
+
+                {paymentStats.lastPayment && (
+                  <div className="bg-indigo-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
+                    <p className="text-[10px] sm:text-xs text-indigo-600 font-black uppercase mb-2">Last Payment</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-base sm:text-lg font-black text-indigo-700">
+                        {formatCurrency(paymentStats.lastPayment.amount)}
+                      </span>
+                      <span className={`text-[10px] sm:text-xs px-2 py-1 rounded-full ${
+                        paymentStats.lastPayment.type === 'full' ? 'bg-green-100 text-green-700' :
+                        paymentStats.lastPayment.type === 'advance' ? 'bg-blue-100 text-blue-700' :
+                        'bg-purple-100 text-purple-700'
+                      }`}>
+                        {paymentStats.lastPayment.type}
+                      </span>
                     </div>
+                    <p className="text-[10px] sm:text-xs text-indigo-600 break-words">
+                      {formatDateTime(paymentStats.lastPayment.paymentDate, paymentStats.lastPayment.paymentTime)}
+                    </p>
+                    {paymentStats.lastPayment.method !== 'cash' && paymentStats.lastPayment.referenceNumber && (
+                      <p className="text-[10px] sm:text-xs text-purple-600 font-mono mt-1 break-words">
+                        Ref: {paymentStats.lastPayment.referenceNumber}
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {payments?.length === 0 && (
-                  <div className="bg-slate-50 p-4 rounded-xl text-center text-slate-400 text-sm">
-                    No payments recorded yet
-                  </div>
-                )}
+                <div className="bg-orange-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
+                  <p className="text-[10px] sm:text-xs text-orange-600 font-black uppercase mb-1">
+                    {isFinalized || balanceAmount.min === balanceAmount.max ? "Balance Amount" : "Remaining Balance Range"}
+                  </p>
+                  <p className="text-base sm:text-lg lg:text-xl font-black text-orange-700 break-words">
+                    {summary.isFullyPaid ? (
+                      formatCurrency(0)
+                    ) : isFinalized || balanceAmount.min === balanceAmount.max ? (
+                      formatCurrency(balanceAmount.max)
+                    ) : (
+                      `${formatCurrency(balanceAmount.min)} - ${formatCurrency(balanceAmount.max)}`
+                    )}
+                  </p>
+                  {summary.isFullyPaid ? (
+                    <p className="text-[10px] sm:text-xs text-green-600 mt-1">✅ Fully paid</p>
+                  ) : (
+                    balanceAmount.min <= 0 && balanceAmount.max > 0 && (
+                      <p className="text-[10px] sm:text-xs text-orange-600 mt-1">⚠️ Minimum reached</p>
+                    )
+                  )}
+                </div>
 
                 {/* Garment delivery range */}
                 {garmentDeliveryRange && (
@@ -860,22 +959,6 @@ export default function EditOrder() {
                       {formatDate(garmentDeliveryRange.min)} – {formatDate(garmentDeliveryRange.max)}
                     </p>
                     <p className="text-xs text-purple-500 mt-1">Order delivery: {formatDate(formData.deliveryDate)}</p>
-                  </div>
-                )}
-
-                {/* ── Balance / Fully Paid — MUTUALLY EXCLUSIVE ───────────── */}
-                {isFullyPaid ? (
-                  /* Fully paid banner */
-                  <div className="bg-green-50 p-4 rounded-xl border border-green-200 text-center">
-                    <p className="text-green-700 font-black text-base">✅ Fully Paid</p>
-                    <p className="text-xs text-green-600 mt-1">No outstanding balance</p>
-                  </div>
-                ) : (
-                  /* Balance due — only shown when NOT fully paid */
-                  <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
-                    <p className="text-xs text-orange-600 font-black uppercase mb-1">Balance Due</p>
-                    <p className="text-xl font-black text-orange-700">{formatCurrency(balanceAmount)}</p>
-                    <p className="text-xs text-orange-500 mt-1">Pending payment</p>
                   </div>
                 )}
 
@@ -891,54 +974,65 @@ export default function EditOrder() {
                   </button>
                 )}
 
-                {/* Payment History Toggle */}
-                {payments?.length > 0 && (
+                {displayPayments?.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setShowPaymentHistory(!showPaymentHistory)}
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-lg font-bold flex items-center justify-center gap-2 text-sm"
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-xs sm:text-sm"
                   >
                     <Receipt size={14} />
-                    {showPaymentHistory ? "Hide" : "Show"} Payment History ({payments.length})
+                    {showPaymentHistory ? 'Hide' : 'Show'} Payment History ({displayPayments.length})
                   </button>
                 )}
 
-                {/* Payment History List */}
-                {showPaymentHistory && payments?.length > 0 && (
-                  <div className="bg-slate-50 rounded-lg p-3 max-h-60 overflow-y-auto">
+                {showPaymentHistory && displayPayments?.length > 0 && (
+                  <div className="bg-slate-50 rounded-lg p-2 sm:p-3 max-h-72 sm:max-h-96 overflow-y-auto">
                     <div className="space-y-2">
-                      {payments.map((payment, index) => (
-                        <div key={payment._id || index} className="bg-white p-3 rounded-lg border border-slate-200">
-                          <div className="flex items-start gap-2">
+                      {displayPayments.map((payment) => (
+                        <div key={payment._id} className="bg-white p-2 sm:p-3 rounded-lg border border-slate-200 hover:shadow-sm">
+                          <div className="flex flex-col sm:flex-row sm:items-start gap-2">
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-1.5 mb-1">
                                 <span className="font-bold text-green-600 text-sm">{formatCurrency(payment.amount)}</span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${payment.type === "full" ? "bg-green-100 text-green-700"
-                                    : payment.type === "final-settlement" ? "bg-emerald-100 text-emerald-700"
-                                      : "bg-blue-100 text-blue-700"
-                                  }`}>
-                                  {payment.type === "final-settlement" ? "Final"
-                                    : payment.type === "full" ? "Full"
-                                      : "Advance"}
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                                  payment.type === 'full' ? 'bg-green-100 text-green-700' :
+                                  payment.type === 'advance' ? 'bg-blue-100 text-blue-700' :
+                                  'bg-purple-100 text-purple-700'
+                                }`}>
+                                  {payment.type}
                                 </span>
                               </div>
-                              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                              <div className="flex flex-wrap items-center gap-1.5 text-[10px] sm:text-xs">
                                 <PaymentMethodIcon method={payment.method} />
                                 <span className="text-slate-600 capitalize">{payment.method}</span>
-                                <span className="text-slate-400">•</span>
-                                <span className="text-slate-400 truncate">{formatDateTime(payment.paymentDate, payment.paymentTime)}</span>
+                                <span className="text-slate-400 hidden xs:inline">•</span>
+                                <span className="text-slate-400 truncate max-w-[120px]">
+                                  {formatDateTime(payment.paymentDate, payment.paymentTime)}
+                                </span>
                               </div>
                               {payment.referenceNumber && (
-                                <p className="text-xs text-purple-600 font-mono mt-1 truncate">Ref: {payment.referenceNumber}</p>
-                              )}
-                              {payment.notes && (
-                                <p className="text-xs text-slate-400 mt-1 italic truncate">{payment.notes}</p>
+                                <p className="text-[10px] text-purple-600 font-mono mt-1 truncate">
+                                  Ref: {payment.referenceNumber}
+                                </p>
                               )}
                             </div>
+                            
                             {canEdit && (
-                              <div className="flex gap-1">
-                                <button type="button" onClick={() => handleEditPayment(payment)} className="text-blue-500 hover:text-blue-700 text-xs font-bold px-2 py-1">Edit</button>
-                                <button type="button" onClick={() => handleDeletePayment(payment._id)} className="text-red-500 hover:text-red-700 p-1"><X size={12} /></button>
+                              <div className="flex gap-1 sm:gap-2 self-end sm:self-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditPayment(payment)}
+                                  className="p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
+                                >
+                                  <Edit size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePayment(payment._id)}
+                                  className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
                               </div>
                             )}
                           </div>
