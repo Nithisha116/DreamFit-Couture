@@ -535,6 +535,7 @@ import outsourcingVendorRoutes from "./routes/outsourcingVendor.routes.js";
 import salaryRoutes from "./routes/salary.routes.js";
 import workerRoutes from "./routes/worker.routes.js";
 import workflowRoutes from "./routes/workflow.routes.js";
+import qrRoutes from "./routes/qr.routes.js";
 
 // BILLING & INVOICING ROUTES
 import invoiceRoutes from "./routes/invoice.routes.js";
@@ -728,6 +729,9 @@ app.get("/health", (req, res) => {
 
 // 🔐 AUTH ROUTES - Public
 app.use("/api/auth", authRoutes);
+
+// 📱 QR WORKFLOW ROUTES - Public (No Auth Required)
+app.use("/api/qr", qrRoutes);
 
 // ====================================================
 // 👤 CUSTOMER MODULE - COMPLETE ✅

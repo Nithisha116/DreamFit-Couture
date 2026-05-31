@@ -19,7 +19,7 @@ const PIPELINE_STAGE_DEFS = {
   packed:     { id: 'packed',     label: 'Packed / Ready', department: 'packing'    },
 };
 
-function normalizeStageKey(key) {
+export function normalizeStageKey(key) {
   const k = String(key || '').trim().toLowerCase().replace(/\s+/g, '_');
   // ✅ IMPORTANT: do NOT collapse packing→packed here for stage-key purposes.
   // packing and packed are different stages in custom workflows.
@@ -29,7 +29,7 @@ function normalizeStageKey(key) {
   return k;
 }
 
-function stageLabel(key) {
+export function stageLabel(key) {
   const def = PIPELINE_STAGE_DEFS[key];
   if (def) return def.label;
   // Custom stage — title-case the key
@@ -45,7 +45,7 @@ function stageLabel(key) {
  *   4. order.workflowStages[] ← array of {key, label, order}
  *   5. LAST RESORT fallback (should never be needed after order_controller fix)
  */
-function resolveOrderedStageKeys(work) {
+export function resolveOrderedStageKeys(work) {
   // 1. work.stageKeys — most direct
   if (Array.isArray(work.stageKeys) && work.stageKeys.length > 0) {
     return work.stageKeys.map(normalizeStageKey).filter(Boolean);
@@ -102,7 +102,7 @@ function resolveOrderedStageKeys(work) {
  *
  * Assignment info comes from work.assignments[].
  */
-function buildStagesFromWork(work, stageKeys) {
+export function buildStagesFromWork(work, stageKeys) {
   const normalizedCurrentStage = normalizeStageKey(work.currentStage);
 
   // Find where the current stage sits in the pipeline
