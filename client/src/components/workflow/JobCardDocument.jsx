@@ -79,10 +79,8 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
 
   const qrUrl = useMemo(() => {
     if (!job || !showQr) return "";
-    const base = window.location.pathname.startsWith("/storekeeper")
-      ? "/storekeeper"
-      : "/admin";
-    const scanUrl = `${window.location.origin}${base}/tasks/scan?wf=${job.workflowTrackingId}`;
+    const qrToken = job.qrCode || job.workMongoId || job.workflowTrackingId;
+    const scanUrl = `${window.location.origin}/qr-workflow/${qrToken}`;
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(scanUrl)}`;
   }, [job, showQr]);
 
@@ -111,8 +109,17 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
   const allNotes = [...parseNotes(additionalInfo), ...parseNotes(cuttingNotes), ...parseNotes(tailorNotes)];
 
   // ── Images ──
-  const refImages = [...(garment?.referenceImages || []), ...(work?.garment?.referenceImages || [])];
-  const custImages = [...(garment?.customerImages || []), ...(garment?.customerClothImages || [])];
+  const refImages = [
+    ...(garment?.referenceImages || []),
+    ...(work?.garment?.referenceImages || []),
+    ...(job.referenceImages || []),
+  ];
+  const custImages = [
+    ...(garment?.customerImages || []),
+    ...(garment?.customerClothImages || []),
+    ...(job.customerImages || []),
+    ...(job.customerClothImages || []),
+  ];
   const allImages = [...refImages, ...custImages].map(imageUrl).filter(Boolean);
 
   // ── Stage History ──
