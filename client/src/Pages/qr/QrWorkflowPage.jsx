@@ -5,7 +5,7 @@ import axios from "axios";
 import showToast from "../../utils/toast";
 import JobCardDocument from "../../components/workflow/JobCardDocument";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const QrWorkflowPage = () => {
   const { qrCode } = useParams();
@@ -27,7 +27,7 @@ const QrWorkflowPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await axios.get(`${API_BASE_URL}/qr/${qrCode}`);
+      const res = await axios.get(`${API_BASE_URL}/api/qr/${qrCode}`);
       if (res.data.success) {
         setJob(res.data.data);
       } else {
@@ -44,7 +44,7 @@ const QrWorkflowPage = () => {
     if (!job || job.lifecycleStatus === "completed") return;
     try {
       setUpdating(true);
-      const res = await axios.post(`${API_BASE_URL}/qr/${qrCode}/scan`);
+      const res = await axios.post(`${API_BASE_URL}/api/qr/${qrCode}/scan`);
       if (res.data.success) {
         showToast.success(res.data.message);
         // Optimistically update or refetch
