@@ -363,10 +363,51 @@ export default function Staff() {
                       </td>
                       <td className="px-8 py-6">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => handleViewDetails(item)} className="p-3 bg-white border border-slate-100 text-slate-600 hover:text-blue-600 hover:border-blue-100 hover:bg-blue-50 rounded-xl transition-all shadow-sm"><Eye size={20} /></button>
-                          <button onClick={() => handleToggleStatus(item)} className={`p-3 rounded-xl transition-all shadow-sm border ${item.isActive ? 'bg-white border-slate-100 text-slate-600 hover:text-orange-600 hover:border-orange-100 hover:bg-orange-50' : 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600'}`}><Power size={20} /></button>
-                          <button onClick={() => handleEdit(item)} className="p-3 bg-white border border-slate-100 text-slate-600 hover:text-indigo-600 hover:border-indigo-100 hover:bg-indigo-50 rounded-xl transition-all shadow-sm"><Edit size={20} /></button>
-                          <button onClick={() => { setSelectedUser(item); setDeleteType(item.type || "staff"); setShowDeleteModal(true); }} className="p-3 bg-white border border-slate-100 text-slate-600 hover:text-red-600 hover:border-red-100 hover:bg-red-50 rounded-xl transition-all shadow-sm"><Trash2 size={20} /></button>
+                          
+                          {/* View Employee */}
+                          <div className="relative group/btn">
+                            <button onClick={() => handleViewDetails(item)} className="p-3 bg-white border border-slate-100 text-slate-600 hover:text-blue-600 hover:border-blue-100 hover:bg-blue-50 hover:scale-105 hover:shadow-md rounded-xl transition-all shadow-sm">
+                              <Eye size={20} />
+                            </button>
+                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[11px] font-bold rounded-lg opacity-0 invisible group-hover/btn:opacity-100 group-hover/btn:visible transition-all duration-200 shadow-xl whitespace-nowrap z-50 pointer-events-none">
+                              View Employee
+                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
+                            </div>
+                          </div>
+
+                          {/* Activate/Deactivate Employee */}
+                          <div className="relative group/btn">
+                            <button onClick={() => handleToggleStatus(item)} className={`p-3 rounded-xl transition-all shadow-sm border hover:scale-105 hover:shadow-md ${item.isActive ? 'bg-white border-slate-100 text-slate-600 hover:text-orange-600 hover:border-orange-100 hover:bg-orange-50' : 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600'}`}>
+                              <Power size={20} />
+                            </button>
+                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[11px] font-bold rounded-lg opacity-0 invisible group-hover/btn:opacity-100 group-hover/btn:visible transition-all duration-200 shadow-xl whitespace-nowrap z-50 pointer-events-none">
+                              Activate/Deactivate Employee
+                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
+                            </div>
+                          </div>
+
+                          {/* Edit Employee */}
+                          <div className="relative group/btn">
+                            <button onClick={() => handleEdit(item)} className="p-3 bg-white border border-slate-100 text-slate-600 hover:text-indigo-600 hover:border-indigo-100 hover:bg-indigo-50 hover:scale-105 hover:shadow-md rounded-xl transition-all shadow-sm">
+                              <Edit size={20} />
+                            </button>
+                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[11px] font-bold rounded-lg opacity-0 invisible group-hover/btn:opacity-100 group-hover/btn:visible transition-all duration-200 shadow-xl whitespace-nowrap z-50 pointer-events-none">
+                              Edit Employee
+                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
+                            </div>
+                          </div>
+
+                          {/* Delete Employee */}
+                          <div className="relative group/btn">
+                            <button onClick={() => { setSelectedUser(item); setDeleteType(item.type || "staff"); setShowDeleteModal(true); }} className="p-3 bg-white border border-slate-100 text-slate-600 hover:text-red-600 hover:border-red-100 hover:bg-red-50 hover:scale-105 hover:shadow-md rounded-xl transition-all shadow-sm">
+                              <Trash2 size={20} />
+                            </button>
+                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[11px] font-bold rounded-lg opacity-0 invisible group-hover/btn:opacity-100 group-hover/btn:visible transition-all duration-200 shadow-xl whitespace-nowrap z-50 pointer-events-none">
+                              Delete Employee
+                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
+                            </div>
+                          </div>
+
                         </div>
                       </td>
                     </tr>

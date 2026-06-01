@@ -4,6 +4,8 @@ import { CheckSquare } from "lucide-react";
 import axios from "axios";
 import showToast from "../../utils/toast";
 import JobCardDocument from "../../components/workflow/JobCardDocument";
+import StageActionModal from "../../components/common/StageActionModal";
+import { getSocket } from "../../utils/socket";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -13,15 +15,28 @@ const QrWorkflowPage = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState(null);
+  const [modalMode, setModalMode] = useState(null); // 'confirm' | 'success' | null
 
   useEffect(() => {
     fetchJobDetails();
     document.body.style.backgroundColor = "#f3f4f6";
+    
+    const socket = getSocket();
+    const handleWorkflowUpdated = (data) => {
+      // If the current job was updated, refresh details
+      if (job && (data.workId === job._id || data.orderId === job.order?._id)) {
+        fetchJobDetails();
+      }
+    };
+    
+    socket.on('workflow:updated', handleWorkflowUpdated);
+
     return () => {
       document.body.style.backgroundColor = "";
+      socket.off('workflow:updated', handleWorkflowUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrCode]);
+  }, [qrCode, job?._id]);
 
   const fetchJobDetails = async () => {
     try {
@@ -40,19 +55,22 @@ const QrWorkflowPage = () => {
     }
   };
 
-  const handleCompleteStage = async () => {
+  const executeCompleteStage = async () => {
     if (!job || job.lifecycleStatus === "completed") return;
     try {
       setUpdating(true);
       const res = await axios.post(`${API_BASE_URL}/api/qr/${qrCode}/scan`);
       if (res.data.success) {
-        showToast.success(res.data.message);
+        setModalMode('success');
+        showToast.success("Workflow updated successfully");
         // Optimistically update or refetch
         fetchJobDetails();
       } else {
+        setModalMode(null);
         showToast.error(res.data.message || "Failed to update stage.");
       }
     } catch (err) {
+      setModalMode(null);
       showToast.error(err.response?.data?.message || "An error occurred.");
     } finally {
       setUpdating(false);
@@ -100,14 +118,17 @@ const QrWorkflowPage = () => {
           
           {!isCompleted && (
             <button
-              onClick={handleCompleteStage}
+              onClick={() => setModalMode('confirm')}
               disabled={updating}
               className={`w-full sm:w-auto px-8 py-3 rounded-xl text-white font-bold text-sm shadow-md transition-all flex justify-center items-center ${
                 updating ? "bg-violet-400 cursor-not-allowed" : "bg-violet-600 hover:bg-violet-700 active:scale-95"
               }`}
             >
               {updating ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  Updating Workflow...
+                </>
               ) : (
                 <>
                   <CheckSquare className="w-5 h-5 mr-2" />
@@ -123,6 +144,13 @@ const QrWorkflowPage = () => {
           <JobCardDocument job={job} showQr={false} />
         </div>
 
+        <StageActionModal 
+          isOpen={modalMode !== null}
+          mode={modalMode || 'confirm'}
+          isUpdating={updating}
+          onClose={() => setModalMode(null)}
+          onConfirm={executeCompleteStage}
+        />
       </div>
     </div>
   );

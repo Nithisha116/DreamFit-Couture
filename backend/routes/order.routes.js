@@ -314,6 +314,7 @@ import {
   // ===== ONLY THESE TWO FOR ADMIN DASHBOARD =====
   getOrderStats,  // For pie chart & KPI cards (GET /api/orders/stats)
   getRecentOrders      ,      // For recent orders table (GET /api/orders/recent)
+  getDashboardData, // Add dashboard data
   
 } from "../controllers/order.controller.js";
 import { protect, authorize } from "../middleware/auth.middleware.js";
@@ -367,6 +368,13 @@ router.get("/stats", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getOr
  * @access  Admin, Store Keeper, Cutting Master
  */
 router.get("/recent", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getRecentOrders);
+
+/**
+ * @route   GET /api/orders/dashboard
+ * @desc    Get dashboard data
+ * @access  Admin, Store Keeper
+ */
+router.get("/dashboard", authorize("ADMIN", "STORE_KEEPER"), getDashboardData);
 
 // ============================================
 // 📋 ORDER CRUD ROUTES (WITH IMAGE UPLOAD)

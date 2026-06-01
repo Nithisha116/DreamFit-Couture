@@ -1853,8 +1853,10 @@ export const getFilteredOrders = async (params = {}) => {
 
 export const getReadyToDeliveryOrders = async (params = {}) => {
   try {
-    const queryString = buildQueryString(params);
-    const response = await axiosInstance.get(`${ORDER_BASE}/ready-to-delivery${queryString}`);
+    // We use the main order endpoint with status filter instead of a dedicated endpoint
+    // since the backend might not have /ready-to-delivery route implemented
+    const queryString = buildQueryString({ ...params, status: 'ready-to-delivery' });
+    const response = await axiosInstance.get(`${ORDER_BASE}${queryString}`);
     return response.data;
   } catch (error) {
     console.error("❌ [API] Error fetching ready to delivery orders:", error);

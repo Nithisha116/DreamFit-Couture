@@ -101,11 +101,11 @@ export default function CustomerSizePage() {
         </div>
 
         {/* Profiles Grid */}
-        {isLoading && profiles.length === 0 ? (
+        {isLoading && (!profiles || profiles.length === 0) ? (
           <div className="flex justify-center py-12">
             <div className="w-10 h-10 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
-        ) : profiles.length === 0 ? (
+        ) : !profiles || profiles.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl shadow-sm border border-slate-200">
             <Ruler size={48} className="text-slate-300 mx-auto mb-4" />
             <h3 className="text-xl font-black text-slate-700 mb-2">No Profiles Found</h3>

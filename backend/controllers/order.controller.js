@@ -334,13 +334,17 @@ export const getOrderStats = async (req, res) => {
 
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    const [todayCount, weekCount, monthCount, totalCount, overdueCount, paymentPendingCount] = await Promise.all([
+    const [todayCount, weekCount, monthCount, totalCount, overdueCount, paymentPendingCount, cuttingCount, stitchingCount, trialCount, finishingCount] = await Promise.all([
       Order.countDocuments({ createdAt: { $gte: today }, isActive: true }),
       Order.countDocuments({ createdAt: { $gte: startOfWeek }, isActive: true }),
       Order.countDocuments({ createdAt: { $gte: startOfMonth }, isActive: true }),
       Order.countDocuments({ isActive: true }),
       Order.countDocuments({ deliveryDate: { $lt: today }, status: { $nin: ['delivered', 'cancelled'] }, isActive: true }),
-      Order.countDocuments({ 'paymentSummary.paymentStatus': 'pending', isActive: true })
+      Order.countDocuments({ 'paymentSummary.paymentStatus': 'pending', isActive: true }),
+      Order.countDocuments({ $or: [{ status: 'cutting' }, { currentStage: 'cutting', status: { $nin: ['cancelled', 'delivered'] } }], isActive: true }),
+      Order.countDocuments({ $or: [{ status: 'stitching' }, { currentStage: 'stitching', status: { $nin: ['cancelled', 'delivered'] } }], isActive: true }),
+      Order.countDocuments({ $or: [{ status: 'trial' }, { currentStage: 'trial', status: { $nin: ['cancelled', 'delivered'] } }], isActive: true }),
+      Order.countDocuments({ $or: [{ status: 'finishing' }, { currentStage: 'finishing', status: { $nin: ['cancelled', 'delivered'] } }], isActive: true })
     ]);
 
     const statusStats = await Order.aggregate([
@@ -392,6 +396,10 @@ export const getOrderStats = async (req, res) => {
         
         // Exact flat fields for OrderFilterTabs.jsx
         ...statusCounts,
+        cutting: cuttingCount,
+        stitching: stitchingCount,
+        trial: trialCount,
+        finishing: finishingCount,
         
         // Legacy fallback
         statusBreakdown: statusStats,
@@ -652,7 +660,8 @@ export const createOrder = async (req, res) => {
         }
         
         order.garments = createdGarmentIds;
-        order.status = "confirmed";
+        // Automatically move to in-progress since job cards/works are generated
+        order.status = "in-progress";
         await order.save();
         
         if (createdGarmentIds.length > 0) {
@@ -723,6 +732,15 @@ export const getAllOrders = async (req, res) => {
         query.status = { $in: ['in-progress', 'progress', 'cutting', 'stitching', 'trial', 'finishing'] };
       } else if (status === 'ready-to-delivery') {
         query.status = { $in: ['ready-to-delivery', 'ready-to-deliver', 'ready'] };
+      } else if (['cutting', 'stitching', 'trial', 'finishing'].includes(status)) {
+        // Safe mapping to capture current stage even if explicit status hasn't synced
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [
+            { status: status },
+            { currentStage: status }
+          ]
+        });
       } else {
         query.status = status;
       }
@@ -864,7 +882,7 @@ export const updateOrderStatus = async (req, res) => {
     const { status } = req.body;
     const { id } = req.params;
     
-    const validStatuses = ["draft", "confirmed", "in-progress", "ready-to-delivery", "delivered", "cancelled"];
+    const validStatuses = ["draft", "confirmed", "in-progress", "cutting", "stitching", "trial", "finishing", "ready-to-delivery", "delivered", "cancelled"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: `Invalid status.` });
     }
@@ -898,19 +916,30 @@ export const updateOrderStatus = async (req, res) => {
 
     if (status === 'cancelled') {
       await Work.updateMany({ order: order._id, status: { $ne: 'ready-to-deliver' } }, { status: 'cancelled', isActive: false });
-    } else if (status === 'in-progress') {
-  const firstStage = order.stageKeys?.[0] || 'cutting';
+    } else if (['in-progress', 'cutting', 'stitching', 'trial', 'finishing'].includes(status)) {
+      const targetStage = status === 'in-progress' ? (order.stageKeys?.[0] || 'cutting') : status;
 
-  await Work.updateMany(
-    {
-      order: order._id,
-      status: 'pending'
-    },
-    {
-      status: firstStage,
-      currentStage: firstStage
-    }
-  );
+      await Work.updateMany(
+        {
+          order: order._id,
+          status: { $nin: ['cancelled', 'ready-to-deliver', 'delivered'] }
+        },
+        {
+          status: targetStage,
+          currentStage: targetStage
+        }
+      );
+    } else if (status === 'ready-to-deliver' || status === 'ready-to-delivery') {
+      await Work.updateMany(
+        {
+          order: order._id,
+          status: { $nin: ['cancelled', 'delivered'] }
+        },
+        {
+          status: 'ready-to-deliver',
+          currentStage: 'packed'
+        }
+      );
     } else if (status === 'delivered') {
       await Work.updateMany(
   {
@@ -1137,8 +1166,8 @@ export const getOrderStatsForDashboard = async (req, res) => {
       Order.countDocuments(query),
       Order.countDocuments({ ...query, status: 'draft' }),
       Order.countDocuments({ ...query, status: 'confirmed' }),
-      Order.countDocuments({ ...query, status: 'in-progress' }),
-      Order.countDocuments({ ...query, status: 'ready-to-deliver' }),
+      Order.countDocuments({ ...query, status: { $in: ['in-progress', 'progress', 'cutting', 'stitching', 'trial', 'finishing'] } }),
+      Order.countDocuments({ ...query, status: { $in: ['ready-to-delivery', 'ready-to-deliver', 'ready'] } }),
       Order.countDocuments({ ...query, status: 'delivered' }),
       Order.countDocuments({ ...query, status: 'cancelled' }),
       Order.countDocuments({ ...query, deliveryDate: { $lt: today }, status: { $nin: ['delivered', 'cancelled'] } }),

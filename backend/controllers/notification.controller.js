@@ -1853,6 +1853,7 @@ import User from '../models/User.js';
 import CuttingMaster from '../models/CuttingMaster.js';
 import StoreKeeper from '../models/StoreKeeper.js';
 import Tailor from '../models/Tailor.js';
+import { getIO } from '../utils/socket.js';
 
 // Helper function to determine recipient model based on role
 const getRecipientModel = (role) => {
@@ -2014,6 +2015,14 @@ export const createNotification = async ({
       console.log(`✅ Notification created successfully!`);
       console.log(`   ID: ${notification._id}`);
       console.log('🔔 ===== CREATE NOTIFICATION COMPLETED =====\n');
+      
+      try {
+        const io = getIO();
+        io.emit('notification:new', notification);
+      } catch (err) {
+        console.error("Socket emission failed:", err.message);
+      }
+      
       return notification;
     }
     
@@ -2051,6 +2060,13 @@ export const createNotification = async ({
     console.log(`   👤 Admin notifications: ${result.length - storeKeeperNotifications.length}`);
     console.log(`   👤 Store Keeper notifications: ${storeKeeperNotifications.length}`);
     console.log('🔔 ===== CREATE NOTIFICATION COMPLETED =====\n');
+    
+    try {
+      const io = getIO();
+      result.forEach(n => io.emit('notification:new', n));
+    } catch (err) {
+      console.error("Socket emission failed:", err.message);
+    }
     
     return result;
     
