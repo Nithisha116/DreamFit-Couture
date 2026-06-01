@@ -74,8 +74,7 @@ export default function WorkflowScanPage() {
   const trackingId = useMemo(() => resolveTrackingId(wfParam), [wfParam]);
 
   // ✅ Destructure suppressNextApiMerge from the hook
-  const { jobs: workflowJobs, refresh: refreshWorkflowJobs, version, suppressNextApiMerge } =
-    useWorkflowJobs();
+  const { jobs: workflowJobs, refresh: refreshWorkflowJobs, version } = useWorkflowJobs();
 
   const [job, setJob]             = useState(null);
   const [loadState, setLoadState] = useState("loading");
@@ -160,41 +159,39 @@ export default function WorkflowScanPage() {
     [job?.additionalInfo, job?.cuttingNotes, job?.tailorNotes],
   );
 
-  const handleCompleteStage = () => {
+  const handleCompleteStage = async () => {
     if (!trackingId || completing || isWorkflowComplete) return;
     setCompleting(true);
 
     const actualTrackingId = job?.workflowTrackingId || trackingId;
 
-    // ✅ STEP 1: Advance in localStorage (optimistic, instant)
-    const res = advanceStageByTrackingId(actualTrackingId, "manual");
-    setCompleting(false);
+    const res = await advanceStageByTrackingId(actualTrackingId, "manual");
 
     if (res.ok) {
-      // ✅ STEP 2: Immediately show updated job from localStorage
-      setJob(res.job);
+      await refreshWorkflowJobs();
+      const updated =
+        findWorkflowJob(actualTrackingId) ||
+        workflowJobs.find(
+          (j) =>
+            j.workflowTrackingId === actualTrackingId ||
+            j.workCode === actualTrackingId,
+        ) ||
+        res.job;
+      setJob(updated);
       setJustCompleted(true);
 
       if (res.nextKey) {
-        const nextLabel = getStageLabelFromDef(res.nextKey, res.job.workflowStages);
+        const nextLabel = getStageLabelFromDef(res.nextKey, updated?.workflowStages);
         showToast.success(
-          `${getStageLabelFromDef(res.activeKey, res.job.workflowStages)} completed — ${nextLabel} is now active`
+          `${getStageLabelFromDef(res.activeKey, updated?.workflowStages)} completed — ${nextLabel} is now active`,
         );
       } else {
         showToast.success("All stages completed — ready for delivery");
       }
-
-      // ✅ STEP 3: Suppress the API merge for 1.5 s so the API refresh
-      //    (triggered below) doesn't overwrite our localStorage state
-      //    before MongoDB has persisted work.currentStage.
-      suppressNextApiMerge();
-
-      // ✅ STEP 4: Refresh from API (will be suppressed for 1.5 s, then
-      //    re-fetches with the persisted Mongo state)
-      refreshWorkflowJobs();
     } else {
       showToast.error(res.error || "Could not complete stage");
     }
+    setCompleting(false);
   };
 
   return (

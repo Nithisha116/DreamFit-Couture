@@ -3951,10 +3951,8 @@ import GarmentForm from "../garment/GarmentForm";
 import AddPaymentModal from "../../../components/AddPaymentModal";
 import ImagePreviewModal from "../../../components/ImagePreviewModal";
 import showToast from "../../../utils/toast";
-import { registerWorkflowJobsFromOrder } from "../../../workflow/orderWorkflowBridge";
-import { fetchWorks } from "../../../features/work/workSlice";
+import { fetchWorks, fetchWorkflowJobs } from "../../../features/work/workSlice";
 import RangeBadge from "../../../components/RangeBadge";
-import { syncWorksToWorkflowJobs } from "../../../workflow/workflowEngine";
 import ProductionWorkflowBuilder from "../../../components/workflow/ProductionWorkflowBuilder";
 import {
   DEFAULT_WORKFLOW_STAGES,
@@ -5466,19 +5464,15 @@ const renderDayContents = useCallback((day, date) => {
           garments: orderData.garments,
           workflowStages: apiOrder.workflowStages || orderData.workflowStages,
         };
-        registerWorkflowJobsFromOrder(orderPayload, []);
-
         try {
-          const worksData = await dispatch(
-            fetchWorks({ orderId, limit: 50 }),
-          ).unwrap();
-          const worksList = worksData?.works || [];
-          if (worksList.length) {
-            registerWorkflowJobsFromOrder(orderPayload, worksList);
-            syncWorksToWorkflowJobs(worksList, []);
-          }
+          await dispatch(fetchWorks({ orderId, limit: 50 })).unwrap();
         } catch (worksErr) {
-          console.warn("Works fetch for workflow sync:", worksErr);
+          console.warn("Works fetch after order create:", worksErr);
+        }
+        try {
+          await dispatch(fetchWorkflowJobs()).unwrap();
+        } catch (wfErr) {
+          console.warn("Workflow jobs refresh after order create:", wfErr);
         }
       } catch (wfErr) {
         console.warn("Workflow job registration skipped:", wfErr);

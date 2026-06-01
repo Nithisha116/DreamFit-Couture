@@ -6755,10 +6755,18 @@ const dynamicStageKeys =
 
 const activeStage = dynamicStageKeys[0] || 'cutting';
 
-const workflowStages = order.workflowStages || [];
 const stageKeys =
-  order.stageKeys ||
-  workflowStages.map(stage => stage.key);
+  (Array.isArray(order.stageKeys) && order.stageKeys.length
+    ? order.stageKeys
+    : Array.isArray(order.workflowStages)
+      ? order.workflowStages.map((s) => s.key).filter(Boolean)
+      : []) || [];
+
+const workflowStages = stageKeys.map((key, index) => {
+  const label =
+    String(key).charAt(0).toUpperCase() + String(key).slice(1).replace(/_/g, " ");
+  return { key, label, order: index + 1 };
+});
 
 const work = await Work.create({
   order: orderId,

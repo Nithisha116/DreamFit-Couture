@@ -1,10 +1,7 @@
-import {
-  WORKFLOW_CHANGED_EVENT,
-  WORKFLOW_LS_KEY,
-  extractOrderedStageKeys,
-  mergeStageKeysPreferCustom,
-} from "./workflowConstants";
-import { dedupeWorkflowJobs, sanitizeWorkflowJob } from "./workflowSanitize";
+import { WORKFLOW_CHANGED_EVENT } from "./workflowConstants";
+import { sanitizeWorkflowJob } from "./workflowSanitize";
+import { store } from "../app/store";
+import { selectWorkflowJobs } from "../features/work/workSlice";
 
 function normRef(ref) {
   return String(ref || "")
@@ -12,36 +9,27 @@ function normRef(ref) {
     .toLowerCase();
 }
 
+/** In-memory workflow jobs come from Redux (populated by GET /api/workflow/jobs). */
 export function loadWorkflowJobs() {
   try {
-    const raw = localStorage.getItem(WORKFLOW_LS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return dedupeWorkflowJobs(parsed);
+    const raw = selectWorkflowJobs(store.getState()) || [];
+    return raw.map((j) => sanitizeWorkflowJob(j)).filter(Boolean);
   } catch {
     return [];
   }
 }
 
+/** @deprecated No-op — MongoDB is SSOT; use fetchWorkflowJobs() instead. */
 export function saveWorkflowJobs(jobs) {
-  const clean = dedupeWorkflowJobs(jobs);
-  localStorage.setItem(WORKFLOW_LS_KEY, JSON.stringify(clean));
   emitWorkflowChanged();
-  return clean;
+  return (jobs || []).map((j) => sanitizeWorkflowJob(j)).filter(Boolean);
 }
 
 export function emitWorkflowChanged() {
   window.dispatchEvent(new CustomEvent(WORKFLOW_CHANGED_EVENT));
 }
 
-/** Resolve job by tracking id, work code, order id, or internal id */
-export function findWorkflowJob(ref) {
-  const needle = normRef(ref);
-  if (!needle) return null;
-
-  const jobs = loadWorkflowJobs();
-
+function searchJobs(jobs, needle) {
   return (
     jobs.find((j) => {
       const candidates = [
@@ -59,6 +47,13 @@ export function findWorkflowJob(ref) {
   );
 }
 
+/** Resolve job by tracking id, work code, order id, or internal id */
+export function findWorkflowJob(ref) {
+  const needle = normRef(ref);
+  if (!needle) return null;
+  return searchJobs(loadWorkflowJobs(), needle);
+}
+
 export function getWorkflowJobByTrackingId(trackingId) {
   return findWorkflowJob(trackingId);
 }
@@ -69,76 +64,18 @@ export function getWorkflowJobByWorkMongoId(workMongoId) {
   return loadWorkflowJobs().find((j) => j.workMongoId === id) || null;
 }
 
-function findJobIndex(jobs, job) {
-  return jobs.findIndex(
-    (j) =>
-      (job.workflowTrackingId &&
-        j.workflowTrackingId === job.workflowTrackingId) ||
-      (job.workMongoId && j.workMongoId && j.workMongoId === job.workMongoId) ||
-      (job.workCode && j.workCode && j.workCode === job.workCode),
-  );
-}
-
+/** @deprecated No-op — persist via API (assign-worker / scan). */
 export function upsertWorkflowJob(job) {
-  const incoming = sanitizeWorkflowJob(job);
-  if (!incoming) return null;
-
-  const jobs = loadWorkflowJobs();
-  const idx = findJobIndex(jobs, incoming);
-  const next = [...jobs];
-
-  let saved;
-  if (idx >= 0) {
-    const prev = jobs[idx];
-    const mergedKeys = mergeStageKeysPreferCustom(
-      prev,
-      extractOrderedStageKeys(incoming),
-    );
-    const mergedStages = { ...(prev.stages || {}), ...(incoming.stages || {}) };
-    const stages = {};
-    mergedKeys.forEach((k) => {
-      stages[k] = mergedStages[k] || {
-        state: "pending",
-        assignedTo: null,
-        completedAt: null,
-        completedBy: null,
-      };
-    });
-
-    saved = sanitizeWorkflowJob({
-      ...prev,
-      ...incoming,
-      stageKeys: mergedKeys,
-      stages,
-      workflowTrackingId:
-        prev.workflowTrackingId || incoming.workflowTrackingId,
-      id: prev.id || incoming.id,
-      createdAt: prev.createdAt || incoming.createdAt,
-      updatedAt: Date.now(),
-    });
-    next[idx] = saved;
-  } else {
-    saved = { ...incoming, updatedAt: Date.now() };
-    next.unshift(saved);
-  }
-
-  saveWorkflowJobs(next);
-  return saved;
+  emitWorkflowChanged();
+  return sanitizeWorkflowJob(job);
 }
 
+/** @deprecated No-op — persist via API. */
 export function updateWorkflowJob(trackingId, updater) {
-  const jobs = loadWorkflowJobs();
   const existing = findWorkflowJob(trackingId);
   if (!existing) return null;
-
-  const idx = findJobIndex(jobs, existing);
-  if (idx < 0) return null;
-
   const merged =
-    typeof updater === "function" ? updater(jobs[idx]) : { ...jobs[idx], ...updater };
-
-  const next = [...jobs];
-  next[idx] = sanitizeWorkflowJob({ ...merged, updatedAt: Date.now() });
-  saveWorkflowJobs(next);
-  return next[idx];
+    typeof updater === "function" ? updater(existing) : { ...existing, ...updater };
+  emitWorkflowChanged();
+  return sanitizeWorkflowJob(merged);
 }

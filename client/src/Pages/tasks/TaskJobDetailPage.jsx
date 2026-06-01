@@ -155,15 +155,15 @@ export default function TaskJobDetailPage() {
     }
   };
 
-  const handleAdvance = () => {
-    const res = advanceStageByTrackingId(trackingId, "manual");
+  const handleAdvance = async () => {
+    const res = await advanceStageByTrackingId(trackingId, "manual");
     if (res.ok) {
+      await refresh();
       showToast.success(
         res.nextKey
           ? `Stage completed — ${res.nextKey} is now active`
           : "Workflow completed — packed / ready",
       );
-      //refresh();
     } else {
       showToast.error(res.error || "Could not advance");
     }

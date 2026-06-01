@@ -132,15 +132,15 @@ function buildStagesFromWork(work, stageKeys) {
     };
   });
 
-  // Overlay completedAt timestamps from workflowStages progress map (if stored as object)
-  // This handles legacy docs that may have {cutting:{completed,completedAt}, ...}
-  const wsMap = work.workflowStages;
-  if (wsMap && typeof wsMap === 'object' && !Array.isArray(wsMap)) {
-    Object.entries(wsMap).forEach(([rawKey, val]) => {
+  // Overlay completion timestamps from workflowProgress (MongoDB SSOT)
+  const progress = work.workflowProgress;
+  if (progress && typeof progress === 'object' && !Array.isArray(progress)) {
+    Object.entries(progress).forEach(([rawKey, val]) => {
       const key = normalizeStageKey(rawKey);
-      if (stages[key] && val?.completedAt) {
-        stages[key].completedAt = val.completedAt;
-      }
+      if (!stages[key] || !val) return;
+      if (val.completedAt) stages[key].completedAt = val.completedAt;
+      if (val.completed) stages[key].state = 'completed';
+      if (val.completedBy) stages[key].completedBy = val.completedBy;
     });
   }
 
@@ -386,20 +386,14 @@ export const processQrScan = async (req, res) => {
     // Build atomic update
     const updateDoc = { $set: {}, $push: {} };
 
-    // ✅ Mark active stage completed in workflowStages map
-    // We store workflowStages as an array of objects now (see Order.js / Work.js),
-    // so we also maintain a legacy-compatible progress object under workflowProgress.
-    // The canonical advancement is tracked via currentStage (String field on Work).
-    updateDoc.$set.currentStage   = nextStageKey ? normalizeStageKey(nextStageKey) : activeKey;
-    updateDoc.$set.overallStatus  = nextStageKey ? 'in-progress' : 'completed';
-    updateDoc.$set.status         = nextStageKey
+    // Canonical cursor: work.currentStage (next active stage, or last when done)
+    updateDoc.$set.currentStage  = nextStageKey
+      ? normalizeStageKey(nextStageKey)
+      : normalizeStageKey(activeKey);
+    updateDoc.$set.overallStatus = nextStageKey ? 'in-progress' : 'completed';
+    updateDoc.$set.status        = nextStageKey
       ? `${activeKey}-completed`
       : 'ready-to-deliver';
-
-    // ✅ Store completion timestamps so getWorkflowJobs can overlay them
-    updateDoc.$set[`workflowStages.${activeKey}.completed`] = true;
-
-updateDoc.$set[`workflowStages.${activeKey}.completedAt`] = now;
 
     // Handle assignment completion
     const assignments = work.assignments || [];
@@ -407,6 +401,11 @@ updateDoc.$set[`workflowStages.${activeKey}.completedAt`] = now;
       a => normalizeStageKey(a.stage) === activeKey
     );
     let completedWorkerName = req.user?.name || 'System';
+
+    // Per-stage progress map (does not mutate workflowStages[] pipeline definition)
+    updateDoc.$set[`workflowProgress.${activeKey}.completed`]   = true;
+    updateDoc.$set[`workflowProgress.${activeKey}.completedAt`] = now;
+    updateDoc.$set[`workflowProgress.${activeKey}.completedBy`] = completedWorkerName;
 
     if (activeAssignmentIndex >= 0) {
       completedWorkerName = assignments[activeAssignmentIndex].workerName || completedWorkerName;

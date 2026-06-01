@@ -12,9 +12,8 @@ import {
   getWorkflowJobByTrackingId,
   getWorkflowJobByWorkMongoId,
   loadWorkflowJobs,
-  saveWorkflowJobs,
-  upsertWorkflowJob,
 } from "./workflowStorage";
+import * as workApi from "../features/work/workApi";
 import { sanitizeWorkflowJob } from "./workflowSanitize";
 import {
   applyWorkStatusToStages,
@@ -203,9 +202,7 @@ export function createJobFromWork(work, boutiqueTasks = [], source = "work-sync"
 
 /** Upsert work into store and return job */
 export function upsertJobFromWork(work, boutiqueTasks = [], existingJob = null) {
-  const job = createJobFromWork(work, boutiqueTasks, "work-sync", existingJob);
-  upsertWorkflowJob(job);
-  return job;
+  return createJobFromWork(work, boutiqueTasks, "work-sync", existingJob);
 }
 
 function findJobForWork(existing, work) {
@@ -248,9 +245,7 @@ export function syncWorksToWorkflowJobs(works = [], boutiqueTasks = []) {
     });
   });
 
-  const merged = [...byWorkId.values(), ...orderOnly];
-  saveWorkflowJobs(merged);
-  return merged;
+  return [...byWorkId.values(), ...orderOnly];
 }
 
 /** Create job when order completes (no work yet) */
@@ -334,93 +329,50 @@ export function createJobFromOrderPayload(
       stageKeys,
     ),
   );
-  upsertWorkflowJob(job);
   return job;
 }
 
-/** QR / floor: complete active stage and activate next */
-export function advanceStageByTrackingId(trackingId, completedBy = "qr") {
+/** Complete active stage via MongoDB (POST /api/workflow/works/:id/scan) */
+export async function advanceStageByTrackingId(trackingId, completedBy = "qr") {
   const job = findWorkflowJob(trackingId);
   if (!job) return { ok: false, error: "Job not found" };
+
+  const workId = job.workMongoId || job.id;
+  if (!workId) return { ok: false, error: "Work record missing" };
 
   const keys = extractOrderedStageKeys(job).filter((k) => k != null && k !== "");
   const activeKey = getActiveStageKey(job);
   const activeIdx = keys.indexOf(activeKey);
   if (activeIdx < 0) return { ok: false, error: "No active stage" };
 
-  const stages = { ...job.stages };
-  stages[activeKey] = {
-    ...stages[activeKey],
-    state: "completed",
-    completedAt: Date.now(),
-    completedBy,
-  };
+  try {
+    const response = await workApi.completeWorkflowStage(workId);
+    emitWorkflowChanged();
 
-  const nextKey = keys[activeIdx + 1];
+    const nextKey = response?.nextStage ?? keys[activeIdx + 1] ?? null;
+    const completedActiveKey = response?.activeKey ?? activeKey;
+    const completedKeys = keys.slice(0, activeIdx + 1);
+    const suggestedWorkStatus = workStatusForCompletedStages(keys, completedKeys);
 
-// ✅ IMPORTANT: remove any previous active states
-keys.forEach((key) => {
-  if (stages[key]?.state === "active") {
-    stages[key] = {
-      ...stages[key],
-      state: "pending",
+    return {
+      ok: true,
+      job: findWorkflowJob(trackingId) || job,
+      suggestedWorkStatus,
+      activeKey: completedActiveKey,
+      nextKey,
+      message: response?.message,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err?.response?.data?.message || err?.message || "Failed to advance stage",
     };
   }
-});
-
-// ✅ mark completed stage
-stages[activeKey] = {
-  ...stages[activeKey],
-  state: "completed",
-  completedAt: Date.now(),
-  completedBy,
-};
-
-// ✅ activate next stage
-if (nextKey) {
-  stages[nextKey] = {
-    ...stages[nextKey],
-    state: "active",
-  };
 }
 
-const updated = recomputeJobMeta({
-  ...job,
-  stages,
-  currentStageKey: nextKey || null,
-  currentStageLabel: nextKey
-    ? getStageLabelFromDef(nextKey, job.workflowStages)
-    : "Completed",
-  lifecycleStatus: nextKey ? "open" : "completed",
-});
-
-upsertWorkflowJob(updated);
-
-emitWorkflowChanged();
-
-  const completedKeys = keys.filter((k) => stages[k]?.state === "completed");
-  const suggestedWorkStatus = workStatusForCompletedStages(keys, completedKeys);
-
-  return { ok: true, job: updated, suggestedWorkStatus, activeKey, nextKey };
-}
-
-export function assignWorkerToActiveStage(trackingId, assignee) {
-  const job = findWorkflowJob(trackingId);
-  if (!job) return null;
-  const activeKey = getActiveStageKey(job);
-  if (!activeKey) return null;
-  const stages = { ...job.stages };
-  stages[activeKey] = {
-    ...stages[activeKey],
-    assignedTo: {
-      role: assignee.role || STAGE_TO_WORKER_ROLE[activeKey] || "helper",
-      name: assignee.name,
-      workerId: assignee.workerId || null,
-    },
-  };
-  const updated = recomputeJobMeta({ ...job, stages });
-  upsertWorkflowJob(updated);
-  return updated;
+/** @deprecated Assign via POST /api/workflow/works/:id/assign-worker (AssignWorkerModal). */
+export function assignWorkerToActiveStage() {
+  return null;
 }
 
 export function buildQrPayload(job) {

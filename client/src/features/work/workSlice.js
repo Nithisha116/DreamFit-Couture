@@ -572,6 +572,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import showToast from '../../utils/toast';
 import * as workApi from './workApi';
+import { sanitizeWorkflowJob } from '../../workflow/workflowSanitize';
 
 const initialState = {
   works: [],
@@ -750,18 +751,34 @@ export const fetchWorkStatusBreakdown = createAsyncThunk(
   }
 );
 
-// Fetch backend-synthesized workflow jobs (replaces localStorage engine)
+// Fetch backend-synthesized workflow jobs (MongoDB SSOT)
 export const fetchWorkflowJobs = createAsyncThunk(
   'work/fetchWorkflowJobs',
   async (_, { rejectWithValue }) => {
     try {
       const response = await workApi.getWorkflowJobs();
-      return response.data || [];
+      const list = response?.data ?? response ?? [];
+      return Array.isArray(list) ? list : [];
     } catch (error) {
       console.error('❌ [fetchWorkflowJobs] error:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch workflow jobs');
     }
   }
+);
+
+export const advanceWorkflowStage = createAsyncThunk(
+  'work/advanceWorkflowStage',
+  async (workId, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await workApi.completeWorkflowStage(workId);
+      await dispatch(fetchWorkflowJobs());
+      return response;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || 'Failed to complete workflow stage',
+      );
+    }
+  },
 );
 
 // ============================================
@@ -1134,7 +1151,9 @@ const workSlice = createSlice({
       })
       .addCase(fetchWorkflowJobs.fulfilled, (state, action) => {
         state.workflowJobsLoading = false;
-        state.workflowJobs = action.payload;
+        state.workflowJobs = (action.payload || [])
+          .map((j) => sanitizeWorkflowJob(j))
+          .filter(Boolean);
       })
       .addCase(fetchWorkflowJobs.rejected, (state) => {
         state.workflowJobsLoading = false;

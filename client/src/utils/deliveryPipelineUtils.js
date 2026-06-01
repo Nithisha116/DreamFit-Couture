@@ -11,17 +11,15 @@ import {
 import { normalizeWorkflowStages } from "../workflow/workflowStageUtils";
 import { getActiveStageKey } from "../workflow/workflowEngine";
 import { getWorkflowJobByWorkMongoId } from "../workflow/workflowStorage";
+import { store } from "../app/store";
+import { selectWorkflowJobs } from "../features/work/workSlice";
 
 export { PIPELINE_STAGE_DEFS };
 
-const LS_TASKS_KEY = "dreamfit_boutique_tasks_v1";
-
+/** Active tasks derived from MongoDB workflow jobs (no localStorage). */
 export function loadBoutiqueTasks() {
   try {
-    const raw = localStorage.getItem(LS_TASKS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return selectWorkflowJobs(store.getState()) || [];
   } catch {
     return [];
   }

@@ -1,5 +1,6 @@
 /** Workflow SSOT — stage definitions and shared constants */
 
+/** @deprecated Workflow jobs are stored in MongoDB only; kept for migration cleanup scripts. */
 export const WORKFLOW_LS_KEY = "dreamfit_workflow_jobs_v1";
 export const WORKFLOW_CHANGED_EVENT = "dreamfit-workflow-changed";
 

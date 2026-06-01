@@ -207,8 +207,14 @@ export const deleteWork = async (id) => {
   return response.data;
 };
 
-// Get backend-synthesized workflow jobs (replaces localStorage engine)
+// Get backend-synthesized workflow jobs (MongoDB SSOT)
 export const getWorkflowJobs = async () => {
   const response = await API.get('/workflow/jobs');
+  return response.data;
+};
+
+/** Complete active stage and advance pipeline (same as QR scan) */
+export const completeWorkflowStage = async (workId) => {
+  const response = await API.post(`/workflow/works/${workId}/scan`, {});
   return response.data;
 };
