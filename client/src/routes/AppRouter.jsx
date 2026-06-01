@@ -453,6 +453,7 @@ const EditGarment = lazy(() => import("../Pages/admin/garment/EditGarment"));
 const TasksPage = lazy(() => import("../Pages/tasks/TasksPage"));
 const TaskJobDetailPage = lazy(() => import("../Pages/tasks/TaskJobDetailPage"));
 const WorkflowScanPage = lazy(() => import("../Pages/tasks/WorkflowScanPage"));
+const QrWorkflowPage = lazy(() => import("../Pages/qr/QrWorkflowPage"));
 const WorkDetailsPage = lazy(() => import("../Pages/works/WorkDetailsPage"));
 const CuttingMasterWorks = lazy(() => import("../Pages/works/CuttingMasterWorks"));
 const CheckAvailabilityPage = lazy(() =>
@@ -638,6 +639,10 @@ export default function AppRouter() {
         <Routes>
           {/* 🔓 PUBLIC ROUTES */}
           <Route path="/" element={<Login />} />
+          
+          {/* 📱 QR WORKFLOW ROUTE (Isolated) */}
+          <Route path="/qr-workflow/:qrCode" element={<QrWorkflowPage />} />
+
 
           {/* 🛡️ ADMIN ROUTES (Full Access) */}
           <Route

@@ -88,6 +88,7 @@ function workToJobFields(work) {
   return {
     workMongoId: work._id,
     workCode: work.workId,
+    qrCode: work.qrCode || "",
     orderId: order?.orderId || "",
     orderMongoId: order?._id || order,
     customerName: order?.customer?.name || "Customer",

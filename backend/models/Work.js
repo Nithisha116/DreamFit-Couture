@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 const workSchema = new mongoose.Schema({
   workId: {
@@ -146,6 +147,10 @@ workSchema.pre('save', async function () {
     const year   = date.getFullYear();
     const random = Math.floor(Math.random() * 1000).toString().padStart(4, '0');
     this.workId  = `WRK-${day}${month}${year}-${random}`;
+  }
+
+  if (!this.qrCode) {
+    this.qrCode = crypto.randomUUID();
   }
 
   if (this.isModified('status')) {
