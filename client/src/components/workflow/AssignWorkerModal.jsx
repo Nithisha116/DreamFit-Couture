@@ -49,6 +49,13 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
           role: a.role || stageRole[k],
           status: "active",
         };
+      } else {
+        // --- TEMPORARY DUMMY DATA FOR TESTING ---
+        if (k === 'embroidery') {
+          next[k] = { _id: '000000000000000000000001', fullName: 'Rahul', role: stageRole[k], status: 'active' };
+        } else if (k === 'aari' || k === 'aari_work') {
+          next[k] = { _id: '000000000000000000000002', fullName: 'Shyam', role: stageRole[k], status: 'active' };
+        }
       }
     });
     setAssignmentsByStage(next);
@@ -67,8 +74,18 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
         if (searchQuery.trim()) query.append("search", searchQuery.trim());
         const res = await API.get(`/workers?${query.toString()}`);
         const list = res?.data?.workers || res?.data?.data || [];
+        
+        // --- TEMPORARY DUMMY DATA FOR TESTING ---
+        const dummyWorkers = [
+          { _id: '000000000000000000000001', fullName: 'Rahul', name: 'Rahul', role, status: 'active' },
+          { _id: '000000000000000000000002', fullName: 'Shyam', name: 'Shyam', role, status: 'active' },
+          { _id: '000000000000000000000003', fullName: 'Mohan', name: 'Mohan', role, status: 'active' },
+          { _id: '000000000000000000000004', fullName: 'Rohan', name: 'Rohan', role, status: 'active' },
+        ];
+        const combinedList = [...(Array.isArray(list) ? list : []), ...dummyWorkers];
+
         if (!cancelled) {
-          setRoleWorkers((s) => ({ ...s, [role]: Array.isArray(list) ? list : [] }));
+          setRoleWorkers((s) => ({ ...s, [role]: combinedList }));
         }
       } catch (e) {
         if (!cancelled) {

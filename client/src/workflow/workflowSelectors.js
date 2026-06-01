@@ -15,13 +15,9 @@ export function filterCompletedJobs(jobs) {
 }
 
 export function sortJobsForDisplay(jobs) {
-  const priorityWeight = { high: 0, normal: 1, low: 2 };
   return [...jobs].sort((a, b) => {
-    const aPri = priorityWeight[a.priority] ?? 1;
-    const bPri = priorityWeight[b.priority] ?? 1;
-    if (aPri !== bPri) return aPri - bPri;
-    const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
-    const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
-    return dateA - dateB;
+    const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+    return timeB - timeA; // Descending order (newest first)
   });
 }
