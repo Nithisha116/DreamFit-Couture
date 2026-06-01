@@ -10,6 +10,9 @@ import { advanceStageByTrackingId } from "../../workflow/workflowEngine";
 import { findWorkflowJob } from "../../workflow/workflowStorage";
 import { fetchWorkById } from "../../features/work/workSlice";
 import showToast from "../../utils/toast";
+import axios from "axios";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 
 
@@ -155,17 +158,35 @@ export default function TaskJobDetailPage() {
     }
   };
 
-  const handleAdvance = () => {
-    const res = advanceStageByTrackingId(trackingId, "manual");
-    if (res.ok) {
-      showToast.success(
-        res.nextKey
-          ? `Stage completed — ${res.nextKey} is now active`
-          : "Workflow completed — packed / ready",
-      );
-      //refresh();
-    } else {
-      showToast.error(res.error || "Could not advance");
+  const handleAdvance = async () => {
+    if (!job || !job.workMongoId) {
+      showToast.error("Cannot advance: Missing work ID");
+      return;
+    }
+
+    const loadingToastId = showToast.loading("Updating Workflow...");
+    try {
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+      
+      const res = await axios.post(`${API_BASE_URL}/api/workflow/works/${job.workMongoId}/scan`, {}, config);
+      
+      if (res.data.success) {
+        showToast.dismiss(loadingToastId);
+        showToast.success(
+          res.data.nextStage
+            ? `Stage completed — ${res.data.nextStage} is now active`
+            : "Workflow completed — packed / ready",
+        );
+        // The WebSocket listener will automatically refresh the data
+      } else {
+        showToast.dismiss(loadingToastId);
+        showToast.error(res.data.message || "Could not advance");
+      }
+    } catch (err) {
+      console.error("Advance error:", err);
+      showToast.dismiss(loadingToastId);
+      showToast.error(err.response?.data?.message || "Could not advance stage");
     }
   };
 

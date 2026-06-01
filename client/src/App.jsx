@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchUnreadCount } from './features/notification/notificationSlice';
 import ToastContainer from './components/common/ToastContainer';
+import GlobalSocketListener from './components/common/GlobalSocketListener';
 
 function App() {
   const dispatch = useDispatch();
@@ -30,6 +31,7 @@ function App() {
 
   return (
     <>
+      <GlobalSocketListener />
       <ToastContainer />
       {/* Your routes */}
     </>

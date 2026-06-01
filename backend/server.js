@@ -489,6 +489,8 @@ import rateLimit from "express-rate-limit";
 import connectDB from "./config/db.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import http from "http";
+import { initSocket } from "./utils/socket.js";
 
 // Import Routes
 import authRoutes from "./routes/auth.routes.js";
@@ -550,6 +552,12 @@ const app = express();
 
 // Connect MongoDB
 connectDB();
+
+// Create HTTP server
+const httpServer = http.createServer(app);
+
+// Initialize Socket.IO
+initSocket(httpServer);
 
 // ==================== MIDDLEWARE ====================
 
@@ -940,7 +948,7 @@ process.on("unhandledRejection", (err) => {
   console.log("❌ UNHANDLED REJECTION! Shutting down...");
   console.log(err.name, err.message);
   console.log(err.stack);
-  server.close(() => {
+  httpServer.close(() => {
     process.exit(1);
   });
 });
@@ -955,7 +963,7 @@ process.on("uncaughtException", (err) => {
 // ==================== START SERVER ====================
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log("\n" + "=".repeat(80));
   console.log(`🚀 DREAMFIT ERP BACKEND v2.0`);
   console.log("=".repeat(80));

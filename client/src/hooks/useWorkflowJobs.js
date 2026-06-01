@@ -82,9 +82,11 @@ export function useWorkflowJobs() {
     const onChange = () => reloadFromStorage();
     window.addEventListener(WORKFLOW_CHANGED_EVENT, onChange);
     window.addEventListener('storage', onChange);
+    window.addEventListener('dreamfit-workflow-refresh', refresh);
     return () => {
       window.removeEventListener(WORKFLOW_CHANGED_EVENT, onChange);
       window.removeEventListener('storage', onChange);
+      window.removeEventListener('dreamfit-workflow-refresh', refresh);
     };
   }, [reloadFromStorage]);
 

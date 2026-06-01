@@ -411,10 +411,10 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { Toaster } from "react-hot-toast";
 
-// Layout & Protected Route
 import MainLayout from "../components/layout/MainLayout";
 import ProtectedRoute from "./ProtectedRoute";
 import ErrorBoundary from "../components/ErrorBoundary";
+import GlobalSocketListener from "../components/common/GlobalSocketListener";
 
 // 🚀 LAZY LOADING - Auth Pages
 const Login = lazy(() => import("../Pages/auth/Login"));
@@ -633,6 +633,8 @@ export default function AppRouter() {
           },
         }}
       />
+
+      <GlobalSocketListener />
 
       {/* ✅ ADDED: Suspense wrapper with PageLoader fallback */}
       <Suspense fallback={<PageLoader />}>

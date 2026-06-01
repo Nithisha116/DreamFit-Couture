@@ -327,8 +327,8 @@
 //                             to={sub.path} 
 //                             className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
 //                               isSubActive 
-//                                 ? 'text-blue-400 font-medium' 
-//                                 : 'text-slate-500 hover:text-blue-400'
+//                                 ? 'text-blue-600 font-bold' 
+//                                 : 'text-slate-800 font-semibold hover:text-blue-600'
 //                             } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center' : ''}`}
 //                             onClick={closeSidebar}
 //                             title={!desktopSidebarOpen && window.innerWidth >= 1024 ? sub.label : ""}
@@ -357,8 +357,8 @@
 //                             to={sub.path} 
 //                             className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
 //                               isSubActive 
-//                                 ? 'text-blue-400 font-medium' 
-//                                 : 'text-slate-500 hover:text-blue-400'
+//                                 ? 'text-blue-600 font-bold' 
+//                                 : 'text-slate-800 font-semibold hover:text-blue-600'
 //                             } ${!desktopSidebarOpen && window.innerWidth >= 1024 ? 'justify-center' : ''}`}
 //                             onClick={closeSidebar}
 //                             title={!desktopSidebarOpen && window.innerWidth >= 1024 ? sub.label : ""}
@@ -980,10 +980,10 @@ export default function MainLayout() {
                        if (item.id === 'ordersOutsourcing') setOrdersOutsourcingOpen(!ordersOutsourcingOpen);
                        if (item.id === 'employeeManagement') setEmployeeManagementOpen(!employeeManagementOpen);
                       }}
-                      className={`w-full flex justify-between items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-semibold text-sm cursor-pointer ${
+                      className={`w-full flex justify-between items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-bold text-sm cursor-pointer ${
                         isItemActive
                           ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
-                          : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100/80'
+                          : 'text-slate-900 hover:text-indigo-700 hover:bg-slate-200/80'
                       } ${!desktopSidebarOpen && isDesktop ? 'justify-center px-2' : ''}`}
                       title={!desktopSidebarOpen && isDesktop ? item.label : ""}
                     >
@@ -1022,8 +1022,8 @@ export default function MainLayout() {
                               to={sub.path} 
                               className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
                                 isSubActive 
-                                  ? 'text-blue-400 font-medium' 
-                                  : 'text-slate-500 hover:text-blue-400'
+                                  ? 'text-blue-600 font-bold' 
+                                  : 'text-slate-800 font-semibold hover:text-blue-600'
                               } ${!desktopSidebarOpen && isDesktop ? 'justify-center' : ''}`}
                               onClick={closeSidebar}
                               title={!desktopSidebarOpen && isDesktop ? sub.label : ""}
@@ -1052,8 +1052,8 @@ export default function MainLayout() {
                               to={sub.path} 
                               className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
                                 isSubActive 
-                                  ? 'text-blue-400 font-medium' 
-                                  : 'text-slate-500 hover:text-blue-400'
+                                  ? 'text-blue-600 font-bold' 
+                                  : 'text-slate-800 font-semibold hover:text-blue-600'
                               } ${!desktopSidebarOpen && isDesktop ? 'justify-center' : ''}`}
                               onClick={closeSidebar}
                               title={!desktopSidebarOpen && isDesktop ? sub.label : ""}
@@ -1082,8 +1082,8 @@ export default function MainLayout() {
                               to={sub.path}
                               className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
                                 isSubActive
-                                  ? 'text-blue-400 font-medium'
-                                  : 'text-slate-500 hover:text-blue-400'
+                                  ? 'text-blue-600 font-bold'
+                                  : 'text-slate-800 font-semibold hover:text-blue-600'
                               } ${!desktopSidebarOpen && isDesktop ? 'justify-center' : ''}`}
                               onClick={closeSidebar}
                               title={!desktopSidebarOpen && isDesktop ? sub.label : ""}
@@ -1113,8 +1113,8 @@ export default function MainLayout() {
                               to={sub.path}
                               className={`flex items-center gap-2 py-2 text-sm transition-all duration-300 ${
                                 isSubActive
-                                  ? 'text-blue-400 font-medium'
-                                  : 'text-slate-500 hover:text-blue-400'
+                                  ? 'text-blue-600 font-bold'
+                                  : 'text-slate-800 font-semibold hover:text-blue-600'
                               } ${!desktopSidebarOpen && isDesktop ? 'justify-center' : ''}`}
                               onClick={closeSidebar}
                               title={!desktopSidebarOpen && isDesktop ? sub.label : ""}
@@ -1136,8 +1136,8 @@ export default function MainLayout() {
                               onClick={() => setProductionStaffOpen(!productionStaffOpen)}
                               className={`w-full flex items-center justify-between gap-2 py-2 text-sm transition-all duration-200 ${
                                 isProductionStaffActive()
-                                  ? 'text-blue-400 font-medium'
-                                  : 'text-slate-500 hover:text-blue-400'
+                                  ? 'text-blue-600 font-bold'
+                                  : 'text-slate-800 font-semibold hover:text-blue-600'
                               }`}
                             >
                               <span className="flex items-center gap-2">
@@ -1160,15 +1160,15 @@ export default function MainLayout() {
                                       to={sub.path}
                                       className={`flex items-center gap-2 py-1.5 text-sm transition-all duration-200 ${
                                         isSubActive
-                                          ? 'text-blue-400 font-medium'
-                                          : 'text-slate-500 hover:text-blue-400'
+                                          ? 'text-blue-600 font-bold'
+                                          : 'text-slate-800 font-semibold hover:text-blue-600'
                                       }`}
                                       onClick={closeSidebar}
                                     >
                                       <sub.icon size={13} className="flex-shrink-0" />
                                       <span>{sub.label}</span>
                                       {isSubActive && (
-                                        <span className="ml-auto w-1.5 h-1.5 bg-blue-400 rounded-full" />
+                                        <span className="ml-auto w-1.5 h-1.5 bg-blue-600 rounded-full" />
                                       )}
                                     </Link>
                                   );
@@ -1183,10 +1183,10 @@ export default function MainLayout() {
                 ) : (
                   <Link 
                     to={item.path} 
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-semibold text-sm ${
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-bold text-sm ${
                       isActive(item.path) 
                         ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' 
-                        : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100/80'
+                        : 'text-slate-900 hover:text-indigo-700 hover:bg-slate-200/80'
                     } ${!desktopSidebarOpen && isDesktop ? 'justify-center px-2' : ''}`}
                     onClick={closeSidebar}
                     title={!desktopSidebarOpen && isDesktop ? item.label : ""}

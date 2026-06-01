@@ -23,7 +23,11 @@ import {
 import { findWorkflowJob } from "../../workflow/workflowStorage";
 import useWorkflowJobs from "../../hooks/useWorkflowJobs";
 import WorkflowStageTimeline from "../../components/workflow/WorkflowStageTimeline";
+import StageActionModal from "../../components/common/StageActionModal";
 import showToast from "../../utils/toast";
+import axios from "axios";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 /** Normalize raw measurements from various data shapes into [{label, value, unit}] */
 function normalizeMeasurements(raw) {
@@ -81,6 +85,7 @@ export default function WorkflowScanPage() {
   const [loadState, setLoadState] = useState("loading");
   const [completing, setCompleting] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
+  const [modalMode, setModalMode] = useState(null);
   const retriedLoadRef            = useRef(false);
 
   const reloadJob = useCallback(() => {
@@ -160,40 +165,40 @@ export default function WorkflowScanPage() {
     [job?.additionalInfo, job?.cuttingNotes, job?.tailorNotes],
   );
 
-  const handleCompleteStage = () => {
+  const executeCompleteStage = async () => {
     if (!trackingId || completing || isWorkflowComplete) return;
     setCompleting(true);
 
-    const actualTrackingId = job?.workflowTrackingId || trackingId;
+    if (!job || !job.workMongoId) {
+      showToast.error("Cannot complete stage: Missing work ID");
+      setCompleting(false);
+      setModalMode(null);
+      return;
+    }
 
-    // ✅ STEP 1: Advance in localStorage (optimistic, instant)
-    const res = advanceStageByTrackingId(actualTrackingId, "manual");
-    setCompleting(false);
-
-    if (res.ok) {
-      // ✅ STEP 2: Immediately show updated job from localStorage
-      setJob(res.job);
-      setJustCompleted(true);
-
-      if (res.nextKey) {
-        const nextLabel = getStageLabelFromDef(res.nextKey, res.job.workflowStages);
-        showToast.success(
-          `${getStageLabelFromDef(res.activeKey, res.job.workflowStages)} completed — ${nextLabel} is now active`
-        );
+    try {
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+      
+      const res = await axios.post(`${API_BASE_URL}/api/workflow/works/${job.workMongoId}/scan`, {}, config);
+      
+      if (res.data.success) {
+        setJustCompleted(true);
+        setModalMode('success');
+        
+        // Suppress API merge briefly, then refresh from API
+        suppressNextApiMerge();
+        refreshWorkflowJobs();
       } else {
-        showToast.success("All stages completed — ready for delivery");
+        setModalMode(null);
+        showToast.error(res.data.message || "Could not complete stage");
       }
-
-      // ✅ STEP 3: Suppress the API merge for 1.5 s so the API refresh
-      //    (triggered below) doesn't overwrite our localStorage state
-      //    before MongoDB has persisted work.currentStage.
-      suppressNextApiMerge();
-
-      // ✅ STEP 4: Refresh from API (will be suppressed for 1.5 s, then
-      //    re-fetches with the persisted Mongo state)
-      refreshWorkflowJobs();
-    } else {
-      showToast.error(res.error || "Could not complete stage");
+    } catch (err) {
+      console.error("Advance error:", err);
+      setModalMode(null);
+      showToast.error(err.response?.data?.message || "Could not complete stage");
+    } finally {
+      setCompleting(false);
     }
   };
 
@@ -357,7 +362,7 @@ export default function WorkflowScanPage() {
           {finishButtonLabel && (
             <button
               type="button"
-              onClick={handleCompleteStage}
+              onClick={() => setModalMode('confirm')}
               disabled={completing}
               className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 py-3.5 text-base font-black text-white transition-all shadow-lg shadow-violet-300/40 disabled:opacity-60"
             >
@@ -388,6 +393,14 @@ export default function WorkflowScanPage() {
             Back to Tasks
           </button>
         </div>
+
+        <StageActionModal 
+          isOpen={modalMode !== null}
+          mode={modalMode || 'confirm'}
+          isUpdating={completing}
+          onClose={() => setModalMode(null)}
+          onConfirm={executeCompleteStage}
+        />
       </div>
     </div>
   );

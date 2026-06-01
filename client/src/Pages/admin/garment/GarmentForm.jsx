@@ -23,9 +23,9 @@ import { fetchAllSizeFields } from "../../../features/sizeField/sizeFieldSlice";
 import { fetchAllTemplates } from "../../../features/sizeTemplate/sizeTemplateSlice";
 import { fetchAllFabrics } from "../../../features/fabric/fabricSlice";
 import {
-  saveMeasurementTemplate,
-  fetchCustomerTemplates,
-} from "../../../features/customer/customerSlice";
+  createCustomerProfile,
+  fetchCustomerProfiles,
+} from "../../../features/customerSize/customerSizeSlice";
 import {
   fetchAllDeliveryDates, // 🔥 CHANGED
   selectAllDeliveryDates, // 🔥 CHANGED
@@ -50,8 +50,11 @@ export default function GarmentForm({
   const { templates } = useSelector((state) => state.sizeTemplate);
   const { fabrics } = useSelector((state) => state.fabric);
   const { user } = useSelector((state) => state.auth);
-  const { currentCustomer, customerTemplates, templatesLoading } = useSelector(
+  const { currentCustomer } = useSelector(
     (state) => state.customer,
+  );
+  const { profiles, isLoading: templatesLoading } = useSelector(
+    (state) => state.customerSize,
   );
 
   const allDeliveryDates = useSelector(selectAllDeliveryDates); // 🔥 CHANGED
@@ -119,8 +122,8 @@ export default function GarmentForm({
 
   useEffect(() => {
     if (effectiveCustomerId) {
-      console.log(`📋 Fetching templates for customer: ${effectiveCustomerId}`);
-      dispatch(fetchCustomerTemplates(effectiveCustomerId));
+      console.log(`📋 Fetching profiles for customer: ${effectiveCustomerId}`);
+      dispatch(fetchCustomerProfiles(effectiveCustomerId));
     }
   }, [dispatch, effectiveCustomerId]);
 
@@ -271,30 +274,21 @@ export default function GarmentForm({
 
   useEffect(() => {
     if (formData.measurementSource === "customer" && selectedCustomerTemplate) {
-      const template = customerTemplates?.find(
+      const template = profiles?.find(
         (t) => t._id === selectedCustomerTemplate,
       );
       if (template) {
         const measurements = [];
         const manual = {};
 
-        if (template.measurements instanceof Map) {
-          template.measurements.forEach((value, key) => {
+        if (template.measurements && Array.isArray(template.measurements)) {
+          template.measurements.forEach((m) => {
             measurements.push({
-              name: key,
-              value: value,
-              unit: "inches",
+              name: m.fieldName,
+              value: m.value,
+              unit: m.unit || "inches",
             });
-            manual[key] = value;
-          });
-        } else {
-          Object.entries(template.measurements).forEach(([key, value]) => {
-            measurements.push({
-              name: key,
-              value: value,
-              unit: "inches",
-            });
-            manual[key] = value;
+            manual[m.fieldName] = m.value;
           });
         }
 
@@ -305,10 +299,24 @@ export default function GarmentForm({
 
         setManualMeasurements(manual);
 
-        showToast.success(`✅ Loaded template: ${template.name}`);
+        showToast.success(`✅ Loaded profile: ${template.profileName}`);
       }
     }
-  }, [selectedCustomerTemplate, customerTemplates]);
+  }, [selectedCustomerTemplate, profiles]);
+
+  // Auto-select latest profile on category match or just first available
+  useEffect(() => {
+    if (formData.measurementSource === "customer" && profiles && profiles.length > 0 && !selectedCustomerTemplate) {
+      // Find one matching category or just the first
+      const catName = formData.categoryName?.toLowerCase() || "";
+      const matched = profiles.find((p) => catName.includes(p.garmentType?.toLowerCase() || ""));
+      if (matched) {
+        setSelectedCustomerTemplate(matched._id);
+      } else {
+        setSelectedCustomerTemplate(profiles[0]._id); // fallback to most recent
+      }
+    }
+  }, [formData.measurementSource, profiles, formData.categoryName]);
 
   useEffect(() => {
     if (editingGarment) {
@@ -528,28 +536,31 @@ export default function GarmentForm({
       ),
     );
 
-    const templateData = {
-      templateName: templateName.trim(),
-      measurements: currentMeasurements,
-      garmentReference: editingGarment?._id || null,
+    const formattedMeasurements = Object.entries(currentMeasurements).map(([key, value]) => ({
+      fieldName: key.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+      fieldDisplayName: key,
+      value: parseFloat(value),
+      unit: "inch"
+    }));
+
+    const profileData = {
+      customerId: effectiveCustomerId,
+      profileName: templateName.trim(),
+      garmentType: formData.categoryName || "general",
       notes: `Saved from ${formData.name} garment`,
+      measurements: formattedMeasurements
     };
 
     try {
-      await dispatch(
-        saveMeasurementTemplate({
-          customerId: effectiveCustomerId,
-          templateData,
-        }),
-      ).unwrap();
+      await dispatch(createCustomerProfile(profileData)).unwrap();
 
       setShowSaveTemplateModal(false);
       setTemplateName("");
-      showToast.success(`✅ Template "${templateName}" saved successfully!`);
+      showToast.success(`✅ Profile "${templateName}" saved successfully!`);
 
-      dispatch(fetchCustomerTemplates(effectiveCustomerId));
+      dispatch(fetchCustomerProfiles(effectiveCustomerId));
     } catch (error) {
-      console.error("❌ Error saving template:", error);
+      console.error("❌ Error saving profile:", error);
     }
   };
 
@@ -1521,7 +1532,7 @@ const renderDayContents = useCallback(
                     className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600"
                   />
                   <span className="text-[10px] sm:text-xs font-medium">
-                    Customer Templates
+                    Customer Profile
                   </span>
                 </label>
 
@@ -1549,7 +1560,7 @@ const renderDayContents = useCallback(
               {formData.measurementSource === "customer" && (
                 <div className="mb-4">
                   <label className="block text-[8px] sm:text-xs font-black uppercase text-slate-500 mb-1 sm:mb-2">
-                    Select Saved Template
+                    Select Customer Profile
                   </label>
                   {!effectiveCustomerId ? (
                     <p className="text-xs sm:text-sm text-amber-600 italic p-2 sm:p-3 bg-amber-50 rounded-lg">
@@ -1559,10 +1570,10 @@ const renderDayContents = useCallback(
                     <div className="flex items-center gap-2 p-2 sm:p-3 bg-slate-100 rounded-lg">
                       <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
                       <span className="text-xs sm:text-sm text-slate-600">
-                        Loading templates...
+                        Loading profiles...
                       </span>
                     </div>
-                  ) : customerTemplates?.length > 0 ? (
+                  ) : profiles && profiles.length > 0 ? (
                     <select
                       value={selectedCustomerTemplate}
                       onChange={(e) =>
@@ -1570,19 +1581,16 @@ const renderDayContents = useCallback(
                       }
                       className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     >
-                      <option value="">-- Select a template --</option>
-                      {customerTemplates.map((template) => (
-                        <option key={template._id} value={template._id}>
-                          {template.name}{" "}
-                          {template.usageCount
-                            ? `(Used ${template.usageCount} times)`
-                            : ""}
+                      <option value="">-- Select a profile --</option>
+                      {profiles.map((profile) => (
+                        <option key={profile._id} value={profile._id}>
+                          {profile.profileName} - {profile.garmentType}
                         </option>
                       ))}
                     </select>
                   ) : (
                     <p className="text-xs sm:text-sm text-slate-500 italic p-2 sm:p-3 bg-slate-100 rounded-lg">
-                      No saved templates yet
+                      No measurements found for this customer
                     </p>
                   )}
                 </div>
