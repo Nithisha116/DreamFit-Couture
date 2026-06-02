@@ -1976,7 +1976,7 @@ const renderDayContents = useCallback(
             {/* Additional Info - UNCHANGED */}
             <div className="bg-slate-50 rounded-lg sm:rounded-xl p-3 sm:p-4">
               <label className="block text-[8px] sm:text-xs font-black uppercase text-slate-500 mb-1 sm:mb-2">
-                Additional Information
+                Bill Notes
               </label>
               <textarea
                 value={formData.additionalInfo}
@@ -1984,7 +1984,7 @@ const renderDayContents = useCallback(
                   setFormData({ ...formData, additionalInfo: e.target.value })
                 }
                 rows="3"
-                placeholder="Any special instructions or notes..."
+                placeholder="Enter bill notes.."
                 className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none text-xs sm:text-sm"
               />
             </div>
