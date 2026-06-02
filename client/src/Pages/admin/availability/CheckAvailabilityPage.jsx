@@ -1,37 +1,54 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { Calendar, Plus, Trash2, Sparkles, AlertTriangle } from "lucide-react";
 import {
   DEPARTMENT_TABS,
-  EMPLOYEES_BY_DEPARTMENT,
   DEFAULT_CAPACITY_HOURS,
 } from "../../../components/tasks/taskConstants";
-import { workloadByEmployee } from "../../../components/tasks/taskUtils";
+import { formatHours } from "../../../components/tasks/taskUtils";
+import { fetchWorkers, selectAllWorkers } from "../../../features/worker/workerSlice";
+import {
+  fetchWorkflowJobs,
+  selectWorkflowJobs,
+} from "../../../features/work/workSlice";
 import { loadTasksFromStorage } from "./availabilityUtils";
 
 const emptyRow = () => ({
   id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
   departmentKey: "embroidery",
-  estimatedHours: 2,
+  estimatedHours: 0,
   otHours: 0,
   priority: 2,
   splittable: false,
 });
 
 export default function CheckAvailabilityPage() {
+  const dispatch = useDispatch();
+  const workers = useSelector(selectAllWorkers);
+  const workflowJobs = useSelector(selectWorkflowJobs);
   const [deliveryDate, setDeliveryDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
   const [rows, setRows] = useState([emptyRow()]);
   const [result, setResult] = useState(null);
 
+  useEffect(() => {
+    dispatch(fetchWorkflowJobs());
+    dispatch(fetchWorkers({ status: "active" }));
+  }, [dispatch]);
+
+  const existingTasks = useMemo(() => loadTasksFromStorage(), [workflowJobs]);
+  const employeesByDepartment = useMemo(
+    () => buildEmployeesByDepartment(workers, existingTasks),
+    [workers, existingTasks],
+  );
+
   const runCheck = () => {
-    const existingTasks = loadTasksFromStorage();
     const baseLoads = {};
-    Object.keys(EMPLOYEES_BY_DEPARTMENT).forEach((dk) => {
-      const w = workloadByEmployee(dk, existingTasks);
-      Object.keys(w).forEach((name) => {
-        baseLoads[name] = (baseLoads[name] || 0) + w[name].hours;
-      });
+    existingTasks.forEach((task) => {
+      if (task.completed || !task.assignedTo) return;
+      baseLoads[task.assignedTo] =
+        (baseLoads[task.assignedTo] || 0) + (Number(task.estimatedHours) || 0);
     });
 
     const tentative = { ...baseLoads };
@@ -40,7 +57,7 @@ export default function CheckAvailabilityPage() {
 
     sorted.forEach((row) => {
       const dept = row.departmentKey;
-      const names = EMPLOYEES_BY_DEPARTMENT[dept] || [];
+      const names = employeesByDepartment[dept] || [];
       if (!names.length) return;
       const hours =
         (Number(row.estimatedHours) || 0) + (Number(row.otHours) || 0);
@@ -84,18 +101,18 @@ export default function CheckAvailabilityPage() {
     });
 
     const perPerson = {};
-    namesFlat().forEach((n) => {
+    namesFlat(employeesByDepartment).forEach((n) => {
       perPerson[n] = tentative[n] || 0;
     });
 
     const recommendations = [];
-    namesFlat().forEach((name) => {
+    namesFlat(employeesByDepartment).forEach((name) => {
       const h = perPerson[name] || 0;
       const ratio = h / DEFAULT_CAPACITY_HOURS;
       if (ratio > 1) {
-        const dk = departmentForName(name);
+        const dk = departmentForName(name, employeesByDepartment);
         if (dk) {
-          const peers = (EMPLOYEES_BY_DEPARTMENT[dk] || []).filter(
+          const peers = (employeesByDepartment[dk] || []).filter(
             (n) => n !== name,
           );
           const alt = [...peers].sort(
@@ -112,7 +129,9 @@ export default function CheckAvailabilityPage() {
 
     const maxRatio = Math.max(
       0,
-      ...namesFlat().map((n) => (perPerson[n] || 0) / DEFAULT_CAPACITY_HOURS),
+      ...namesFlat(employeesByDepartment).map(
+        (n) => (perPerson[n] || 0) / DEFAULT_CAPACITY_HOURS,
+      ),
     );
     let overall = "available";
     if (maxRatio > 1) overall = "overloaded";
@@ -360,7 +379,7 @@ export default function CheckAvailabilityPage() {
                   >
                     <span className="font-bold capitalize">{name}</span>
                     <span className="text-xs text-slate-500">
-                      {h.toFixed(1)}h · {label}
+                      {formatHours(h)}h · {label}
                     </span>
                   </div>
                 );
@@ -372,17 +391,60 @@ export default function CheckAvailabilityPage() {
   );
 }
 
-function namesFlat() {
+function namesFlat(employeesByDepartment) {
   const s = new Set();
-  Object.values(EMPLOYEES_BY_DEPARTMENT).forEach((arr) =>
+  Object.values(employeesByDepartment).forEach((arr) =>
     arr.forEach((n) => s.add(n)),
   );
   return [...s];
 }
 
-function departmentForName(name) {
-  for (const [dk, arr] of Object.entries(EMPLOYEES_BY_DEPARTMENT)) {
+function departmentForName(name, employeesByDepartment) {
+  for (const [dk, arr] of Object.entries(employeesByDepartment)) {
     if (arr.includes(name)) return dk;
+  }
+  return null;
+}
+
+function buildEmployeesByDepartment(workers = [], tasks = []) {
+  const grouped = {
+    embroidery: [],
+    cutting: [],
+    sewing: [],
+    finishes: [],
+    marking: [],
+    aari: [],
+  };
+
+  workers
+    .filter((worker) => worker.status === "active")
+    .forEach((worker) => {
+      const departmentKey = departmentFromRole(worker.role);
+      if (!departmentKey) return;
+      grouped[departmentKey].push(worker.fullName || worker.name);
+    });
+
+  tasks.forEach((task) => {
+    if (!task.assignedTo || !grouped[task.departmentKey]) return;
+    grouped[task.departmentKey].push(task.assignedTo);
+  });
+
+  return Object.fromEntries(
+    Object.entries(grouped).map(([key, names]) => [
+      key,
+      [...new Set(names.filter(Boolean))],
+    ]),
+  );
+}
+
+function departmentFromRole(role = "") {
+  const normalized = role.toLowerCase();
+  if (normalized === "cutting_master" || normalized === "cutting") return "cutting";
+  if (normalized === "tailor" || normalized === "sewing") return "sewing";
+  if (normalized === "embroidery") return "embroidery";
+  if (normalized === "aari") return "aari";
+  if (["finishing", "ironing", "packing", "qc", "helper"].includes(normalized)) {
+    return "finishes";
   }
   return null;
 }

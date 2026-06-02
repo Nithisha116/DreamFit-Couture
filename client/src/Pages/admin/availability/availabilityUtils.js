@@ -16,13 +16,20 @@ export function loadTasksFromStorage() {
           job.currentStageKey ||
           job.stageKeys?.find((k) => job.stages?.[k]?.state === "active");
         const assignee = activeKey ? job.stages?.[activeKey]?.assignedTo : null;
+        const stage = activeKey ? job.stages?.[activeKey] : null;
+        const estimatedHours =
+          Number(stage?.estimatedHours) ||
+          Number(job.estimatedHours) ||
+          Number(job.totalEstimatedHours) ||
+          0;
+
         return {
           orderId: job.orderId,
           customerName: job.customerName,
           title: job.garmentName,
           departmentKey: STAGE_TO_DEPARTMENT[activeKey] || activeKey || "sewing",
           assignedTo: assignee?.name || null,
-          estimatedHours: 2,
+          estimatedHours,
           completed: job.lifecycleStatus === "completed",
         };
       });

@@ -1,11 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import { Plus, Pencil, Trash2, Download, Sparkles, Check, X } from "lucide-react";
-import { INITIAL_SOURCING, SOURCING_STATUSES } from "./sourcingSeed";
+import API from "../../../app/axios";
+import showToast from "../../../utils/toast";
 
-function uid() {
-  return `src-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
+const SOURCING_STATUSES = [
+  "To Start",
+  "In Progress",
+  "Ordered",
+  "Delivered",
+  "Delayed",
+];
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -26,24 +31,50 @@ function urgencyFor(row) {
   return null;
 }
 
+function emptyDraft() {
+  return {
+    clientLabel: "",
+    productName: "",
+    sourcingType: "Fabrics",
+    quantity: 0,
+    totalAmount: 0,
+    status: "To Start",
+    priority: "Medium",
+    supplier: "",
+    deliveryDate: "",
+  };
+}
+
 export default function SourcingPage() {
-  const [rows, setRows] = useState(INITIAL_SOURCING);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [productFilter, setProductFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
 
-  const filtered = useMemo(() => {
-    return rows.filter((r) => {
-      if (statusFilter && r.status !== statusFilter) return false;
-      if (
-        productFilter &&
-        !r.productName.toLowerCase().includes(productFilter.toLowerCase())
-      )
-        return false;
-      return true;
-    });
-  }, [rows, productFilter, statusFilter]);
+  const fetchRows = async () => {
+    setLoading(true);
+    try {
+      const response = await API.get("/sourcing", {
+        params: {
+          search: productFilter || undefined,
+          status: statusFilter || undefined,
+        },
+      });
+      setRows(response.data?.data || []);
+    } catch (error) {
+      showToast.error(error.response?.data?.message || "Failed to load sourcing records");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRows();
+  }, [productFilter, statusFilter]);
+
+  const filtered = useMemo(() => rows, [rows]);
 
   const dueSoon = useMemo(() => {
     const active = rows.filter((r) => r.status !== "Delivered");
@@ -66,7 +97,7 @@ export default function SourcingPage() {
   const downloadPdf = () => {
     const doc = new jsPDF("l", "mm", "a4");
     doc.setFontSize(14);
-    doc.text("DreamFit Couture — Sourcing report", 14, 16);
+    doc.text("DreamFit Couture - Sourcing report", 14, 16);
     doc.setFontSize(10);
     let y = 28;
     filtered.forEach((r, i) => {
@@ -75,7 +106,7 @@ export default function SourcingPage() {
         y = 16;
       }
       doc.text(
-        `${i + 1}. ${r.clientLabel} | ${r.productName} | ${r.sourcingType} | Qty ${r.quantity} | ₹${r.totalAmount} | ${r.status} | ${r.priority} | ${r.supplier} | Due ${r.deliveryDate || "-"}`,
+        `${i + 1}. ${r.clientLabel} | ${r.productName} | ${r.sourcingType} | Qty ${r.quantity} | Rs.${r.totalAmount} | ${r.status} | ${r.priority} | ${r.supplier} | Due ${formatDateValue(r.deliveryDate) || "-"}`,
         14,
         y,
       );
@@ -84,19 +115,29 @@ export default function SourcingPage() {
     doc.save("dreamfit-sourcing.pdf");
   };
 
-  const remove = (id) => {
-    if (window.confirm("Remove this sourcing row?")) {
-      setRows((rs) => rs.filter((r) => r.id !== id));
+  const remove = async (id) => {
+    if (!window.confirm("Remove this sourcing row?")) return;
+    try {
+      await API.delete(`/sourcing/${id}`);
+      setRows((rs) => rs.filter((r) => r._id !== id));
       if (editingId === id) {
         setEditingId(null);
         setDraft(null);
       }
+      showToast.success("Sourcing record removed");
+    } catch (error) {
+      showToast.error(error.response?.data?.message || "Failed to remove sourcing record");
     }
   };
 
   const startEdit = (row) => {
-    setEditingId(row.id);
-    setDraft({ ...row });
+    setEditingId(row._id);
+    setDraft({ ...row, deliveryDate: formatDateValue(row.deliveryDate) });
+  };
+
+  const startCreate = () => {
+    setEditingId("__new__");
+    setDraft(emptyDraft());
   };
 
   const cancelEdit = () => {
@@ -104,12 +145,44 @@ export default function SourcingPage() {
     setDraft(null);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!draft) return;
-    setRows((rs) => rs.map((r) => (r.id === editingId ? { ...draft } : r)));
-    setEditingId(null);
-    setDraft(null);
+    if (!draft.productName?.trim()) {
+      showToast.error("Product name is required");
+      return;
+    }
+
+    try {
+      if (editingId === "__new__") {
+        const response = await API.post("/sourcing", draft);
+        setRows((rs) => [response.data.data, ...rs]);
+        showToast.success("Sourcing record added");
+      } else {
+        const response = await API.put(`/sourcing/${editingId}`, draft);
+        setRows((rs) =>
+          rs.map((r) => (r._id === editingId ? response.data.data : r)),
+        );
+        showToast.success("Sourcing record updated");
+      }
+      setEditingId(null);
+      setDraft(null);
+    } catch (error) {
+      showToast.error(error.response?.data?.message || "Failed to save sourcing record");
+    }
   };
+
+  const updateStatus = async (row, status) => {
+    try {
+      const response = await API.put(`/sourcing/${row._id}`, { status });
+      setRows((rs) => rs.map((r) => (r._id === row._id ? response.data.data : r)));
+    } catch (error) {
+      showToast.error(error.response?.data?.message || "Failed to update status");
+    }
+  };
+
+  const visibleRows = editingId === "__new__" && draft
+    ? [{ ...draft, _id: "__new__" }, ...filtered]
+    : filtered;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -129,34 +202,7 @@ export default function SourcingPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() =>
-              setRows((rs) => {
-                const id = uid();
-                const next = [
-                  {
-                    id,
-                    clientLabel: "New — client",
-                    productName: "New item",
-                    sourcingType: "Fabrics",
-                    quantity: 1,
-                    totalAmount: 0,
-                    status: "To Start",
-                    priority: "Medium",
-                    supplier: "—",
-                    deliveryDate: new Date(Date.now() + 86400000 * 7)
-                      .toISOString()
-                      .slice(0, 10),
-                  },
-                  ...rs,
-                ];
-                // Ensure immediate edit works for freshly added row
-                setTimeout(() => {
-                  const row = next.find((x) => x.id === id);
-                  if (row) startEdit(row);
-                }, 0);
-                return next;
-              })
-            }
+            onClick={startCreate}
             className="inline-flex items-center gap-2 rounded-2xl bg-[#1E6BFF] text-white font-bold px-4 py-2.5 text-sm shadow-md hover:bg-blue-700"
           >
             <Plus className="w-4 h-4" />
@@ -173,7 +219,6 @@ export default function SourcingPage() {
         </div>
       </div>
 
-      {/* Due soon alert (lightweight) */}
       {(dueSoon.counts["Due Soon"] > 0 ||
         dueSoon.counts.Urgent > 0 ||
         dueSoon.counts.Delayed > 0) && (
@@ -195,7 +240,7 @@ export default function SourcingPage() {
             <div className="mt-4 grid sm:grid-cols-2 gap-3">
               {dueSoon.top.map((r) => (
                 <div
-                  key={r.id}
+                  key={r._id}
                   className="rounded-2xl border border-slate-100 p-4 hover:border-blue-200/70 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -204,7 +249,7 @@ export default function SourcingPage() {
                         {r.productName}
                       </p>
                       <p className="text-xs text-slate-500 mt-0.5 truncate">
-                        {r.clientLabel} · Due {r.deliveryDate}
+                        {r.clientLabel} - Due {formatDateValue(r.deliveryDate)}
                       </p>
                     </div>
                     <UrgencyBadge value={r.urgency} />
@@ -218,7 +263,7 @@ export default function SourcingPage() {
 
       <div className="flex flex-wrap gap-3 rounded-2xl bg-white border border-slate-200/80 p-4 shadow-sm">
         <input
-          placeholder="Filter by product…"
+          placeholder="Filter by product..."
           value={productFilter}
           onChange={(e) => setProductFilter(e.target.value)}
           className="flex-1 min-w-[160px] rounded-xl border border-slate-200 px-3 py-2 text-sm"
@@ -254,224 +299,236 @@ export default function SourcingPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.map((r) => (
-              <tr
-                key={r.id}
-                className={`hover:bg-blue-50/30 transition-colors ${
-                  urgencyFor(r) === "Urgent"
-                    ? "border-l-4 border-rose-500"
-                    : urgencyFor(r) === "Due Soon"
-                      ? "border-l-4 border-amber-400"
-                      : urgencyFor(r) === "Delayed"
-                        ? "border-l-4 border-slate-400"
-                        : ""
-                }`}
-              >
-                <td className="px-4 py-3 font-medium text-slate-800">
-                  {editingId === r.id ? (
-                    <input
-                      value={draft?.clientLabel || ""}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, clientLabel: e.target.value }))
-                      }
-                      className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                    />
-                  ) : (
-                    r.clientLabel
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {editingId === r.id ? (
-                    <input
-                      value={draft?.productName || ""}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, productName: e.target.value }))
-                      }
-                      className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                    />
-                  ) : (
-                    r.productName
-                  )}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {editingId === r.id ? (
-                    <select
-                      value={draft?.sourcingType || "Fabrics"}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, sourcingType: e.target.value }))
-                      }
-                      className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white"
-                    >
-                      <option>Fabrics</option>
-                      <option>Trims</option>
-                      <option>Accessories</option>
-                      <option>Embroidery</option>
-                    </select>
-                  ) : (
-                    r.sourcingType
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {editingId === r.id ? (
-                    <input
-                      type="number"
-                      min="0"
-                      value={draft?.quantity ?? 0}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, quantity: Number(e.target.value) }))
-                      }
-                      className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                    />
-                  ) : (
-                    r.quantity
-                  )}
-                </td>
-                <td className="px-4 py-3 font-mono text-xs">
-                  {editingId === r.id ? (
-                    <div className="flex items-center gap-1">
-                      <span className="text-slate-400">₹</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={draft?.totalAmount ?? 0}
-                        onChange={(e) =>
-                          setDraft((d) => ({
-                            ...d,
-                            totalAmount: Number(e.target.value),
-                          }))
-                        }
-                        className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-sans"
-                      />
-                    </div>
-                  ) : (
-                    `₹${Number(r.totalAmount).toLocaleString("en-IN")}`
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <select
-                    value={r.status}
-                    onChange={(e) =>
-                      setRows((rs) =>
-                        rs.map((x) =>
-                          x.id === r.id ? { ...x, status: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    className="rounded-lg border border-slate-200 text-xs font-bold py-1.5 px-2 bg-white"
-                  >
-                    {SOURCING_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  {urgencyFor(r) && (
-                    <div className="mt-2">
-                      <UrgencyBadge value={urgencyFor(r)} />
-                    </div>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {editingId === r.id ? (
-                    <select
-                      value={draft?.priority || "Medium"}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, priority: e.target.value }))
-                      }
-                      className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold bg-white"
-                    >
-                      <option>Low</option>
-                      <option>Medium</option>
-                      <option>High</option>
-                    </select>
-                  ) : (
-                    <span
-                      className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border ${
-                        r.priority === "High"
-                          ? "bg-rose-50 text-rose-800 border-rose-100"
-                          : r.priority === "Low"
-                            ? "bg-slate-50 text-slate-600 border-slate-200"
-                            : "bg-amber-50 text-amber-900 border-amber-100"
-                      }`}
-                    >
-                      {r.priority}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-slate-600 max-w-[140px] truncate">
-                  {editingId === r.id ? (
-                    <input
-                      value={draft?.supplier || ""}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, supplier: e.target.value }))
-                      }
-                      className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                    />
-                  ) : (
-                    r.supplier
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {editingId === r.id ? (
-                    <input
-                      type="date"
-                      value={draft?.deliveryDate || ""}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, deliveryDate: e.target.value }))
-                      }
-                      className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                    />
-                  ) : (
-                    <span className="text-xs text-slate-600 font-medium">
-                      {r.deliveryDate || "—"}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {editingId === r.id ? (
-                    <div className="inline-flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={saveEdit}
-                        className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg inline-flex"
-                        title="Save"
-                      >
-                        <Check className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={cancelEdit}
-                        className="p-2 text-slate-600 hover:bg-slate-50 rounded-lg inline-flex"
-                        title="Cancel"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => startEdit(r)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg inline-flex"
-                      title="Edit"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => remove(r.id)}
-                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg inline-flex"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+            {loading && (
+              <tr>
+                <td colSpan={10} className="px-4 py-8 text-center text-slate-500 font-semibold">
+                  Loading sourcing records...
                 </td>
               </tr>
+            )}
+            {!loading && visibleRows.length === 0 && (
+              <tr>
+                <td colSpan={10} className="px-4 py-8 text-center text-slate-500 font-semibold">
+                  No sourcing records found.
+                </td>
+              </tr>
+            )}
+            {visibleRows.map((r) => (
+              <SourcingRow
+                key={r._id}
+                row={r}
+                draft={draft}
+                editing={editingId === r._id}
+                setDraft={setDraft}
+                saveEdit={saveEdit}
+                cancelEdit={cancelEdit}
+                startEdit={startEdit}
+                remove={remove}
+                updateStatus={updateStatus}
+              />
             ))}
           </tbody>
         </table>
       </div>
     </div>
   );
+}
+
+function SourcingRow({
+  row,
+  draft,
+  editing,
+  setDraft,
+  saveEdit,
+  cancelEdit,
+  startEdit,
+  remove,
+  updateStatus,
+}) {
+  const r = editing ? draft : row;
+
+  return (
+    <tr
+      className={`hover:bg-blue-50/30 transition-colors ${
+        urgencyFor(row) === "Urgent"
+          ? "border-l-4 border-rose-500"
+          : urgencyFor(row) === "Due Soon"
+            ? "border-l-4 border-amber-400"
+            : urgencyFor(row) === "Delayed"
+              ? "border-l-4 border-slate-400"
+              : ""
+      }`}
+    >
+      <EditableCell editing={editing} value={r.clientLabel || ""} field="clientLabel" setDraft={setDraft} />
+      <EditableCell editing={editing} value={r.productName || ""} field="productName" setDraft={setDraft} />
+      <td className="px-4 py-3 text-slate-600">
+        {editing ? (
+          <select
+            value={r.sourcingType || "Fabrics"}
+            onChange={(e) => setDraft((d) => ({ ...d, sourcingType: e.target.value }))}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white"
+          >
+            <option>Fabrics</option>
+            <option>Trims</option>
+            <option>Accessories</option>
+            <option>Embroidery</option>
+          </select>
+        ) : (
+          r.sourcingType
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <input
+            type="number"
+            min="0"
+            value={r.quantity ?? 0}
+            onChange={(e) => setDraft((d) => ({ ...d, quantity: Number(e.target.value) }))}
+            className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+          />
+        ) : (
+          r.quantity
+        )}
+      </td>
+      <td className="px-4 py-3 font-mono text-xs">
+        {editing ? (
+          <div className="flex items-center gap-1">
+            <span className="text-slate-400">Rs.</span>
+            <input
+              type="number"
+              min="0"
+              value={r.totalAmount ?? 0}
+              onChange={(e) => setDraft((d) => ({ ...d, totalAmount: Number(e.target.value) }))}
+              className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-sans"
+            />
+          </div>
+        ) : (
+          `Rs.${Number(r.totalAmount || 0).toLocaleString("en-IN")}`
+        )}
+      </td>
+      <td className="px-4 py-3">
+        <select
+          value={r.status || "To Start"}
+          onChange={(e) =>
+            editing
+              ? setDraft((d) => ({ ...d, status: e.target.value }))
+              : updateStatus(row, e.target.value)
+          }
+          className="rounded-lg border border-slate-200 text-xs font-bold py-1.5 px-2 bg-white"
+        >
+          {SOURCING_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        {urgencyFor(row) && (
+          <div className="mt-2">
+            <UrgencyBadge value={urgencyFor(row)} />
+          </div>
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {editing ? (
+          <select
+            value={r.priority || "Medium"}
+            onChange={(e) => setDraft((d) => ({ ...d, priority: e.target.value }))}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold bg-white"
+          >
+            <option>Low</option>
+            <option>Medium</option>
+            <option>High</option>
+          </select>
+        ) : (
+          <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border ${priorityClass(r.priority)}`}>
+            {r.priority}
+          </span>
+        )}
+      </td>
+      <EditableCell editing={editing} value={r.supplier || ""} field="supplier" setDraft={setDraft} muted />
+      <td className="px-4 py-3">
+        {editing ? (
+          <input
+            type="date"
+            value={formatDateValue(r.deliveryDate)}
+            onChange={(e) => setDraft((d) => ({ ...d, deliveryDate: e.target.value }))}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+          />
+        ) : (
+          <span className="text-xs text-slate-600 font-medium">
+            {formatDateValue(r.deliveryDate) || "-"}
+          </span>
+        )}
+      </td>
+      <td className="px-4 py-3 text-right">
+        {editing ? (
+          <div className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={saveEdit}
+              className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg inline-flex"
+              title="Save"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="p-2 text-slate-600 hover:bg-slate-50 rounded-lg inline-flex"
+              title="Cancel"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => startEdit(row)}
+            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg inline-flex"
+            title="Edit"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        )}
+        {row._id !== "__new__" && (
+          <button
+            type="button"
+            onClick={() => remove(row._id)}
+            className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg inline-flex"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function EditableCell({ editing, value, field, setDraft, muted = false }) {
+  return (
+    <td className={`px-4 py-3 ${muted ? "text-slate-600 max-w-[140px] truncate" : "font-medium text-slate-800"}`}>
+      {editing ? (
+        <input
+          value={value}
+          onChange={(e) => setDraft((d) => ({ ...d, [field]: e.target.value }))}
+          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+        />
+      ) : (
+        value
+      )}
+    </td>
+  );
+}
+
+function formatDateValue(value) {
+  if (!value) return "";
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function priorityClass(priority) {
+  if (priority === "High") return "bg-rose-50 text-rose-800 border-rose-100";
+  if (priority === "Low") return "bg-slate-50 text-slate-600 border-slate-200";
+  return "bg-amber-50 text-amber-900 border-amber-100";
 }
 
 function Pill({ tone, label }) {

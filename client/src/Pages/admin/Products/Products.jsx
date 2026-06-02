@@ -2017,6 +2017,7 @@ import {
   updateItem,
   deleteItem,
 } from "../../../features/item/itemSlice";
+import API from "../../../app/axios";
 import showToast from "../../../utils/toast";
 
 export default function Products() {
@@ -2075,39 +2076,20 @@ export default function Products() {
     }
   });
 
-  // Lightweight inventory (UI-only for now; prepares for future sourcing integration)
-  const [inventoryRows, setInventoryRows] = useState(() => ([
-    {
-      id: "inv-1",
-      itemName: "Cotton lining (white)",
-      category: "Fabrics",
-      stock: 18,
-      unit: "m",
-      lowStockAt: 10,
-      criticalAt: 5,
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: "inv-2",
-      itemName: "Zari thread (gold)",
-      category: "Trims",
-      stock: 6,
-      unit: "spool",
-      lowStockAt: 8,
-      criticalAt: 4,
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-    {
-      id: "inv-3",
-      itemName: "Hook & eye set",
-      category: "Accessories",
-      stock: 3,
-      unit: "pack",
-      lowStockAt: 6,
-      criticalAt: 3,
-      updatedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-    },
-  ]));
+  const [inventoryRows, setInventoryRows] = useState([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+
+  const fetchInventorySummary = async () => {
+    setInventoryLoading(true);
+    try {
+      const response = await API.get("/inventory/summary");
+      setInventoryRows(response.data?.data || []);
+    } catch (error) {
+      showToast.error(error.response?.data?.message || "Failed to load inventory");
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
 
   // Navigation handlers for mobile menu
   const handleNavigateToDashboard = () => {
@@ -2150,6 +2132,7 @@ export default function Products() {
   useEffect(() => {
     dispatch(fetchAllFabrics());
     dispatch(fetchAllCategories());
+    fetchInventorySummary();
   }, [dispatch]);
 
   useEffect(() => {
@@ -2740,37 +2723,23 @@ export default function Products() {
 
           {/* Lists */}
           <div className="p-4 lg:p-6">
-              {/* Inventory - Lightweight boutique stock table */}
+              {/* Inventory - MongoDB-backed stock table */}
               {activeTab === "inventory" && (
                 <div className="rounded-2xl border border-slate-100 overflow-hidden">
                   <div className="p-4 bg-slate-50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                       <p className="text-sm font-black text-slate-800">Inventory</p>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Lightweight stock view (safe UI-only). Low stock signals help plan sourcing.
+                        Stock is calculated from MongoDB inventory movements.
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() =>
-                        setInventoryRows((rs) => [
-                          {
-                            id: `inv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                            itemName: "New item",
-                            category: "Fabrics",
-                            stock: 0,
-                            unit: "pcs",
-                            lowStockAt: 10,
-                            criticalAt: 5,
-                            updatedAt: new Date().toISOString(),
-                          },
-                          ...rs,
-                        ])
-                      }
+                      onClick={fetchInventorySummary}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-all"
                     >
-                      <Plus size={16} />
-                      Add inventory row
+                      <Filter size={16} />
+                      Refresh inventory
                     </button>
                   </div>
                   <div className="overflow-x-auto">
@@ -2786,75 +2755,43 @@ export default function Products() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {inventoryRows.map((r) => {
-                          const critical = r.stock <= r.criticalAt;
-                          const low = !critical && r.stock <= r.lowStockAt;
+                        {inventoryLoading && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-8 text-center text-slate-500 font-semibold">
+                              Loading inventory...
+                            </td>
+                          </tr>
+                        )}
+                        {!inventoryLoading && inventoryRows.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-8 text-center text-slate-500 font-semibold">
+                              No inventory items found.
+                            </td>
+                          </tr>
+                        )}
+                        {!inventoryLoading && inventoryRows.map((r) => {
+                          const stock = Number(r.stock) || 0;
+                          const critical = stock <= 0;
                           const badge = critical
                             ? "Critical"
-                            : low
-                              ? "Low stock"
-                              : "Healthy";
+                            : "Healthy";
                           const badgeCls = critical
                             ? "bg-rose-50 text-rose-800 border-rose-100"
-                            : low
-                              ? "bg-amber-50 text-amber-900 border-amber-100"
-                              : "bg-emerald-50 text-emerald-800 border-emerald-100";
+                            : "bg-emerald-50 text-emerald-800 border-emerald-100";
 
                           return (
-                            <tr key={r.id} className="hover:bg-blue-50/30 transition-colors">
+                            <tr key={r.itemId} className="hover:bg-blue-50/30 transition-colors">
                               <td className="px-4 py-3 font-medium text-slate-800">
-                                <input
-                                  value={r.itemName}
-                                  onChange={(e) =>
-                                    setInventoryRows((rs) =>
-                                      rs.map((x) =>
-                                        x.id === r.id ? { ...x, itemName: e.target.value, updatedAt: new Date().toISOString() } : x,
-                                      ),
-                                    )
-                                  }
-                                  className="w-full rounded-lg border border-slate-200 px-2 py-1.5"
-                                />
+                                {r.itemName}
                               </td>
                               <td className="px-4 py-3 text-slate-700">
-                                <input
-                                  value={r.category}
-                                  onChange={(e) =>
-                                    setInventoryRows((rs) =>
-                                      rs.map((x) =>
-                                        x.id === r.id ? { ...x, category: e.target.value, updatedAt: new Date().toISOString() } : x,
-                                      ),
-                                    )
-                                  }
-                                  className="w-full rounded-lg border border-slate-200 px-2 py-1.5"
-                                />
+                                {r.category}
                               </td>
                               <td className="px-4 py-3">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={r.stock}
-                                  onChange={(e) =>
-                                    setInventoryRows((rs) =>
-                                      rs.map((x) =>
-                                        x.id === r.id ? { ...x, stock: Number(e.target.value), updatedAt: new Date().toISOString() } : x,
-                                      ),
-                                    )
-                                  }
-                                  className="w-28 rounded-lg border border-slate-200 px-2 py-1.5"
-                                />
+                                <span className="font-mono text-xs">{stock}</span>
                               </td>
                               <td className="px-4 py-3">
-                                <input
-                                  value={r.unit}
-                                  onChange={(e) =>
-                                    setInventoryRows((rs) =>
-                                      rs.map((x) =>
-                                        x.id === r.id ? { ...x, unit: e.target.value, updatedAt: new Date().toISOString() } : x,
-                                      ),
-                                    )
-                                  }
-                                  className="w-24 rounded-lg border border-slate-200 px-2 py-1.5"
-                                />
+                                {r.unit}
                               </td>
                               <td className="px-4 py-3">
                                 <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border ${badgeCls}`}>
