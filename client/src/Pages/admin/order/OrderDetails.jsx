@@ -1739,6 +1739,12 @@ import AddPaymentModal from "../../../components/AddPaymentModal";
 import showToast from "../../../utils/toast";
 import { calculatePaymentSummary } from "../../../utils/paymentUtils";
 import RangeBadge from "../../../components/RangeBadge";
+import WhatsAppShareButton from "../../../components/WhatsAppShareButton";
+import {
+  buildOrderWhatsAppMessage,
+  openWhatsAppShare,
+  resolveCustomerPhone,
+} from "../../../utils/whatsappShare";
 
 // ==================== IMAGE MODAL COMPONENT ====================
 const ImageModal = ({ isOpen, image, imageType, onClose }) => {
@@ -2617,6 +2623,26 @@ const handleSavePayment = async (paymentData) => {
   const StatusIcon = statusBadge.icon;
   const customer = currentOrder.customer || {};
 
+  const handleWhatsAppShare = () => {
+    if (!currentOrder) {
+      showToast.error("Order data is not available.");
+      return;
+    }
+    const phoneDigits = resolveCustomerPhone(customer);
+    if (!phoneDigits) {
+      showToast.error("Customer phone number not available.");
+      return;
+    }
+    const message = buildOrderWhatsAppMessage({
+      order: currentOrder,
+      customer,
+      totalPaid: paymentStats.totalPaid,
+      statusLabel: statusBadge.label,
+      deliveryDate: currentOrder.deliveryDate,
+    });
+    openWhatsAppShare({ phoneDigits, message });
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Mobile Header */}
@@ -2779,11 +2805,18 @@ const handleSavePayment = async (paymentData) => {
                     handleDownloadFullInvoice();
                     setMobileMenuOpen(false);
                   }}
-                  className="w-full flex items-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg font-bold"
+                  className="w-full flex items-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg font-bold mb-2"
                 >
                   <Download size={18} />
                   Full Invoice
                 </button>
+                <WhatsAppShareButton
+                  onClick={() => {
+                    handleWhatsAppShare();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full justify-center"
+                />
               </div>
             </div>
           </div>
@@ -2970,6 +3003,9 @@ const handleSavePayment = async (paymentData) => {
               <Download size={18} />
               Full Invoice
             </button>
+
+            {/* WhatsApp Share — opens wa.me with pre-filled order summary */}
+            <WhatsAppShareButton onClick={handleWhatsAppShare} />
           </div>
         </div>
 

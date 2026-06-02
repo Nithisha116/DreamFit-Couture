@@ -217,4 +217,4 @@ export const getWorkflowJobs = async () => {
 export const completeWorkflowStage = async (workId) => {
   const response = await API.post(`/workflow/works/${workId}/scan`, {});
   return response.data;
-};
+};
