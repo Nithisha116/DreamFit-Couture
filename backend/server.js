@@ -491,6 +491,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import http from "http";
 import { initSocket } from "./utils/socket.js";
+import cronService from "./services/cron.service.js";
 
 // Import Routes
 import authRoutes from "./routes/auth.routes.js";
@@ -558,6 +559,9 @@ const httpServer = http.createServer(app);
 
 // Initialize Socket.IO
 initSocket(httpServer);
+
+// Initialize Cron Jobs
+cronService.init();
 
 // ==================== MIDDLEWARE ====================
 

@@ -25,8 +25,9 @@ import {
 import AppointmentModal from './components/AppointmentModal';
 import AppointmentDrawer from './components/AppointmentDrawer';
 import StatusBadge, { STATUS_CONFIG } from './components/StatusBadge';
+import { getSocket } from '../../../utils/socket';
 
-import { Calendar as CalIcon, Plus, Filter, Search, Clock, User, Scissors } from 'lucide-react';
+import { Calendar as CalIcon, Plus, Filter, Search, Clock, User, Scissors, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const locales = {
   'en-US': enUS,
@@ -59,6 +60,26 @@ export default function AppointmentsPage() {
 
   useEffect(() => {
     dispatch(fetchAppointments());
+  }, [dispatch]);
+
+  // Real-time updates via Socket.IO
+  useEffect(() => {
+    const socket = getSocket();
+    
+    const handleAppointmentUpdate = () => {
+      console.log('📡 [WebSocket] Appointment update received. Refetching...');
+      dispatch(fetchAppointments());
+    };
+
+    socket.on('appointment:updated', handleAppointmentUpdate);
+    socket.on('appointment:created', handleAppointmentUpdate);
+    socket.on('appointment:deleted', handleAppointmentUpdate);
+
+    return () => {
+      socket.off('appointment:updated', handleAppointmentUpdate);
+      socket.off('appointment:created', handleAppointmentUpdate);
+      socket.off('appointment:deleted', handleAppointmentUpdate);
+    };
   }, [dispatch]);
 
   // Convert backend appointments to react-big-calendar format
@@ -152,35 +173,88 @@ export default function AppointmentsPage() {
   const CustomEvent = ({ event }) => {
     // Determine if it's a short event (like 15 mins) to adjust layout
     const durationMins = (event.end.getTime() - event.start.getTime()) / 60000;
-    const isShort = durationMins <= 15;
+    const isShort = durationMins <= 30;
+    
+    // Extract initials
+    const initials = (event.title || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
     return (
       <div 
-        className={`group relative flex h-full w-full flex-col overflow-hidden rounded-[10px] transition-all duration-300 ease-out cursor-pointer hover:shadow-lg hover:shadow-indigo-500/30 text-white`}
-        style={{ background: 'linear-gradient(135deg, #4f46e5, #6366f1)' }}
+        className={`group relative flex h-full w-full flex-col overflow-hidden rounded-[10px] transition-all duration-300 ease-out cursor-pointer hover:shadow-md hover:-translate-y-[1px] bg-white border border-slate-200 text-slate-800 p-1`}
         title={`${event.title} - ${event.appointmentType}`}
       >
         {/* Left Status Bar */}
-        <div className={`absolute left-0 top-0 bottom-0 w-[5px] ${event.barClass}`} />
+        <div className={`absolute left-0 top-0 bottom-0 w-[4px] ${event.barClass}`} />
         
-        <div className="flex flex-col h-full px-2.5 py-1.5 ml-1 overflow-hidden">
-          {/* Client Name */}
-          <div className="font-extrabold text-[12px] leading-tight truncate tracking-wide">
-            {event.title}
-          </div>
-
-          {/* Service & Time (Hide if short duration) */}
+        <div className="flex items-center gap-1.5 h-full ml-1.5 overflow-hidden">
+          {/* Avatar */}
           {!isShort && (
-            <div className="mt-1 flex flex-col gap-0.5 opacity-90">
-              <div className="flex items-center gap-1.5 text-[10px] font-medium truncate">
-                <span className="truncate capitalize">{event.appointmentType || 'Consultation'}</span>
-              </div>
-              <div className="flex items-center gap-1 text-[9px] font-semibold tracking-wide opacity-80 mt-auto">
-                <Clock size={9} />
-                {format(event.start, 'hh:mm a')}
-              </div>
+            <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 border border-slate-200">
+              <span className="text-[8px] font-bold text-slate-600">{initials}</span>
             </div>
           )}
+          
+          <div className="flex flex-col min-w-0 flex-1 justify-center">
+            <div className="font-bold text-[10px] sm:text-[11px] leading-tight truncate text-slate-700">
+              {event.title}
+            </div>
+            {!isShort && (
+              <div className="flex items-center gap-1 text-[9px] text-slate-500 mt-[1px]">
+                <span className="truncate capitalize font-medium">{event.appointmentType || 'Consultation'}</span>
+                <span className="opacity-50 hidden sm:inline">•</span>
+                <span className="whitespace-nowrap hidden sm:inline">{format(event.start, 'h:mm a')}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Modern Premium Header (Custom Toolbar)
+  const CustomToolbar = (toolbar) => {
+    const goToBack = () => {
+      toolbar.onNavigate('PREV');
+    };
+    const goToNext = () => {
+      toolbar.onNavigate('NEXT');
+    };
+    const goToCurrent = () => {
+      toolbar.onNavigate('TODAY');
+    };
+
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between mb-4 mt-2 px-2 gap-4">
+        <div className="flex items-center gap-2">
+          <button onClick={goToBack} className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button onClick={goToCurrent} className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm">
+            Today
+          </button>
+          <button onClick={goToNext} className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">
+          {toolbar.label}
+        </h2>
+
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200">
+          {['month', 'week', 'day'].map((view) => (
+            <button
+              key={view}
+              onClick={() => toolbar.onView(view)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-200 capitalize ${
+                toolbar.view === view 
+                  ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+              }`}
+            >
+              {view}
+            </button>
+          ))}
         </div>
       </div>
     );
@@ -245,12 +319,33 @@ export default function AppointmentsPage() {
           timeslots={4}
           min={new Date(2023, 1, 1, 8, 0)} // Starts at 8am
           max={new Date(2023, 1, 1, 20, 0)} // Ends at 8pm
+          dayLayoutAlgorithm={'no-overlap'} // Premium stacking for time grids
           components={{
             event: CustomEvent,
+            toolbar: CustomToolbar
           }}
           className="custom-calendar-theme"
           style={{ height: '100%' }}
         />
+        
+        {/* Empty State Overlay */}
+        {(!appointments || appointments.length === 0) && !isLoading && !filterText && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm">
+            <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-5 border border-indigo-100 shadow-sm">
+              <CalIcon className="w-10 h-10 text-indigo-500" />
+            </div>
+            <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">No Appointments Scheduled</h3>
+            <p className="text-slate-500 mb-8 text-center max-w-md font-medium">
+              Your calendar is currently clear. Create your first appointment to start organizing your schedule!
+            </p>
+            <button 
+              onClick={() => { setSelectedAppointment(null); setSelectedSlot(new Date()); setIsModalOpen(true); }}
+              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5"
+            >
+              <Plus size={20} /> Create Appointment
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modals & Drawers */}

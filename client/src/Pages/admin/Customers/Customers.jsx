@@ -4,7 +4,7 @@ import {
   Search, UserPlus, ShoppingBag, User, MapPin, Phone, Mail, 
   Calendar, PlusCircle, Eye, Hash, IndianRupee, CreditCard, 
   TrendingUp, Package, Download, Upload, FileSpreadsheet,
-  ChevronLeft, ChevronRight 
+  ChevronLeft, ChevronRight, Ban 
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { 
@@ -19,6 +19,7 @@ import {
 import { fetchOrdersByCustomer } from "../../../features/order/orderSlice";
 import { useNavigate } from "react-router-dom";
 import showToast from "../../../utils/toast";
+import BlacklistModal from "./components/BlacklistModal";
 
 export default function Customers() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -27,6 +28,10 @@ export default function Customers() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
+  
+  // Blacklist modal state
+  const [blacklistModalOpen, setBlacklistModalOpen] = useState(false);
+  const [selectedCustomerForBlacklist, setSelectedCustomerForBlacklist] = useState(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -505,6 +510,14 @@ export default function Customers() {
                                 {customerName}
                               </h3>
                               
+                              {customer.isBlacklisted && (
+                                <div className="mb-2">
+                                  <span className="inline-block bg-[#FEE2E2] text-[#DC2626] border border-[#FCA5A5] px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold shadow-sm">
+                                    🔴 BLACKLISTED
+                                  </span>
+                                </div>
+                              )}
+                              
                               {customer.customerId && (
                                 <div className="flex items-center gap-1 mb-2">
                                   <Hash size={10} className="text-blue-500" />
@@ -555,6 +568,22 @@ export default function Customers() {
                           </div>
                           
                           <div className="flex items-center gap-2 sm:self-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCustomerForBlacklist(customer);
+                                setBlacklistModalOpen(true);
+                              }}
+                              className={`flex items-center justify-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl font-bold transition-all shadow-lg text-xs sm:text-sm whitespace-nowrap ${
+                                customer.isBlacklisted 
+                                  ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/20' 
+                                  : 'bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300'
+                              }`}
+                              title={customer.isBlacklisted ? "View Blacklist Details" : "Blacklist Customer"}
+                            >
+                              <Ban size={12} />
+                              <span className="hidden xs:inline">Blacklist</span>
+                            </button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -727,6 +756,15 @@ export default function Customers() {
           )}
         </div>
       </div>
+
+      <BlacklistModal 
+        isOpen={blacklistModalOpen} 
+        onClose={() => {
+          setBlacklistModalOpen(false);
+          setSelectedCustomerForBlacklist(null);
+        }} 
+        customer={selectedCustomerForBlacklist} 
+      />
     </div>
   );
 }

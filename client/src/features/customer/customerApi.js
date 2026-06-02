@@ -879,3 +879,38 @@ export const downloadSampleTemplateApi = async () => {
     throw error.response?.data || error;
   }
 };
+
+// ==================== 🚫 BLACKLIST API CALLS ====================
+
+/**
+ * Blacklist a customer
+ * @param {string} id - Customer ID
+ * @param {Object} data - { reason, notes }
+ * @returns {Promise}
+ */
+export const blacklistCustomerApi = async (id, data) => {
+  try {
+    console.log(`🚫 API Call: blacklistCustomer ${id}`, data);
+    const response = await API.post(`/customers/${id}/blacklist`, data);
+    return response.data;
+  } catch (error) {
+    console.error("❌ API Error blacklistCustomer:", error.response?.data || error.message);
+    throw error.response?.data || error;
+  }
+};
+
+/**
+ * Unblacklist a customer
+ * @param {string} id - Customer ID
+ * @returns {Promise}
+ */
+export const unblacklistCustomerApi = async (id) => {
+  try {
+    console.log(`✅ API Call: unblacklistCustomer ${id}`);
+    const response = await API.post(`/customers/${id}/unblacklist`);
+    return response.data;
+  } catch (error) {
+    console.error("❌ API Error unblacklistCustomer:", error.response?.data || error.message);
+    throw error.response?.data || error;
+  }
+};

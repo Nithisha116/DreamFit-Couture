@@ -186,7 +186,11 @@ import {
   exportCustomers,
   
   // 🔄 Recalculate totals function
-  recalculateCustomerTotals
+  recalculateCustomerTotals,
+
+  // 🚫 Blacklist functions
+  blacklistCustomer,
+  unblacklistCustomer
 
 } from "../controllers/customer.controller.js";
 import { protect, authorize } from "../middleware/auth.middleware.js";
@@ -256,6 +260,10 @@ router.get("/:id", authorize("ADMIN", "STORE_KEEPER"), getCustomerById);
 router.post("/create", authorize("ADMIN", "STORE_KEEPER"), createCustomer);
 router.put("/:id", authorize("ADMIN", "STORE_KEEPER"), updateCustomer);
 router.delete("/:id", authorize("ADMIN"), deleteCustomer);
+
+// ==================== BLACKLIST ROUTES ====================
+router.post("/:id/blacklist", authorize("ADMIN", "STORE_KEEPER"), blacklistCustomer);
+router.post("/:id/unblacklist", authorize("ADMIN", "STORE_KEEPER"), unblacklistCustomer);
 
 console.log("   ✅ Routes added successfully:");
 console.log("      📤 GET  /export            ✅ EXCEL");

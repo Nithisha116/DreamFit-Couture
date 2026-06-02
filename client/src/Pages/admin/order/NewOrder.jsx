@@ -3938,7 +3938,9 @@ import {
   Eye,
   Camera,
   Scissors,
-  Edit
+  Edit,
+  Ban,
+  ShieldAlert
 } from "lucide-react";
 import { createNewOrder } from "../../../features/order/orderSlice";
 import { createGarment } from "../../../features/garment/garmentSlice";
@@ -5621,6 +5623,23 @@ const renderDayContents = useCallback((day, date) => {
               {formData.customer && (
                 <div className="mt-2 text-xs text-green-600 font-medium">
                   ✓ Customer selected: {selectedCustomerDisplay}
+                </div>
+              )}
+              
+              {selectedOption?.customer?.isBlacklisted && (
+                <div className="mt-3 bg-red-50 border-l-4 border-red-500 p-3 rounded-r-lg flex items-start gap-3">
+                  <ShieldAlert size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-red-800 font-bold text-sm">WARNING: BLACKLISTED CUSTOMER</h4>
+                    <p className="text-red-600 text-xs mt-1">
+                      This customer has been blacklisted. Proceed with caution.
+                    </p>
+                    {selectedOption.customer.blacklistReason && (
+                      <p className="text-red-700 text-xs mt-1 font-medium">
+                        Reason: {selectedOption.customer.blacklistReason}
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
