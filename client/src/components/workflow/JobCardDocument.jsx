@@ -178,8 +178,8 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
         {/* ── 2. Order Details Grid ── */}
         <div className="jc-section grid grid-cols-3 gap-3 text-sm mb-5">
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase">Customer</p>
-            <p className="font-semibold truncate">{job.customerName}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase">Work ID</p>
+            <p className="font-semibold truncate">{job.workCode || job.workflowTrackingId || job.orderId}</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase">Due Date</p>

@@ -1778,6 +1778,7 @@ import {
   fetchUnreadCount,
   selectNotifications,
   selectUnreadCount,
+  selectTotalCount,
   selectNotificationsLoading,
   selectNotificationsError
 } from '../../features/notification/notificationSlice';
@@ -1798,6 +1799,7 @@ const NotificationIcon = ({ type, isRead }) => {
       case 'order-ready':
       case 'order-delivered': return <CheckCircle className="text-gray-400" {...iconProps} />;
       case 'order-cancelled': return <AlertCircle className="text-gray-400" {...iconProps} />;
+      case 'birthday': return <span className="text-xl opacity-50 grayscale">🎂</span>;
       default: return <Bell className="text-gray-400" {...iconProps} />;
     }
   } else {
@@ -1809,6 +1811,7 @@ const NotificationIcon = ({ type, isRead }) => {
       case 'order-ready':
       case 'order-delivered': return <CheckCircle className="text-green-600" {...iconProps} />;
       case 'order-cancelled': return <AlertCircle className="text-red-600" {...iconProps} />;
+      case 'birthday': return <span className="text-xl animate-bounce">🎂</span>;
       default: return <Bell className="text-blue-600" {...iconProps} />;
     }
   }
@@ -1845,6 +1848,12 @@ const NotificationBadge = ({ type, priority, isRead }) => {
         <span className="px-1.5 sm:px-2 py-0.5 bg-green-100 text-green-600 text-[10px] sm:text-xs rounded-full font-medium">
           <span className="hidden sm:inline">Accepted</span>
           <span className="sm:hidden">Acc</span>
+        </span>
+      )}
+      {type === 'birthday' && (
+        <span className="px-1.5 sm:px-2 py-0.5 bg-pink-100 text-pink-600 text-[10px] sm:text-xs rounded-full font-medium shadow-sm border border-pink-200">
+          <span className="hidden sm:inline">Birthday</span>
+          <span className="sm:hidden">Bday</span>
         </span>
       )}
     </div>
@@ -1956,6 +1965,7 @@ export default function NotificationsPage() {
   // Redux state
   const allNotifications = useSelector(selectNotifications) || [];
   const unreadCount = useSelector(selectUnreadCount) || 0;
+  const totalCount = useSelector(selectTotalCount) || 0;
   const loading = useSelector(selectNotificationsLoading) || false;
   const error = useSelector(selectNotificationsError) || null;
   const { user } = useSelector((state) => state.auth);
@@ -2192,6 +2202,7 @@ export default function NotificationsPage() {
       case 'work-accepted': return 'bg-green-50 hover:bg-green-100';
       case 'tailor-assigned': return 'bg-orange-50 hover:bg-orange-100';
       case 'order-cancelled': return 'bg-red-50 hover:bg-red-100';
+      case 'birthday': return 'bg-pink-50 hover:bg-pink-100 border-pink-100';
       default: return 'bg-gray-50 hover:bg-gray-100';
     }
   };
@@ -2200,8 +2211,9 @@ export default function NotificationsPage() {
 
   // Calculate stats
   const stats = {
-    total: allNotifications.length,
+    total: totalCount,
     unread: unreadCount,
+    read: Math.max(0, totalCount - unreadCount)
   };
 
   return (
@@ -2224,7 +2236,7 @@ export default function NotificationsPage() {
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-2xl font-bold text-gray-800 truncate">Notifications</h1>
                 <p className="text-xs sm:text-sm text-gray-500 truncate">
-                  {filteredNotifications.length} notification{filteredNotifications.length !== 1 ? 's' : ''}
+                  {totalCount} notification{totalCount !== 1 ? 's' : ''}
                   {filter !== 'all' && ` (${filter})`}
                 </p>
               </div>

@@ -2770,3 +2770,119 @@ export const getCrmData = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// ==================== BLACKLIST FUNCTIONS ====================
+
+/**
+ * @desc    Blacklist a customer
+ * @route   POST /api/customers/:id/blacklist
+ * @access  Private (Admin/Store Keeper)
+ */
+export const blacklistCustomer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason, notes } = req.body;
+    
+    console.log(`🚫 Blacklisting customer ID: ${id}`);
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid customer ID format" });
+    }
+
+    if (!reason) {
+      return res.status(400).json({ success: false, message: "Reason is required to blacklist a customer" });
+    }
+
+    const customer = await Customer.findById(id);
+
+    if (!customer) {
+      return res.status(404).json({ success: false, message: "Customer not found" });
+    }
+
+    if (customer.isBlacklisted) {
+      return res.status(400).json({ success: false, message: "Customer is already blacklisted" });
+    }
+
+    customer.isBlacklisted = true;
+    customer.blacklistReason = reason;
+    customer.blacklistNotes = notes || "";
+    
+    if (!customer.blacklistHistory) {
+      customer.blacklistHistory = [];
+    }
+
+    customer.blacklistHistory.push({
+      action: "BLACKLISTED",
+      reason,
+      notes: notes || "",
+      adminName: req.user?.name || "System Admin",
+      timestamp: new Date()
+    });
+
+    await customer.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Customer successfully blacklisted",
+      customer
+    });
+
+  } catch (error) {
+    console.error("❌ Blacklist customer error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * @desc    Unblacklist a customer
+ * @route   POST /api/customers/:id/unblacklist
+ * @access  Private (Admin/Store Keeper)
+ */
+export const unblacklistCustomer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`✅ Unblacklisting customer ID: ${id}`);
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid customer ID format" });
+    }
+
+    const customer = await Customer.findById(id);
+
+    if (!customer) {
+      return res.status(404).json({ success: false, message: "Customer not found" });
+    }
+
+    if (!customer.isBlacklisted) {
+      return res.status(400).json({ success: false, message: "Customer is not blacklisted" });
+    }
+
+    customer.isBlacklisted = false;
+    customer.blacklistReason = "";
+    customer.blacklistNotes = "";
+    
+    if (!customer.blacklistHistory) {
+      customer.blacklistHistory = [];
+    }
+
+    customer.blacklistHistory.push({
+      action: "UNBLACKLISTED",
+      reason: "Removed from blacklist",
+      adminName: req.user?.name || "System Admin",
+      timestamp: new Date()
+    });
+
+    await customer.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Customer successfully removed from blacklist",
+      customer
+    });
+
+  } catch (error) {
+    console.error("❌ Unblacklist customer error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

@@ -560,6 +560,7 @@ import showToast from '../../utils/toast';
 const initialState = {
   notifications: [],
   unreadCount: 0,
+  totalCount: 0,
   loading: false,
   error: null,
   lastFetched: null
@@ -675,6 +676,7 @@ const notificationSlice = createSlice({
       if (!isRead) {
         state.unreadCount = (state.unreadCount || 0) + 1;
       }
+      state.totalCount = (state.totalCount || 0) + 1;
       
       console.log("📨 Notification added:", {
         notification: action.payload,
@@ -701,6 +703,7 @@ const notificationSlice = createSlice({
         const payload = action.payload || {};
         const notifications = payload.notifications || [];
         const unreadCount = payload.unreadCount || 0;
+        const totalCount = payload.globalTotal !== undefined ? payload.globalTotal : (payload.pagination?.total || 0);
         
         // Ensure notifications is an array
         state.notifications = Array.isArray(notifications) ? notifications : [];
@@ -713,12 +716,14 @@ const notificationSlice = createSlice({
         
         // Use unreadCount from backend if available, otherwise use calculated
         state.unreadCount = unreadCount > 0 ? unreadCount : calculatedUnread;
+        state.totalCount = totalCount > 0 ? totalCount : state.notifications.length;
         
         state.lastFetched = new Date().toISOString();
         
         console.log("🔍 Notifications loaded:", {
           count: state.notifications.length,
           unread: state.unreadCount,
+          total: state.totalCount,
           calculatedUnread,
           backendUnread: unreadCount,
           firstNotification: state.notifications[0] // Log first notification to see its structure
@@ -852,6 +857,15 @@ export const selectUnreadCount = (state) => {
     return state?.notification?.unreadCount || 0;
   } catch (error) {
     console.error('Error in selectUnreadCount:', error);
+    return 0;
+  }
+};
+
+export const selectTotalCount = (state) => {
+  try {
+    return state?.notification?.totalCount || 0;
+  } catch (error) {
+    console.error('Error in selectTotalCount:', error);
     return 0;
   }
 };

@@ -13,7 +13,8 @@ const notificationSchema = new mongoose.Schema({
       'work-available',      // For cutting masters
       'delivery-ready',       // For store keepers
       'order-delivered',      // For store keepers
-      'order-cancelled'       // For everyone
+      'order-cancelled',      // For everyone
+      'birthday'              // For staff (automated)
     ],
     required: [true, 'Notification type is required']
   },

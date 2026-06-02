@@ -70,6 +70,44 @@ const customerSchema = new mongoose.Schema({
     ref: "CustomerMeasurementTemplate"
   }],
   
+  // ✅ NEW: Blacklist Feature
+  isBlacklisted: {
+    type: Boolean,
+    default: false
+  },
+  blacklistReason: {
+    type: String,
+    trim: true
+  },
+  blacklistNotes: {
+    type: String,
+    trim: true
+  },
+  blacklistedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User"
+  },
+  blacklistedAt: {
+    type: Date
+  },
+  blacklistHistory: [{
+    action: {
+      type: String,
+      enum: ["BLACKLISTED", "UNBLACKLISTED"]
+    },
+    reason: String,
+    notes: String,
+    admin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User"
+    },
+    adminName: String,
+    timestamp: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  
   // Computed fields (Stored in DB for fast searching)
   name: {
     type: String,

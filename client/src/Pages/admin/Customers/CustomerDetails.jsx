@@ -1491,7 +1491,7 @@ import {
   Receipt, Clock, Download, Filter, Banknote, Smartphone, 
   Landmark, Package, ChevronLeft as ChevronLeftIcon,
   ChevronRight, Bookmark, ChevronDown, ChevronUp, Scissors,
-  Menu
+  Menu, Ban, ShieldAlert, History
 } from "lucide-react";
 import { 
   fetchCustomerById, 
@@ -2189,6 +2189,28 @@ export default function CustomerDetails() {
           ) : (
             /* VIEW MODE - Responsive */
             <div className="p-4 sm:p-6 lg:p-8">
+              {/* Blacklist Banner */}
+              {currentCustomer?.isBlacklisted && (
+                <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 sm:p-6 rounded-r-xl flex flex-col sm:flex-row gap-4 sm:items-center">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <ShieldAlert size={24} className="text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-red-800 font-black text-lg flex items-center gap-2">
+                      <Ban size={18} />
+                      BLACKLISTED CUSTOMER
+                    </h3>
+                    <p className="text-red-600 text-sm mt-1">
+                      <span className="font-bold">Reason:</span> {currentCustomer.blacklistReason || 'Not specified'}
+                    </p>
+                    {currentCustomer.blacklistNotes && (
+                      <p className="text-red-500 text-xs mt-1 italic">
+                        "{currentCustomer.blacklistNotes}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* VIP Badge */}
               {isVIP && (
                 <div className="mb-4">
@@ -2330,6 +2352,17 @@ export default function CustomerDetails() {
                   >
                     <Ruler size={16} className="inline mr-1 sm:mr-2" />
                     Measurements ({customerTemplates?.length || 0})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("history")}
+                    className={`pb-3 px-1 font-bold text-xs sm:text-sm uppercase tracking-wider transition-all whitespace-nowrap ${
+                      activeTab === "history" 
+                        ? "text-blue-600 border-b-2 border-blue-600" 
+                        : "text-slate-400 hover:text-slate-600"
+                    }`}
+                  >
+                    <History size={16} className="inline mr-1 sm:mr-2" />
+                    Audit History
                   </button>
                 </div>
               </div>
@@ -2879,6 +2912,54 @@ export default function CustomerDetails() {
                           </div>
                         )}
                       </>
+                    )}
+                  </div>
+                )}
+
+                {/* AUDIT HISTORY TAB */}
+                {activeTab === "history" && (
+                  <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+                    <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                      <History size={20} className="text-slate-500" />
+                      Account Activity
+                    </h3>
+                    
+                    {(!currentCustomer?.blacklistHistory || currentCustomer.blacklistHistory.length === 0) ? (
+                      <div className="text-center py-8">
+                        <p className="text-slate-500">No notable activity recorded.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {[...currentCustomer.blacklistHistory]
+                          .sort((a, b) => new Date(b.date) - new Date(a.date))
+                          .map((record, idx) => (
+                            <div key={idx} className={`p-4 rounded-lg border-l-4 ${record.action === 'blacklisted' ? 'bg-red-50 border-red-500' : 'bg-green-50 border-green-500'}`}>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                                <span className={`font-bold uppercase text-xs px-2 py-1 rounded-md w-fit ${
+                                  record.action === 'blacklisted' ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'
+                                }`}>
+                                  {record.action === 'blacklisted' ? 'Blacklisted' : 'Unblacklisted'}
+                                </span>
+                                <span className="text-xs text-slate-500 font-medium">
+                                  {formatDate(record.date)} at {new Date(record.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <p className="text-sm text-slate-700 font-medium mb-1">
+                                <span className="text-slate-500">By:</span> {record.byAdminName || 'System Admin'}
+                              </p>
+                              {record.reason && (
+                                <p className="text-sm text-slate-800">
+                                  <span className="font-bold">Reason:</span> {record.reason}
+                                </p>
+                              )}
+                              {record.notes && (
+                                <p className="text-xs text-slate-500 italic mt-1 bg-white/50 p-2 rounded">
+                                  "{record.notes}"
+                                </p>
+                              )}
+                            </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}

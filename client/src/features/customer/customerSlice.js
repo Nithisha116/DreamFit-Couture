@@ -441,13 +441,17 @@
 //   getCustomerOrdersApi,
 //   getCustomerPaymentStatsApi,
 //   getCustomerStatsApi,
-//   // ✅ NEW: Template API imports
 //   saveMeasurementTemplateApi,
 //   getCustomerTemplatesApi,
 //   getTemplateByIdApi,
 //   updateTemplateApi,
 //   deleteTemplateApi,
-//   useTemplateApi
+//   useTemplateApi,
+//   importCustomersApi,
+//   exportCustomersApi,
+//   downloadSampleTemplateApi,
+//   blacklistCustomerApi,
+//   unblacklistCustomerApi
 // } from "./customerApi";
 // import showToast from "../../utils/toast";
 
@@ -717,7 +721,37 @@
 //     }
 //   }
 // );
-
+// 
+// // ==================== 🚫 BLACKLIST THUNKS ====================
+// 
+// export const blacklistCustomer = createAsyncThunk(
+//   "customer/blacklist",
+//   async ({ id, data }, { rejectWithValue }) => {
+//     try {
+//       const response = await blacklistCustomerApi(id, data);
+//       showToast.success("✅ Customer blacklisted successfully!");
+//       return response.data;
+//     } catch (error) {
+//       showToast.error(error.message || "Failed to blacklist customer");
+//       return rejectWithValue(error.message || "Failed to blacklist customer");
+//     }
+//   }
+// );
+// 
+// export const unblacklistCustomer = createAsyncThunk(
+//   "customer/unblacklist",
+//   async (id, { rejectWithValue }) => {
+//     try {
+//       const response = await unblacklistCustomerApi(id);
+//       showToast.success("✅ Customer unblacklisted successfully!");
+//       return response.data;
+//     } catch (error) {
+//       showToast.error(error.message || "Failed to unblacklist customer");
+//       return rejectWithValue(error.message || "Failed to unblacklist customer");
+//     }
+//   }
+// );
+// 
 // // ==================== SLICE ====================
 // const customerSlice = createSlice({
 //   name: "customer",
@@ -1076,7 +1110,9 @@ import {
   useTemplateApi,
   // ✅ NEW: Import/Export API imports
   importCustomersApi,
-  exportCustomersApi
+  exportCustomersApi,
+  blacklistCustomerApi,
+  unblacklistCustomerApi
 } from "./customerApi";
 import showToast from "../../utils/toast";
 
@@ -1350,6 +1386,36 @@ export const useTemplate = createAsyncThunk(
 );
 
 // ==================== ✅ NEW: IMPORT/EXPORT THUNKS ====================
+
+// ==================== 🚫 BLACKLIST THUNKS ====================
+
+export const blacklistCustomer = createAsyncThunk(
+  "customer/blacklist",
+  async ({ id, data }, { rejectWithValue }) => {
+    try {
+      const response = await blacklistCustomerApi(id, data);
+      showToast.success("✅ Customer blacklisted successfully!");
+      return response.data;
+    } catch (error) {
+      showToast.error(error.message || "Failed to blacklist customer");
+      return rejectWithValue(error.message || "Failed to blacklist customer");
+    }
+  }
+);
+
+export const unblacklistCustomer = createAsyncThunk(
+  "customer/unblacklist",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await unblacklistCustomerApi(id);
+      showToast.success("✅ Customer unblacklisted successfully!");
+      return response.data;
+    } catch (error) {
+      showToast.error(error.message || "Failed to unblacklist customer");
+      return rejectWithValue(error.message || "Failed to unblacklist customer");
+    }
+  }
+);
 
 // 📥 1. IMPORT CUSTOMERS (Excel Upload)
 export const importCustomers = createAsyncThunk(
@@ -1738,6 +1804,44 @@ const customerSlice = createSlice({
       })
       .addCase(exportCustomers.rejected, (state, action) => {
         state.importExportLoading = false;
+        state.error = action.payload;
+      })
+
+      // ===== 🚫 BLACKLIST CUSTOMER =====
+      .addCase(blacklistCustomer.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(blacklistCustomer.fulfilled, (state, action) => {
+        state.loading = false;
+        if (action.payload?.customer) {
+          state.currentCustomer = action.payload.customer;
+          state.customers = state.customers.map(c => 
+            c._id === action.payload.customer._id ? action.payload.customer : c
+          );
+        }
+      })
+      .addCase(blacklistCustomer.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== 🚫 UNBLACKLIST CUSTOMER =====
+      .addCase(unblacklistCustomer.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(unblacklistCustomer.fulfilled, (state, action) => {
+        state.loading = false;
+        if (action.payload?.customer) {
+          state.currentCustomer = action.payload.customer;
+          state.customers = state.customers.map(c => 
+            c._id === action.payload.customer._id ? action.payload.customer : c
+          );
+        }
+      })
+      .addCase(unblacklistCustomer.rejected, (state, action) => {
+        state.loading = false;
         state.error = action.payload;
       });
   }

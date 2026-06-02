@@ -66,36 +66,64 @@
   border: none !important;
 }
 
+/* Remove red horizontal line completely */
+.custom-calendar-theme .rbc-current-time-indicator {
+  display: none !important;
+}
+
+/* Header & Headers Grid */
 .custom-calendar-theme .rbc-header {
-  border-bottom: 1px solid #f1f5f9;
-  padding: 12px 8px;
-  font-size: 11px;
-  font-weight: 800;
-  color: #64748b;
+  border-bottom: 1px solid #E5E7EB !important;
+  border-left: 1px solid #E5E7EB !important;
+  padding: 14px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6B7280;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background-color: #f8fafc;
+  background-color: #F8FAFC;
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .custom-calendar-theme .rbc-month-view,
 .custom-calendar-theme .rbc-time-view {
-  border-radius: 16px;
-  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  border: 1px solid #E5E7EB;
   overflow: hidden;
-  background: white;
+  background: #FFFFFF;
 }
 
 .custom-calendar-theme .rbc-day-bg {
-  border-left: 1px solid #f1f5f9;
-}
-.custom-calendar-theme .rbc-month-row {
-  border-top: 1px solid #f1f5f9;
+  border-left: 1px solid #E5E7EB;
 }
 
+/* Today Highlight */
 .custom-calendar-theme .rbc-today {
-  background-color: #eff6ff;
+  background-color: #EFF6FF !important; /* Soft blue */
+  box-shadow: inset 0 0 15px rgba(59, 130, 246, 0.05); /* Slight glow */
 }
 
+/* Overlapping Handling (Month View Excel-like behavior) */
+.custom-calendar-theme .rbc-month-row {
+  border-top: 1px solid #E5E7EB;
+  flex: 1 0 auto !important; /* Let rows expand based on content */
+  min-height: 120px;
+  overflow: visible !important;
+}
+
+/* Ensure Row Content can expand */
+.custom-calendar-theme .rbc-row-content {
+  z-index: 10;
+}
+
+/* Remove +X more limits */
+.custom-calendar-theme .rbc-show-more {
+  display: none !important; /* Hide 'show more' if we intend to show everything */
+}
+
+/* Remove Event default padding/border to let our custom component handle it */
 .custom-calendar-theme .rbc-event {
   background: transparent !important;
   border: none !important;
@@ -106,119 +134,57 @@
   outline: none;
 }
 
+/* Grid & Time Slots */
 .custom-calendar-theme .rbc-time-header {
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #E5E7EB;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #FFFFFF;
 }
 
 .custom-calendar-theme .rbc-time-content {
   border-top: none;
+  overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
-.custom-calendar-theme .rbc-time-gutter .rbc-timeslot-group {
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.custom-calendar-theme .rbc-timeslot-group {
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.custom-calendar-theme .rbc-day-slot .rbc-time-slot {
-  border-top: 1px solid #f8fafc;
-}
-
-.custom-calendar-theme .rbc-toolbar {
-  margin-bottom: 20px;
-}
-
-.custom-calendar-theme .rbc-toolbar button {
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #475569;
-  transition: all 0.2s;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-}
-
-.custom-calendar-theme .rbc-toolbar button:hover {
-  background: #f8fafc;
-  color: #0f172a;
-}
-
-.custom-calendar-theme .rbc-toolbar button.rbc-active {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-  color: #2563eb;
-  box-shadow: none;
-}
-
-.custom-calendar-theme .rbc-toolbar .rbc-toolbar-label {
-  font-weight: 800;
-  font-size: 16px;
-  color: #1e293b;
-}
-
-/* Custom Scrollbar for sidebars/drawers */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
-  border-radius: 20px;
-}
-
-/* Premium Calendar Additions */
-.custom-calendar-theme .rbc-current-time-indicator {
-  background-color: #ef4444; /* red-500 */
-  height: 2px;
-  z-index: 5;
-}
-.custom-calendar-theme .rbc-current-time-indicator::before {
-  content: "";
-  position: absolute;
-  left: -4px;
-  top: -4px;
-  width: 10px;
-  height: 10px;
-  background-color: #ef4444;
-  border-radius: 50%;
-}
-
-.custom-calendar-theme .rbc-time-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: white;
-}
 .custom-calendar-theme .rbc-time-gutter {
   position: sticky;
   left: 0;
-  z-index: 10;
-  background: white;
+  z-index: 15;
+  background: #FFFFFF;
+  border-right: 1px solid #E5E7EB;
 }
 
-/* Ensure time labels and dates are black and visible */
+.custom-calendar-theme .rbc-time-gutter .rbc-timeslot-group {
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.custom-calendar-theme .rbc-timeslot-group {
+  border-bottom: 1px solid #E5E7EB;
+  min-height: 48px; /* Slightly taller slots for breathing room */
+}
+
+.custom-calendar-theme .rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid #F3F4F6;
+}
+
 .custom-calendar-theme .rbc-time-gutter .rbc-label,
 .custom-calendar-theme .rbc-time-header .rbc-label,
-.custom-calendar-theme .rbc-header,
-.custom-calendar-theme .rbc-event-label,
-.custom-calendar-theme .rbc-slot-selection {
-  color: #0f172a !important;
-  font-weight: 600;
+.custom-calendar-theme .rbc-event-label {
+  color: #111827 !important;
+  font-weight: 500;
+  font-size: 11px;
 }
 
-/* Ensure slot selection background provides contrast */
+/* Selection */
 .custom-calendar-theme .rbc-slot-selection {
-  background-color: rgba(59, 130, 246, 0.2) !important;
-  border: 1px solid rgba(59, 130, 246, 0.5) !important;
+  background-color: rgba(79, 70, 229, 0.1) !important; /* Primary color hint */
+  border: 1px solid rgba(79, 70, 229, 0.3) !important;
 }
 
-/* Ensure column headers (dates) are darker */
-.custom-calendar-theme .rbc-header {
-  color: #0f172a !important;
-  font-weight: 800 !important;
+/* Hide default toolbar since we are building a custom one */
+.custom-calendar-theme .rbc-toolbar {
+  display: none !important;
 }

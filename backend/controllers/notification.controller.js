@@ -2102,13 +2102,15 @@ export const getNotifications = async (req, res) => {
 
     // 🔥 FIX: Remove recipientModel filter - use only userId match
     // This ensures notifications work regardless of which collection user is in
-    const filter = {
+    const baseFilter = {
       $or: [
         { recipient: userId },
         { recipient: userIdStr }
       ]
     };
     
+    const filter = { ...baseFilter };
+
     if (unreadOnly === 'true') {
       filter.isRead = false;
     }
@@ -2129,12 +2131,13 @@ export const getNotifications = async (req, res) => {
     console.log(`✅ Found ${notifications.length} notifications for this page`);
 
     const total = await Notification.countDocuments(filter);
+    const globalTotal = await Notification.countDocuments(baseFilter);
     const unreadCount = await Notification.countDocuments({
-      ...filter,
+      ...baseFilter,
       isRead: false
     });
 
-    console.log(`📊 Final counts - Total: ${total}, Unread: ${unreadCount}`);
+    console.log(`📊 Final counts - Total: ${total}, Global Total: ${globalTotal}, Unread: ${unreadCount}`);
     console.log('🔍 ===== GET NOTIFICATIONS COMPLETED =====\n');
     
     res.json({
@@ -2142,6 +2145,7 @@ export const getNotifications = async (req, res) => {
       data: {
         notifications,
         unreadCount,
+        globalTotal,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),

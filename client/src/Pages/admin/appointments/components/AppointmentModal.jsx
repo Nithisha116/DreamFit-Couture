@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, User, Phone, MapPin, Calendar as CalIcon, Clock } from 'lucide-react';
+import { X, Search, User, Phone, MapPin, Calendar as CalIcon, Clock, ShieldAlert } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { searchCustomerByPhoneApi, getAllCustomersApi } from '../../../../features/customer/customerApi';
 import Select from 'react-select';
@@ -24,6 +24,8 @@ export default function AppointmentModal({ isOpen, onClose, selectedDate, onSave
     time: '10:00',
     duration: 30,
     notes: '',
+    isBlacklisted: false,
+    blacklistReason: ''
   });
 
   const [isSearching, setIsSearching] = useState(false);
@@ -103,14 +105,18 @@ export default function AppointmentModal({ isOpen, onClose, selectedDate, onSave
         ...prev,
         customer: c._id,
         customerName: fullName,
-        phone: c.phone
+        phone: c.phone,
+        isBlacklisted: c.isBlacklisted || false,
+        blacklistReason: c.blacklistReason || ''
       }));
     } else {
       setFormData(prev => ({
         ...prev,
         customer: '',
         customerName: '',
-        phone: ''
+        phone: '',
+        isBlacklisted: false,
+        blacklistReason: ''
       }));
     }
   };
@@ -221,6 +227,24 @@ export default function AppointmentModal({ isOpen, onClose, selectedDate, onSave
                   />
                 </div>
               </div>
+              
+              {/* Blacklist Warning */}
+              {formData.isBlacklisted && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-r-lg flex items-start gap-3 mt-2">
+                  <ShieldAlert size={18} className="text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-red-800 font-bold text-sm">BLACKLISTED CUSTOMER</h4>
+                    <p className="text-red-600 text-xs mt-1">
+                      This customer has been blacklisted. Please proceed with caution.
+                    </p>
+                    {formData.blacklistReason && (
+                      <p className="text-red-700 text-xs mt-1 font-medium">
+                        Reason: {formData.blacklistReason}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Appointment Details Section */}
