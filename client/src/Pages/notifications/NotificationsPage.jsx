@@ -2202,7 +2202,6 @@ export default function NotificationsPage() {
   const stats = {
     total: allNotifications.length,
     unread: unreadCount,
-    read: allNotifications.length - unreadCount
   };
 
   return (

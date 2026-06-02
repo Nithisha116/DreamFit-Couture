@@ -138,10 +138,7 @@ export default function CheckAvailabilityPage() {
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
           Check availability
         </h1>
-        <p className="text-slate-500 mt-1 text-sm sm:text-base">
-          Model new work against today&apos;s task load. Logic is heuristic —
-          no AI required.
-        </p>
+        
       </div>
 
       <div className="rounded-3xl bg-white border border-slate-200/80 shadow-sm p-5 sm:p-8 space-y-6">

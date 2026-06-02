@@ -175,9 +175,7 @@ export default function DeliveryPipelineSection({
                 <h2 className="text-base font-black tracking-tight text-white sm:text-lg">
                   Delivery Pipeline
                 </h2>
-                <p className="mt-0.5 text-xs text-indigo-200/90 sm:text-sm">
-                  Live workflow — next {daysAhead} days &amp; overdue orders
-                </p>
+                
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
