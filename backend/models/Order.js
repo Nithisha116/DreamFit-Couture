@@ -41,7 +41,7 @@ const orderSchema = new mongoose.Schema({
   deliveryDate: { type: Date, required: [true, "Delivery date is required"] },
   status: {
     type: String,
-    enum: ["draft", "confirmed", "in-progress","ready-to-delivery", "delivered", "cancelled"],
+    enum: ["draft", "confirmed", "in-progress", "cutting", "stitching", "trial", "finishing", "ready-to-delivery", "delivered", "cancelled"],
     default: "draft",
     index: true
   },

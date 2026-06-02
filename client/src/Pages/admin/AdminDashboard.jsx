@@ -78,8 +78,10 @@ import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } fro
 import { 
   fetchOrderStats, 
   fetchRecentOrders,
+  fetchReadyToDeliveryOrders,
   selectOrderStats,
-  selectRecentOrders 
+  selectRecentOrders,
+  selectReadyToDelivery
 } from '../../features/order/orderSlice';
 
 // IMPORT from workSlice
@@ -116,6 +118,8 @@ import {
 
 import StatCard from '../../components/common/StatCard';
 import DeliveryPipelineSection from '../../components/dashboard/DeliveryPipelineSection';
+import ReadyToDeliverSection from '../../components/dashboard/ReadyToDeliverSection';
+import QuickActionsSection from '../../components/dashboard/QuickActionsSection';
 import showToast from '../../utils/toast';
 import { fetchAppointments } from '../../features/appointment/appointmentSlice';
 import CountUp from 'react-countup';
@@ -163,6 +167,7 @@ export default function AdminDashboard() {
   };
   
   const recentOrders = useSelector(selectRecentOrders) || [];
+  const readyToDeliveryState = useSelector(selectReadyToDelivery) || { orders: [], loading: false };
   
   // ===== GET WORK DATA =====
   const workStats = useSelector(selectWorkStats) || {
@@ -667,6 +672,10 @@ export default function AdminDashboard() {
     dispatch(fetchDailyRevenueStats(revenueParams));
     dispatch(fetchTodayTransactions());
     dispatch(fetchAppointments());
+    
+    // Fetch ALL ready-to-deliver orders regardless of date range 
+    // (orders waiting for pickup should always be visible)
+    dispatch(fetchReadyToDeliveryOrders({ limit: 50 }));
     
     if (isAdmin || isStoreKeeper) {
       dispatch(fetchTailorPerformance({ period: dateRange }));
@@ -1511,6 +1520,13 @@ const displayPerformers = (isAdmin || isStoreKeeper)
           </p>
         </div>
 
+        {/* ===== QUICK ACTIONS SECTION ===== */}
+        <QuickActionsSection 
+          basePath={basePath} 
+          onRefresh={loadDashboardData} 
+          isLoading={isLoading} 
+        />
+
         {/* ===== KPI CARDS - Exact Match ===== */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6 mb-6 lg:mb-8">
           {/* Card 1 - Total Revenue (Blue Gradient) */}
@@ -1898,6 +1914,13 @@ const displayPerformers = (isAdmin || isStoreKeeper)
 
         {/* ===== DELIVERY PIPELINE ===== */}
         <DeliveryPipelineSection works={recentWorks} basePath={basePath} />
+
+        {/* ===== READY TO DELIVER ORDERS ===== */}
+        <ReadyToDeliverSection 
+          orders={readyToDeliveryState.orders} 
+          loading={readyToDeliveryState.loading} 
+          basePath={basePath} 
+        />
 
 
 

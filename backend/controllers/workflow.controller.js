@@ -6,6 +6,9 @@ import Tailor from '../models/Tailor.js';
 import CuttingMaster from '../models/CuttingMaster.js';
 import StoreKeeper from '../models/StoreKeeper.js';
 import User from '../models/User.js';
+import { syncOrderFromWork } from '../services/workflowSync.service.js';
+import { getIO } from '../utils/socket.js';
+import { createNotification } from './notification.controller.js';
 
 // Pipeline stage definitions — labels for any known key
 const PIPELINE_STAGE_DEFS = {
@@ -453,16 +456,44 @@ export const processQrScan = async (req, res) => {
       return res.status(500).json({ success: false, message: 'Database update failed' });
     }
 
-    // Sync Order.currentStage as well (for order list views)
+    // Sync Order.currentStage and status as well (for order list views)
     if (work.order?._id) {
-      await Order.findByIdAndUpdate(work.order._id, {
-        $set: {
-          currentStage: nextStageKey ? normalizeStageKey(nextStageKey) : activeKey,
-          [`workflowStages.${activeKey}.completed`]:   true,
-          [`workflowStages.${activeKey}.completedAt`]: now,
-          [`workflowStages.${activeKey}.assignedTo`]:  completedWorkerName,
-        },
+      const isCompleted = !nextStageKey;
+      const targetStage = nextStageKey ? normalizeStageKey(nextStageKey) : activeKey;
+      await syncOrderFromWork(work.order._id, targetStage, activeKey, now, completedWorkerName, isCompleted);
+    }
+
+    // CREATE NOTIFICATION
+    try {
+      const orderIdStr = work.order?.orderId || 'Unknown Order';
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      await createNotification({
+        type: 'work-status-update',
+        title: `${stageLabel(activeKey)} Completed`,
+        message: `${completedWorkerName} completed the ${stageLabel(activeKey)} stage for Order #${orderIdStr} at ${timeStr}.`,
+        reference: {
+          orderId: work.order?._id,
+          workId: work._id
+        }
       });
+    } catch (err) {
+      console.error("Failed to create notification:", err.message);
+    }
+
+    // EMIT SOCKET EVENT
+    try {
+      const io = getIO();
+      io.emit('workflow:updated', {
+        workId: updatedWork._id,
+        orderId: updatedWork.order?._id,
+        previousStage: activeKey,
+        currentStage: nextStageKey ? normalizeStageKey(nextStageKey) : 'completed',
+        status: updatedWork.status,
+        timestamp: now
+      });
+      console.log(`📡 Emitted workflow:updated for Work ${updatedWork._id}`);
+    } catch (err) {
+      console.error("Socket emission failed:", err.message);
     }
 
     const nextLabel = nextStageKey ? stageLabel(nextStageKey) : null;
