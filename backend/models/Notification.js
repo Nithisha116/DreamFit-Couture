@@ -37,7 +37,7 @@ const notificationSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Recipient model is required'],
     enum: {
-      values: ['User', 'CuttingMaster', 'StoreKeeper', 'Tailor'],
+      values: ['User', 'CuttingMaster', 'StoreKeeper', 'Tailor', 'AariWorker', 'EmbroideryWorker', 'Helper'],
       message: '{VALUE} is not a valid recipient model'
     },
     default: 'User'

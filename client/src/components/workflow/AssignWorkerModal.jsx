@@ -49,13 +49,6 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
           role: a.role || stageRole[k],
           status: "active",
         };
-      } else {
-        // --- TEMPORARY DUMMY DATA FOR TESTING ---
-        if (k === 'embroidery') {
-          next[k] = { _id: '000000000000000000000001', fullName: 'Rahul', role: stageRole[k], status: 'active' };
-        } else if (k === 'aari' || k === 'aari_work') {
-          next[k] = { _id: '000000000000000000000002', fullName: 'Shyam', role: stageRole[k], status: 'active' };
-        }
       }
     });
     setAssignmentsByStage(next);
@@ -65,43 +58,34 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
     if (!open || !job) return;
     let cancelled = false;
 
-    async function loadRole(role) {
-      setLoadingRoles((s) => ({ ...s, [role]: true }));
+    async function loadAllWorkers() {
+      setLoadingRoles({ all: true });
       try {
         const query = new URLSearchParams();
-        query.append("role", role);
+        query.append("role", "all");
         query.append("status", "active");
         if (searchQuery.trim()) query.append("search", searchQuery.trim());
         const res = await API.get(`/workers?${query.toString()}`);
         const list = res?.data?.workers || res?.data?.data || [];
-        
-        // --- TEMPORARY DUMMY DATA FOR TESTING ---
-        const dummyWorkers = [
-          { _id: '000000000000000000000001', fullName: 'Rahul', name: 'Rahul', role, status: 'active' },
-          { _id: '000000000000000000000002', fullName: 'Shyam', name: 'Shyam', role, status: 'active' },
-          { _id: '000000000000000000000003', fullName: 'Mohan', name: 'Mohan', role, status: 'active' },
-          { _id: '000000000000000000000004', fullName: 'Rohan', name: 'Rohan', role, status: 'active' },
-        ];
-        const combinedList = [...(Array.isArray(list) ? list : []), ...dummyWorkers];
 
         if (!cancelled) {
-          setRoleWorkers((s) => ({ ...s, [role]: combinedList }));
+          setRoleWorkers({ all: list });
         }
       } catch (e) {
         if (!cancelled) {
-          setRoleWorkers((s) => ({ ...s, [role]: [] }));
+          setRoleWorkers({ all: [] });
         }
       } finally {
-        if (!cancelled) setLoadingRoles((s) => ({ ...s, [role]: false }));
+        if (!cancelled) setLoadingRoles({ all: false });
       }
     }
 
-    requiredRoles.forEach((r) => loadRole(r));
+    loadAllWorkers();
 
     return () => {
       cancelled = true;
     };
-  }, [open, job, requiredRoles, searchQuery]);
+  }, [open, job, searchQuery]);
 
   useEffect(() => {
     if (!open) {
@@ -115,8 +99,7 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
   }, [open]);
 
   const handleWorkerSelect = (stageKey, workerId) => {
-    const role = stageRole[stageKey] || "helper";
-    const list = roleWorkers[role] || [];
+    const list = roleWorkers.all || [];
     const w = list.find((x) => x._id === workerId) || null;
     setAssignmentsByStage((s) => ({
       ...s,
@@ -239,8 +222,8 @@ export default function AssignWorkerModal({ job, open, onClose, onAssigned }) {
               <div className="space-y-2">
                 {stageKeys.map((key) => {
                   const roleId = stageRole[key] || "helper";
-                  const list = roleWorkers[roleId] || [];
-                  const busy = Boolean(loadingRoles[roleId]);
+                  const list = roleWorkers.all || [];
+                  const busy = Boolean(loadingRoles.all);
                   const selected = assignmentsByStage[key];
                   const state = job.stages?.[key]?.state || "pending";
 

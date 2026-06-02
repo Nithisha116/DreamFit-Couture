@@ -535,7 +535,7 @@ import {
   HardHat, ClipboardList, Wallet, IndianRupee, Download, Filter,
   PieChart, Activity, DollarSign, Receipt, Banknote, PiggyBank,
   Menu, ChevronLeft, Gauge, CalendarRange, PackageSearch, Handshake,
-  CalendarPlus, PackagePlus
+  CalendarPlus, PackagePlus, Wand2, Palette, UserCog
 } from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../../features/auth/authSlice";
@@ -676,6 +676,9 @@ export default function MainLayout() {
   const productionStaffItems = [
     { id: 'tailors-sub', label: 'Tailors', icon: Scissors, path: `/${rolePath}/tailors` },
     { id: 'cutting-masters-sub', label: 'Cutting Masters', icon: HardHat, path: `/${rolePath}/cutting-masters` },
+    { id: 'aari-workers-sub', label: 'Aari Workers', icon: Wand2, path: `/${rolePath}/aari-workers` },
+    { id: 'embroidery-workers-sub', label: 'Embroidery Workers', icon: Palette, path: `/${rolePath}/embroidery-workers` },
+    { id: 'helpers-sub', label: 'Helpers', icon: UserCog, path: `/${rolePath}/helpers` },
     { id: 'store-keepers-sub', label: 'Store Keepers', icon: Store, path: `/${rolePath}/store-keepers` },
   ];
 
