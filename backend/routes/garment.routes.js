@@ -191,11 +191,16 @@ router.get(
 
 /**
  * @route   PUT /api/garments/:id
- * @desc    Update text data (name, priority, price)
+ * @desc    Update text data and images for garment
  */
 router.put(
   "/:id", 
-  authorize("ADMIN", "STORE_KEEPER"), 
+  authorize("ADMIN", "STORE_KEEPER"),
+  upload.fields([
+    { name: "referenceImages", maxCount: 5 },
+    { name: "customerImages", maxCount: 5 },
+    { name: "customerClothImages", maxCount: 5 },
+  ]),
   updateGarment
 );
 

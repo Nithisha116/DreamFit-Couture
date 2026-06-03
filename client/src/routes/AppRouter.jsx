@@ -471,6 +471,22 @@ const AddTailor = lazy(() => import("../Pages/admin/tailor/AddTailor"));
 const TailorDetails = lazy(() => import("../Pages/admin/tailor/TailorDetails"));
 const EditTailor = lazy(() => import("../Pages/admin/tailor/EditTailor"));
 
+// 🚀 LAZY LOADING - AARI WORKER COMPONENTS
+const AariWorkers = lazy(() => import("../Pages/admin/aariWorker/AariWorkers"));
+const AddAariWorker = lazy(() => import("../Pages/admin/aariWorker/AddAariWorker"));
+const AariWorkerDetails = lazy(() => import("../Pages/admin/aariWorker/AariWorkerDetails"));
+const EditAariWorker = lazy(() => import("../Pages/admin/aariWorker/EditAariWorker"));
+
+const EmbroideryWorkers = lazy(() => import("../Pages/admin/embroideryWorker/EmbroideryWorkers"));
+const AddEmbroideryWorker = lazy(() => import("../Pages/admin/embroideryWorker/AddEmbroideryWorker"));
+const EmbroideryWorkerDetails = lazy(() => import("../Pages/admin/embroideryWorker/EmbroideryWorkerDetails"));
+const EditEmbroideryWorker = lazy(() => import("../Pages/admin/embroideryWorker/EditEmbroideryWorker"));
+
+const Helpers = lazy(() => import("../Pages/admin/helper/Helpers"));
+const AddHelper = lazy(() => import("../Pages/admin/helper/AddHelper"));
+const HelperDetails = lazy(() => import("../Pages/admin/helper/HelperDetails"));
+const EditHelper = lazy(() => import("../Pages/admin/helper/EditHelper"));
+
 // 🚀 LAZY LOADING - CUTTING MASTER COMPONENTS
 const CuttingMasters = lazy(() => import("../Pages/admin/cuttingMaster/CuttingMasters"));
 const AddCuttingMaster = lazy(() => import("../Pages/admin/cuttingMaster/AddCuttingMaster"));
@@ -695,6 +711,24 @@ export default function AppRouter() {
             <Route path="tailors/:id" element={<TailorDetails />} />
             <Route path="tailors/edit/:id" element={<EditTailor />} />
             
+            {/* Aari Workers Management */}
+            <Route path="aari-workers" element={<AariWorkers />} />
+            <Route path="aari-workers/add" element={<AddAariWorker />} />
+            <Route path="aari-workers/:id" element={<AariWorkerDetails />} />
+            <Route path="aari-workers/edit/:id" element={<EditAariWorker />} />
+
+            {/* Embroidery Workers Routes */}
+            <Route path="embroidery-workers" element={<EmbroideryWorkers />} />
+            <Route path="embroidery-workers/add" element={<AddEmbroideryWorker />} />
+            <Route path="embroidery-workers/:id" element={<EmbroideryWorkerDetails />} />
+            <Route path="embroidery-workers/edit/:id" element={<EditEmbroideryWorker />} />
+            
+            {/* Helpers Routes */}
+            <Route path="helpers" element={<Helpers />} />
+            <Route path="helpers/add" element={<AddHelper />} />
+            <Route path="helpers/:id" element={<HelperDetails />} />
+            <Route path="helpers/edit/:id" element={<EditHelper />} />
+            
             {/* Cutting Masters Management */}
             <Route path="cutting-masters" element={<CuttingMasters />} />
             <Route path="cutting-masters/add" element={<AddCuttingMaster />} />
@@ -823,6 +857,22 @@ export default function AppRouter() {
             <Route path="tailors/:id" element={<TailorDetails />} />
             <Route path="tailors/edit/:id" element={<EditTailor />} />
             
+            {/* Aari Workers Management */}
+            <Route path="aari-workers" element={<AariWorkers />} />
+            <Route path="aari-workers/add" element={<AddAariWorker />} />
+            <Route path="aari-workers/:id" element={<AariWorkerDetails />} />
+            <Route path="aari-workers/edit/:id" element={<EditAariWorker />} />
+
+            <Route path="embroidery-workers" element={<EmbroideryWorkers />} />
+            <Route path="embroidery-workers/add" element={<AddEmbroideryWorker />} />
+            <Route path="embroidery-workers/:id" element={<EmbroideryWorkerDetails />} />
+            <Route path="embroidery-workers/edit/:id" element={<EditEmbroideryWorker />} />
+            
+            <Route path="helpers" element={<Helpers />} />
+            <Route path="helpers/add" element={<AddHelper />} />
+            <Route path="helpers/:id" element={<HelperDetails />} />
+            <Route path="helpers/edit/:id" element={<EditHelper />} />
+            
             {/* Work Section (Legacy) */}
             <Route path="work" element={<Work />} />
             
@@ -883,6 +933,16 @@ export default function AppRouter() {
             {/* Tailors - View only */}
             <Route path="tailors" element={<Tailors />} />
             <Route path="tailors/:id" element={<TailorDetails />} />
+            
+            {/* Aari Workers - View only */}
+            <Route path="aari-workers" element={<AariWorkers />} />
+            <Route path="aari-workers/:id" element={<AariWorkerDetails />} />
+
+            <Route path="embroidery-workers" element={<EmbroideryWorkers />} />
+            <Route path="embroidery-workers/:id" element={<EmbroideryWorkerDetails />} />
+            
+            <Route path="helpers" element={<Helpers />} />
+            <Route path="helpers/:id" element={<HelperDetails />} />
             
             {/* Work Section (Legacy) */}
             <Route path="work" element={<Work />} />

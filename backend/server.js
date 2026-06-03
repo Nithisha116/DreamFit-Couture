@@ -518,6 +518,9 @@ import paymentRoutes from "./routes/payment.routes.js";
 
 // TAILOR MANAGEMENT ROUTES
 import tailorRoutes from "./routes/tailor.routes.js";
+import aariWorkerRoutes from "./routes/aariWorker.routes.js";
+import embroideryWorkerRoutes from "./routes/embroideryWorker.routes.js";
+import helperRoutes from "./routes/helper.routes.js";
 
 // NOTIFICATION ROUTES
 import notificationRoutes from "./routes/notification.routes.js";
@@ -867,6 +870,9 @@ app.use("/api/customer-size", customerSizeRoutes);
 // ✂️ TAILOR MANAGEMENT - COMPLETE ✅
 // ====================================================
 app.use("/api/tailors", tailorRoutes);
+app.use("/api/aari-workers", aariWorkerRoutes);
+app.use("/api/embroidery-workers", embroideryWorkerRoutes);
+app.use("/api/helpers", helperRoutes);
 
 // ====================================================
 // 🔔 NOTIFICATION MANAGEMENT - COMPLETE ✅

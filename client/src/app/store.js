@@ -15,6 +15,9 @@ import orderReducer from "../features/order/orderSlice";
 import garmentReducer from "../features/garment/garmentSlice";
 import workReducer from "../features/work/workSlice";
 import tailorReducer from "../features/tailor/tailorSlice";
+import aariWorkerReducer from "../features/aariWorker/aariWorkerSlice";
+import embroideryWorkerReducer from "../features/embroideryWorker/embroideryWorkerSlice";
+import helperReducer from "../features/helper/helperSlice";
 
 // ✅ NEW: Add these missing reducers
 import cuttingMasterReducer from "../features/cuttingMaster/cuttingMasterSlice";
@@ -47,6 +50,9 @@ const rootReducer = combineReducers({
   work: workReducer,
     worker: workerReducer,
   tailor: tailorReducer,
+  aariWorker: aariWorkerReducer,
+  embroideryWorker: embroideryWorkerReducer,
+  helper: helperReducer,
   customerSize: customerSizeReducer,
   attendance: attendanceReducer,
   leave: leaveReducer,
