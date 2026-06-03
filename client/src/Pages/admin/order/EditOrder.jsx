@@ -680,7 +680,7 @@ export default function EditOrder() {
               <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
                 <Package size={18} className="text-blue-600" /> Order Details
               </h2>
-              <label className="block text-xs font-black uppercase text-slate-500 mb-2">Special Notes</label>
+              <label className="block text-xs font-black uppercase text-slate-500 mb-2">Bill Notes</label>
               <textarea
                 value={formData.specialNotes}
                 onChange={(e) => setFormData({ ...formData, specialNotes: e.target.value })}
