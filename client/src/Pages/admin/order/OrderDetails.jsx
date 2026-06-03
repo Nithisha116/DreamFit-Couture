@@ -1742,6 +1742,7 @@ import RangeBadge from "../../../components/RangeBadge";
 import WhatsAppShareButton from "../../../components/WhatsAppShareButton";
 import {
   buildOrderWhatsAppMessage,
+  getPublicInvoiceUrl,
   openWhatsAppShare,
   resolveCustomerPhone,
 } from "../../../utils/whatsappShare";
@@ -2633,12 +2634,14 @@ const handleSavePayment = async (paymentData) => {
       showToast.error("Customer phone number not available.");
       return;
     }
+    const invoiceUrl = getPublicInvoiceUrl(currentOrder);
     const message = buildOrderWhatsAppMessage({
       order: currentOrder,
       customer,
       totalPaid: paymentStats.totalPaid,
       statusLabel: statusBadge.label,
       deliveryDate: currentOrder.deliveryDate,
+      invoiceUrl: invoiceUrl || undefined,
     });
     openWhatsAppShare({ phoneDigits, message });
   };

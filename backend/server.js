@@ -541,6 +541,7 @@ import salaryRoutes from "./routes/salary.routes.js";
 import workerRoutes from "./routes/worker.routes.js";
 import workflowRoutes from "./routes/workflow.routes.js";
 import qrRoutes from "./routes/qr.routes.js";
+import publicRoutes from "./routes/public.routes.js";
 
 // BILLING & INVOICING ROUTES
 import invoiceRoutes from "./routes/invoice.routes.js";
@@ -583,6 +584,7 @@ const allowedOrigins = [
   "https://dream-fitcouture-bnuc.vercel.app",
   "https://dream-fitcouture.vercel.app",
   "https://dream-fit-couture.vercel.app",
+  "https://dreamfit-couture.vercel.app",
 ];
 
 app.use(
@@ -746,6 +748,9 @@ app.use("/api/auth", authRoutes);
 
 // 📱 QR WORKFLOW ROUTES - Public (No Auth Required)
 app.use("/api/qr", qrRoutes);
+
+// 📄 PUBLIC INVOICE — read-only customer invoice by order ID
+app.use("/api/public", publicRoutes);
 
 // ====================================================
 // 👤 CUSTOMER MODULE - COMPLETE ✅

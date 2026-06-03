@@ -47,8 +47,27 @@ export function formatWhatsAppAmount(amount) {
 }
 
 /**
+ * Public invoice page URL for WhatsApp (business order ID, not Mongo _id).
+ * Override base with VITE_PUBLIC_APP_URL in production (e.g. Vercel domain).
+ */
+export function getPublicInvoiceUrl(order) {
+  const businessOrderId = order?.orderId;
+  if (!businessOrderId) return null;
+
+  const envBase = import.meta.env.VITE_PUBLIC_APP_URL;
+  const base =
+    (typeof envBase === "string" && envBase.trim()) ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+
+  if (!base) return null;
+
+  const path = `/invoice/view/${encodeURIComponent(String(businessOrderId).trim())}`;
+  return `${base.replace(/\/$/, "")}${path}`;
+}
+
+/**
  * Build a professional order summary message from live order data.
- * @param {{ order, customer, totalPaid, statusLabel, deliveryDate }} params
+ * @param {{ order, customer, totalPaid, statusLabel, deliveryDate, invoiceUrl? }} params
  */
 export function buildOrderWhatsAppMessage({
   order,
@@ -56,14 +75,15 @@ export function buildOrderWhatsAppMessage({
   totalPaid,
   statusLabel,
   deliveryDate,
+  invoiceUrl,
 }) {
   const orderId = order?.orderId || "N/A";
   const customerName = customer?.name || "Customer";
   const displayPhone =
     customer?.phone || customer?.mobile || customer?.phoneNumber || "N/A";
 
-  return [
-    "DreamFit Couture",
+  const lines = [
+    "🌸DreamFit Couture",
     "",
     `Order ID: ${orderId}`,
     `Customer: ${customerName}`,
@@ -74,9 +94,15 @@ export function buildOrderWhatsAppMessage({
     `Delivery Date: ${formatWhatsAppDeliveryDate(deliveryDate)}`,
     "",
     `Status: ${statusLabel || "Unknown"}`,
-    "",
-    "Thank you for choosing DreamFit Couture.",
-  ].join("\n");
+  ];
+
+  if (invoiceUrl) {
+    lines.push("", "Invoice:", invoiceUrl);
+  }
+
+  lines.push("", "Thank you for choosing DreamFit Couture💗.");
+
+  return lines.join("\n");
 }
 
 export function buildWhatsAppUrl(phoneDigits, message) {

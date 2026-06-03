@@ -505,6 +505,7 @@ const BillingDashboard = lazy(() => import("../Pages/admin/billing/BillingDashbo
 const InvoiceList = lazy(() => import("../Pages/admin/billing/InvoiceList"));
 const CreateInvoice = lazy(() => import("../Pages/admin/billing/CreateInvoice"));
 const InvoiceDetails = lazy(() => import("../Pages/admin/billing/InvoiceDetails"));
+const PublicInvoiceView = lazy(() => import("../Pages/public/PublicInvoiceView"));
 
 // 🚀 LAZY LOADING - CUSTOMER SIZE PROFILES
 const CustomerSizePage = lazy(() => import("../Pages/admin/customer-size/CustomerSizePage"));
@@ -644,6 +645,9 @@ export default function AppRouter() {
           
           {/* 📱 QR WORKFLOW ROUTE (Isolated) */}
           <Route path="/qr-workflow/:qrCode" element={<QrWorkflowPage />} />
+
+          {/* 📄 Public customer invoice (read-only, no auth) */}
+          <Route path="/invoice/view/:orderId" element={<PublicInvoiceView />} />
 
 
           {/* 🛡️ ADMIN ROUTES (Full Access) */}
