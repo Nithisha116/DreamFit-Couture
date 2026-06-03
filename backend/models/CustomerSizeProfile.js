@@ -28,7 +28,6 @@ const customerSizeProfileSchema = new mongoose.Schema({
   // 4. Garment Type (shirt, pant, kurta, etc)
   garmentType: {
     type: String,
-    enum: ["shirt", "trouser", "kurta", "blouse", "saree", "general"],
     default: "general"
   },
 

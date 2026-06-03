@@ -2497,6 +2497,13 @@ export const updateGarment = async (req, res) => {
       return res.status(404).json({ message: "Garment not found" });
     }
 
+    if (!req.body) {
+      return res.status(400).json({
+        success: false,
+        message: "Request body missing"
+      });
+    }
+
     // Parse JSON fields from FormData
     let {
       name,
@@ -2517,7 +2524,7 @@ export const updateGarment = async (req, res) => {
       existingReferenceImages,
       existingCustomerImages,
       existingClothImages
-    } = req.body;
+    } = req.body || {};
 
     // Parse JSON strings if they came from FormData
     if (measurements && typeof measurements === 'string') {

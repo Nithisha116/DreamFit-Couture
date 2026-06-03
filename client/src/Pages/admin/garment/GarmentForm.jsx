@@ -348,6 +348,14 @@ export default function GarmentForm({
         fabricPrice: editingGarment.fabricPrice || 0,
       });
 
+      if (editingGarment.measurementSource === "manual" && editingGarment.measurements) {
+        const manual = {};
+        editingGarment.measurements.forEach(m => {
+          manual[m.name] = m.value;
+        });
+        setManualMeasurements(manual);
+      }
+
       const studioPreviews = (editingGarment.referenceImages || []).map(
         (img) => ({
           preview: img.url || img,
@@ -552,15 +560,24 @@ export default function GarmentForm({
     };
 
     try {
-      await dispatch(createCustomerProfile(profileData)).unwrap();
+      const response = await dispatch(createCustomerProfile(profileData)).unwrap();
 
       setShowSaveTemplateModal(false);
       setTemplateName("");
-      showToast.success(`✅ Profile "${templateName}" saved successfully!`);
+      showToast.success(`✅ Measurement template saved successfully.`);
 
       dispatch(fetchCustomerProfiles(effectiveCustomerId));
+      
+      if (response && response._id) {
+        setFormData(prev => ({
+          ...prev,
+          measurementSource: "customer"
+        }));
+        setSelectedCustomerTemplate(response._id);
+      }
     } catch (error) {
       console.error("❌ Error saving profile:", error);
+      showToast.error(error?.message || error?.toString() || "Failed to save template");
     }
   };
 
