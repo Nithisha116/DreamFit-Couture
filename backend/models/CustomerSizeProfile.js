@@ -225,7 +225,7 @@ customerSizeProfileSchema.statics.findOldProfiles = function() {
 // ========== MIDDLEWARE ==========
 
 // Pre-save: Update measurements_object
-customerSizeProfileSchema.pre('save', function(next) {
+customerSizeProfileSchema.pre('save', async function() {
   if (this.measurements && this.measurements.length > 0) {
     const obj = {};
     this.measurements.forEach(m => {
@@ -233,15 +233,13 @@ customerSizeProfileSchema.pre('save', function(next) {
     });
     this.measurements_object = obj;
   }
-  next();
 });
 
 // Pre-save: Set default profile name if not provided
-customerSizeProfileSchema.pre('save', function(next) {
+customerSizeProfileSchema.pre('save', async function() {
   if (!this.profileName) {
     this.profileName = `${this.garmentType} Profile - ${new Date().toLocaleDateString()}`;
   }
-  next();
 });
 
 const CustomerSizeProfile = mongoose.model("CustomerSizeProfile", customerSizeProfileSchema);
