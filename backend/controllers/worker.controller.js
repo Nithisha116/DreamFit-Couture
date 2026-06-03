@@ -2,6 +2,9 @@ import Worker from '../models/Worker.js';
 import Tailor from '../models/Tailor.js';
 import CuttingMaster from '../models/CuttingMaster.js';
 import StoreKeeper from '../models/StoreKeeper.js';
+import AariWorker from '../models/AariWorker.js';
+import EmbroideryWorker from '../models/EmbroideryWorker.js';
+import Helper from '../models/Helper.js';
 import User from '../models/User.js';
 
 // @desc    Get all workers with optional role filtering
@@ -76,6 +79,36 @@ export const getWorkers = async (req, res) => {
         phone: s.phone || '',
         status: s.isActive ? 'active' : 'inactive'
       }));
+    } else if (normalizedRole === 'all') {
+      const query = { ...getIsActiveFilter(), ...searchFilter };
+      
+      const [tailors, cuttingMasters, aariWorkers, embroideryWorkers, helpers] = await Promise.all([
+        Tailor.find(query).sort({ name: 1 }).lean(),
+        CuttingMaster.find(query).sort({ name: 1 }).lean(),
+        AariWorker.find(query).sort({ name: 1 }).lean(),
+        EmbroideryWorker.find(query).sort({ name: 1 }).lean(),
+        Helper.find(query).sort({ name: 1 }).lean()
+      ]);
+
+      const mapWorkers = (list, roleName) => list.map(w => ({
+        _id: w._id,
+        name: w.name,
+        fullName: w.name,
+        role: roleName,
+        phone: w.phone || '',
+        status: w.isActive ? 'active' : 'inactive'
+      }));
+
+      workersList = [
+        ...mapWorkers(tailors, 'tailor'),
+        ...mapWorkers(cuttingMasters, 'cutting_master'),
+        ...mapWorkers(aariWorkers, 'aari_worker'),
+        ...mapWorkers(embroideryWorkers, 'embroidery_worker'),
+        ...mapWorkers(helpers, 'helper')
+      ];
+
+      // Sort combined list by name
+      workersList.sort((a, b) => a.name.localeCompare(b.name));
     } else {
       // General search or other roles: query standard/legacy Worker collection
       let query = {};
