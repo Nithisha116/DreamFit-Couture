@@ -2249,7 +2249,7 @@ export default function Products() {
           categoryId: itemForm.categoryId,
           priceRange: itemForm.priceRange
         })).unwrap();
-        showToast.success("Item created successfully! 🎉");
+        showToast.success("Sub Category created successfully! 🎉");
       }
       setShowModal(false);
       resetForms();
@@ -2586,7 +2586,7 @@ export default function Products() {
             Products Management
           </h1>
           <p className="text-slate-500 font-medium mt-2">
-            Manage fabrics, categories, and items
+            Manage fabrics, categories, and sub categories
           </p>
         </div>
 
@@ -2608,7 +2608,7 @@ export default function Products() {
                   : tab === "category"
                     ? "📁 Categories"
                     : tab === "item"
-                      ? "🧵 Items"
+                      ? "🧵 Sub Categories"
                       : "📦 Inventory"}
                 <span
                   className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
@@ -2638,15 +2638,15 @@ export default function Products() {
               <div className="flex items-center gap-2 lg:gap-3">
                 {activeTab === "fabric" && <Tag size={18} className="text-blue-600 lg:w-6 lg:h-6" />}
                 {activeTab === "category" && <Layers size={18} className="text-blue-600 lg:w-6 lg:h-6" />}
-                {activeTab === "item" && <Package size={18} className="text-blue-600 lg:w-6 lg:h-6" />}
+                {activeTab === "Sub Categories" && <Package size={18} className="text-blue-600 lg:w-6 lg:h-6" />}
                 {activeTab === "inventory" && <LayoutGrid size={18} className="text-blue-600 lg:w-6 lg:h-6" />}
                 <h2 className="text-base lg:text-xl font-black text-slate-800 uppercase tracking-tight">
                   {activeTab === "fabric"
                     ? "Fabrics"
                     : activeTab === "category"
                       ? "Categories"
-                      : activeTab === "item"
-                        ? "Items"
+                      : activeTab === "Sub Categories"
+                        ? "Sub Categories"
                         : "Inventory"}
                 </h2>
               </div>
@@ -3042,7 +3042,7 @@ export default function Products() {
                   ? "Fabric"
                   : activeTab === "category"
                     ? "Category"
-                    : "Item"}
+                    : "Sub Categories"}
               </h2>
               <button
                 onClick={() => {
