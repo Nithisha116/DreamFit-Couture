@@ -977,8 +977,11 @@ export const deleteOrder = async (req, res) => {
     await Payment.updateMany({ order: order._id }, { isDeleted: true });
     await Transaction.updateMany({ order: order._id }, { status: 'cancelled' });
 
-    order.isActive = false;
-    await order.save();
+    await Order.findByIdAndUpdate(
+  order._id,
+  { isActive: false },
+  { runValidators: false }
+);
     res.json({ success: true, message: "Order deleted successfully" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

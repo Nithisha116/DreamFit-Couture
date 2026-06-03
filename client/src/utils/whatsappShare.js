@@ -83,7 +83,7 @@ export function buildOrderWhatsAppMessage({
     customer?.phone || customer?.mobile || customer?.phoneNumber || "N/A";
 
   const lines = [
-    "🌸DreamFit Couture",
+    "DreamFit Couture",
     "",
     `Order ID: ${orderId}`,
     `Customer: ${customerName}`,
@@ -100,7 +100,7 @@ export function buildOrderWhatsAppMessage({
     lines.push("", "Invoice:", invoiceUrl);
   }
 
-  lines.push("", "Thank you for choosing DreamFit Couture💗.");
+  lines.push("", "Thank you for choosing DreamFit Couture.");
 
   return lines.join("\n");
 }
