@@ -1,16 +1,14 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import axios from "axios";
+import API from "../../app/axios";
 
-const API_URL = "/api/customer-size/";
+const API_URL = "/customer-size/";
 
 // Get all profiles for a customer
 export const fetchCustomerProfiles = createAsyncThunk(
   "customerSize/fetchAll",
   async (customerId, thunkAPI) => {
     try {
-      const response = await axios.get(API_URL + "customer/" + customerId, {
-        withCredentials: true,
-      });
+      const response = await API.get(API_URL + "customer/" + customerId);
       return response.data.data;
     } catch (error) {
       const message =
@@ -27,9 +25,7 @@ export const createCustomerProfile = createAsyncThunk(
   "customerSize/create",
   async (profileData, thunkAPI) => {
     try {
-      const response = await axios.post(API_URL, profileData, {
-        withCredentials: true,
-      });
+      const response = await API.post(API_URL, profileData);
       return response.data.data;
     } catch (error) {
       const message =
@@ -46,12 +42,10 @@ export const updateCustomerProfile = createAsyncThunk(
   "customerSize/update",
   async ({ id, measurements, reason, notes }, thunkAPI) => {
     try {
-      const response = await axios.put(API_URL + id + "/measurements", {
+      const response = await API.put(API_URL + id + "/measurements", {
         measurements,
         reason,
         notes
-      }, {
-        withCredentials: true,
       });
       return response.data.data;
     } catch (error) {
@@ -69,9 +63,7 @@ export const deleteCustomerProfile = createAsyncThunk(
   "customerSize/delete",
   async (id, thunkAPI) => {
     try {
-      await axios.delete(API_URL + id, {
-        withCredentials: true,
-      });
+      await API.delete(API_URL + id);
       return id;
     } catch (error) {
       const message =
