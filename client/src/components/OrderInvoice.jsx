@@ -432,16 +432,12 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
       ref={invoiceRef}
       data-invoice="true"
       style={{
-        width: "210mm",
-        minHeight: "297mm",
-        margin: "0 auto",
-        backgroundColor: "#ffffff",
-        fontFamily: "'Inter', 'Arial', 'Helvetica', sans-serif",
-        color: "#1e293b",
-        position: "relative",
-        boxSizing: "border-box",
-        lineHeight: "1.5",
-      }}
+  width: "100%",
+  maxWidth: "210mm",
+  minHeight: "297mm",
+  margin: "0 auto",
+  backgroundColor: "#ffffff",
+}}
     >
       {/* Professional Watermark Background */}
       <div
@@ -567,10 +563,12 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
         >
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-            }}
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+  gap: "16px",
+}}
           >
             <div>
               <p
@@ -673,13 +671,15 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
 
         {/* Professional Table */}
         <div
-          style={{
-            marginBottom: "30px",
-            borderRadius: "12px",
-            overflow: "hidden",
-            border: "1px solid #e2e8f0",
-          }}
-        >
+  style={{
+    marginBottom: "30px",
+    borderRadius: "12px",
+    overflowX: "auto",
+    border: "1px solid #e2e8f0",
+    WebkitOverflowScrolling: "touch",
+  }}
+>
+        
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ backgroundColor: "#f1f5f9" }}>
@@ -764,9 +764,16 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                       </span>
                     </td>
                     <td style={{ padding: "14px 16px" }}>
-                      <div style={{ fontWeight: "600", color: "#0f172a" }}>
-                        {g.name}
-                      </div>
+                      <div
+  style={{
+    fontWeight: "600",
+    color: "#0f172a",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
+  }}
+>
+  {g.name}
+</div>
                       <div style={{ fontSize: "12px", color: "#64748b" }}>
                         {g.fabric || g.category?.name || "—"}
                       </div>
@@ -1036,10 +1043,12 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
         {/* Footer with Signature */}
         <div
           style={{
-            marginTop: "30px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-end",
+  marginTop: "30px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-end",
+  flexWrap: "wrap",
+  gap: "20px",
             borderTop: "2px dashed #e2e8f0",
             paddingTop: "25px",
           }}
