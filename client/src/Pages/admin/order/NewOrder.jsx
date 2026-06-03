@@ -5647,7 +5647,7 @@ const renderDayContents = useCallback((day, date) => {
             {/* Special Notes */}
             <div className="mt-4">
               <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-                Special Notes
+                Bill Notes
               </label>
               <textarea
                 value={formData.specialNotes}

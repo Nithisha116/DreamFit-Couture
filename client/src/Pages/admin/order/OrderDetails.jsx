@@ -3080,7 +3080,7 @@ const handleSavePayment = async (paymentData) => {
 
                 {currentOrder.specialNotes && (
                   <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
-                    <p className="text-[10px] sm:text-xs font-medium text-slate-500 mb-1">Special Notes</p>
+                    <p className="text-[10px] sm:text-xs font-medium text-slate-500 mb-1">Bill Notes</p>
                     <p className="text-xs sm:text-sm text-slate-700 break-words">{currentOrder.specialNotes}</p>
                   </div>
                 )}

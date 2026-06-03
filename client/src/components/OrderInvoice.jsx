@@ -1022,7 +1022,7 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                       margin: "0 0 4px 0",
                     }}
                   >
-                    Special Instructions
+                    Bill Notes
                   </p>
                   <p
                     style={{
