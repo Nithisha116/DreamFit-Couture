@@ -842,9 +842,9 @@ export default function AddCustomer() {
       // console.log("🔄 Navigating to:", `${rolePath}/customers`);
       // navigate(`${rolePath}/customers`);
       showToast.success("Customer created successfully! 🎉");
-      console.log("🔄 Navigating to customer details:", result.data?._id);
-      console.log("🔗 URL:", `${rolePath}/customers/${result.data?._id}`);
-      navigate(`${rolePath}/customers/${result.data?._id}`);
+      console.log("🔄 Navigating to customer details:", result?._id);
+      console.log("🔗 URL:", `${rolePath}/customers/${result?._id}`);
+      navigate(`${rolePath}/customers/${result?._id}`);
     } catch (error) {
       console.error("❌ Error creating customer:", error);
 
