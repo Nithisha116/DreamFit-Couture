@@ -1,5 +1,5 @@
 // models/Payment.js
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
 
 const paymentSchema = new mongoose.Schema({
   order: {
@@ -78,4 +78,5 @@ paymentSchema.index({ customer: 1, paymentDate: -1 });
 paymentSchema.index({ paymentDate: -1 });
 paymentSchema.index({ type: 1, paymentDate: -1 });
 
-module.exports = mongoose.model('Payment', paymentSchema);
+const Payment = mongoose.model('Payment', paymentSchema);
+export default Payment;

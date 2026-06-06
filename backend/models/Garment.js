@@ -144,7 +144,6 @@ const garmentSchema = new mongoose.Schema({
   garmentId: {
     type: String,
     unique: true,
-    index: true
   },
   order: {
     type: mongoose.Schema.Types.ObjectId,
@@ -316,7 +315,6 @@ garmentSchema.pre('save', async function() {
 });
 
 // Indexes for performance
-garmentSchema.index({ garmentId: 1 });
 garmentSchema.index({ order: 1 });
 
 const Garment = mongoose.model("Garment", garmentSchema);

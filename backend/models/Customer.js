@@ -4,7 +4,6 @@ const customerSchema = new mongoose.Schema({
   customerId: {
     type: String,
     unique: true,
-    index: true,
   },
   salutation: {
     type: String,
@@ -172,8 +171,7 @@ customerSchema.virtual('fullName').get(function() {
 
 // Indexes for performance
 customerSchema.index({ name: 1 });
-customerSchema.index({ customerId: 1 });
-customerSchema.index({ phone: 1 });
+
 
 const Customer = mongoose.models.Customer || mongoose.model("Customer", customerSchema);
 export default Customer;

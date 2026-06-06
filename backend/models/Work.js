@@ -168,8 +168,6 @@ workSchema.pre('save', async function () {
     }
   }
 });
-
-workSchema.index({ workId:                  1 }, { unique: true });
 workSchema.index({ order:                   1 });
 workSchema.index({ garment:                 1 });
 workSchema.index({ 'assignments.workerId':  1 });

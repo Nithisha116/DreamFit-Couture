@@ -160,8 +160,6 @@ orderSchema.post('save', function(error, doc, next) {
 // ============================================
 // ✅ INDEXES
 // ============================================
-orderSchema.index({ orderId: 1 });
-orderSchema.index({ status: 1 });
 orderSchema.index({ customer: 1 });
 orderSchema.index({ 'paymentSummary.paymentStatus': 1 });
 orderSchema.index({ orderDate: -1 });
@@ -357,9 +355,6 @@ orderSchema.statics.isDateAvailable = async function(date, maxOrdersPerDay = 10)
 };
 
 // Indexes for performance
-orderSchema.index({ status: 1 });
-orderSchema.index({ orderId: 1 });
-orderSchema.index({ customer: 1 });
 orderSchema.index({ garments: 1 });
 orderSchema.index({ minPrice: 1 });
 orderSchema.index({ maxPrice: 1 });
