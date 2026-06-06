@@ -262,9 +262,15 @@ const InvoiceDetails = () => {
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
               <h3 className="font-bold text-gray-700 uppercase tracking-wider text-xs">Terms & Conditions</h3>
               <ul className="list-decimal list-inside text-xs text-gray-600 space-y-1">
-                <li>All orders require a 50% advance payment.</li>
-                <li>Alterations for completed garments will be chargeable.</li>
-                <li>Goods not collected within 30 days of the due date may be disposed of without notice.</li>
+                <li>50% of the amount must be paid as Advance</li>
+<li>Balance 50% of the amount must be paid at the time of Delivery</li>
+<li>Lining and Materials Cost will be charged additionally</li>
+<li>Fitting alterations for the delivered order will be charged additionally after 7 working days from the date of delivery</li>
+<li>If you want you change the final outcome once the garment is completely finished, additional charges will be applicable</li>
+<li>Order Delivery timings: 5pm to 8pm only (Monday to Saturday)</li>
+<li>Order processed, cannot be cancelled</li>
+<li>A flat ₹200 cancellation fee will be applied to orders cancelled before processing</li>
+<li>Amount paid will not be refunded under any circumstances</li>
               </ul>
             </div>
           </div>
