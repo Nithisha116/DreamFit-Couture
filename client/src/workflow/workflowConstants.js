@@ -5,19 +5,84 @@ export const WORKFLOW_LS_KEY = "dreamfit_workflow_jobs_v1";
 export const WORKFLOW_CHANGED_EVENT = "dreamfit-workflow-changed";
 
 export const PIPELINE_STAGE_DEFS = {
-  cutting:    { key: "cutting",    label: "Cutting",        shortLabel: "Cut"    },
-  embroidery: { key: "embroidery", label: "Embroidery",     shortLabel: "Emb"    },
-  aari:       { key: "aari",       label: "Aari Work",      shortLabel: "Aari"   },
-  stitching:  { key: "stitching",  label: "Stitching",      shortLabel: "Stitch" },
-  ironing:    { key: "ironing",    label: "Ironing",        shortLabel: "Iron"   },
-  finishing:  { key: "finishing",  label: "Finishing & QC", shortLabel: "Fin"    },
-  packing:    { key: "packing",    label: "Packing",        shortLabel: "Pack"   },
-  packed:     { key: "packed",     label: "Packed / Ready", shortLabel: "Done"   },
+  purchase: {
+    key: "purchase",
+    label: "Purchase",
+    shortLabel: "Buy",
+  },
+
+  marking: {
+    key: "marking",
+    label: "Marking",
+    shortLabel: "Mark",
+  },
+
+  aari_started: {
+    key: "aari_started",
+    label: "Aari Work Started",
+    shortLabel: "Aari S",
+  },
+
+  aari_completed: {
+    key: "aari_completed",
+    label: "Aari Work Completed",
+    shortLabel: "Aari C",
+  },
+
+  cutting: {
+    key: "cutting",
+    label: "Cutting",
+    shortLabel: "Cut",
+  },
+
+  stitching: {
+    key: "stitching",
+    label: "Stitching",
+    shortLabel: "Stitch",
+  },
+
+  final_finishing: {
+    key: "final_finishing",
+    label: "Final Finishing",
+    shortLabel: "Finish",
+  },
+
+  ironing_packing: {
+    key: "ironing_packing",
+    label: "Ironing & Packing",
+    shortLabel: "Pack",
+  },
+
+  trial: {
+    key: "trial",
+    label: "Trial",
+    shortLabel: "Trial",
+  },
+
+  alteration: {
+    key: "alteration",
+    label: "Alteration",
+    shortLabel: "Alter",
+  },
+
+  delivered: {
+    key: "delivered",
+    label: "Delivered",
+    shortLabel: "Done",
+  },
 };
 
 const VALID_KEYS = new Set(Object.keys(PIPELINE_STAGE_DEFS));
 
-export const DEFAULT_WORKFLOW_STAGES = ["cutting", "stitching", "ironing", "packed"];
+export const DEFAULT_WORKFLOW_STAGES = [
+  "cutting",
+  "stitching",
+  "final_finishing",
+  "ironing_packing",
+  "trial",
+  "alteration",
+  "delivered",
+];
 
 /** Map API / legacy aliases to canonical stage keys */
 export function normalizeStageKey(key) {
@@ -213,21 +278,40 @@ export const WORKER_ROLES = [
 
 /** Maps workflow stage → boutique department tab key (for filters/workload) */
 export const STAGE_TO_DEPARTMENT = {
+  purchase: "store",
+  marking: "aari",
+  aari_started: "aari",
+  aari_completed: "aari",
+
   cutting: "cutting",
-  embroidery: "embroidery",
-  aari: "aari",
   stitching: "sewing",
-  ironing: "finishes",
-  packed: null,
+
+  final_finishing: "finishes",
+  ironing_packing: "finishes",
+
+  trial: "finishes",
+  alteration: "sewing",
+
+  delivered: null,
 };
 
 export const STAGE_TO_WORKER_ROLE = {
+  purchase: "store_keeper",
+
+  marking: "aari",
+  aari_started: "aari",
+  aari_completed: "aari",
+
   cutting: "cutting",
-  embroidery: "embroidery",
-  aari: "aari",
   stitching: "tailor",
-  ironing: "ironing",
-  packed: null,
+
+  final_finishing: "staff",
+  ironing_packing: "ironing",
+
+  trial: "staff",
+  alteration: "tailor",
+
+  delivered: null,
 };
 
 const EMBROIDERY_RE = /\b(embroidery|zardozi|zari|magam|kundan|bead|sequin|thread\s*work)\b/i;

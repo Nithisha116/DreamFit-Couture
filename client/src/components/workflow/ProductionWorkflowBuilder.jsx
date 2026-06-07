@@ -9,20 +9,47 @@ const PRESETS = [
   {
     id: "standard",
     label: "Standard",
-    stages: ["cutting", "stitching", "ironing", "packed"],
+    stages: [
+      "cutting",
+      "stitching",
+      "final_finishing",
+      "ironing_packing",
+      "trial",
+      "alteration",
+      "delivered"
+    ],
   },
   {
-    id: "embroidery",
-    label: "With embroidery",
-    stages: ["cutting", "embroidery", "stitching", "ironing", "packed"],
+    id: "purchase",
+    label: "Purchase",
+    stages: [
+      "purchase",
+      "cutting",
+      "stitching",
+      "final_finishing",
+      "ironing_packing",
+      "trial",
+      "alteration",
+      "delivered"
+    ],
   },
   {
-    id: "bridal",
-    label: "Bridal / Aari",
-    stages: ["cutting", "embroidery", "aari", "stitching", "ironing", "packed"],
+    id: "aari",
+    label: "Aari",
+    stages: [
+      "marking",
+      "aari_started",
+      "aari_completed",
+      "cutting",
+      "stitching",
+      "final_finishing",
+      "ironing_packing",
+      "trial",
+      "alteration",
+      "delivered"
+    ],
   },
 ];
-
 export default function ProductionWorkflowBuilder({ stages, onChange }) {
   const selected = stages?.length ? stages : [...DEFAULT_WORKFLOW_STAGES];
   const available = AVAILABLE_WORKFLOW_BLOCKS.filter((b) => !selected.includes(b.key));
