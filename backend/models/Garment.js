@@ -187,6 +187,28 @@ const garmentSchema = new mongoose.Schema({
   referenceImages: [imageSchema],      
   customerImages: [imageSchema],       
   customerClothImages: [imageSchema],  
+  fabricSource: {
+    type: String,
+    enum: ["customer", "shop"],
+    default: "customer"
+  },
+  fabricPrice: {
+    type: Number,
+    default: 0
+  },
+  fabricMeters: {
+    type: String,
+    default: ""
+  },
+  fabricNotes: {
+    type: String,
+    default: ""
+  },
+  fabricSufficiency: {
+    type: String,
+    enum: ["Sufficient", "Additional Fabric Required", "To Be Verified"],
+    default: "To Be Verified"
+  },
   additionalInfo: {
     type: String,
     default: "",

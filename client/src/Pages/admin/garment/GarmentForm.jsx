@@ -89,6 +89,8 @@ export default function GarmentForm({
     selectedFabric: "",
     fabricMeters: "",
     fabricPrice: 0,
+    fabricNotes: "",
+    fabricSufficiency: "To Be Verified",
 
     categoryName: "",
     itemName: "",
@@ -233,12 +235,13 @@ export default function GarmentForm({
         }));
       }
     } else if (formData.fabricSource === "customer") {
-      setFormData((prev) => ({
-        ...prev,
-        fabricPrice: 0,
-        selectedFabric: "",
-        fabricMeters: "",
-      }));
+      if (formData.fabricPrice !== 0 || formData.selectedFabric !== "") {
+        setFormData((prev) => ({
+          ...prev,
+          fabricPrice: 0,
+          selectedFabric: "",
+        }));
+      }
     }
   }, [
     formData.fabricSource,
@@ -346,6 +349,8 @@ export default function GarmentForm({
         selectedFabric: editingGarment.selectedFabric || "",
         fabricMeters: editingGarment.fabricMeters || "",
         fabricPrice: editingGarment.fabricPrice || 0,
+        fabricNotes: editingGarment.fabricNotes || "",
+        fabricSufficiency: editingGarment.fabricSufficiency || "To Be Verified",
       });
 
       if (editingGarment.measurementSource === "manual" && editingGarment.measurements) {
@@ -960,9 +965,12 @@ const renderDayContents = useCallback(
 
       // Add fabric data
       formDataToSend.append("fabricSource", formData.fabricSource);
+      formDataToSend.append("fabricMeters", formData.fabricMeters);
+      formDataToSend.append("fabricNotes", formData.fabricNotes);
+      formDataToSend.append("fabricSufficiency", formData.fabricSufficiency);
+
       if (formData.fabricSource === "shop") {
         formDataToSend.append("selectedFabric", formData.selectedFabric);
-        formDataToSend.append("fabricMeters", formData.fabricMeters);
         formDataToSend.append("fabricPrice", formData.fabricPrice);
       } else {
         formDataToSend.append("fabricPrice", "0");
@@ -1358,6 +1366,72 @@ const renderDayContents = useCallback(
                   </div>
                 </div>
               )}
+
+              {/* Fabric Information */}
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <h4 className="font-bold text-slate-700 text-xs sm:text-sm mb-3">
+                  Fabric Information
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-3">
+                  {formData.fabricSource === "customer" && (
+                    <div>
+                      <label className="block text-[8px] sm:text-xs font-black uppercase text-slate-500 mb-1 sm:mb-2">
+                        Provided Fabric (Meters)
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.fabricMeters}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            fabricMeters: e.target.value,
+                          })
+                        }
+                        placeholder="e.g., 2.5"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      />
+                    </div>
+                  )}
+                  
+                  <div className={formData.fabricSource === "shop" ? "col-span-1 sm:col-span-2" : ""}>
+                    <label className="block text-[8px] sm:text-xs font-black uppercase text-slate-500 mb-1 sm:mb-2">
+                      Fabric Sufficiency Status
+                    </label>
+                    <select
+                      value={formData.fabricSufficiency}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          fabricSufficiency: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    >
+                      <option value="To Be Verified">To Be Verified</option>
+                      <option value="Sufficient">Sufficient</option>
+                      <option value="Additional Fabric Required">Additional Fabric Required</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[8px] sm:text-xs font-black uppercase text-slate-500 mb-1 sm:mb-2">
+                    Fabric Notes
+                  </label>
+                  <textarea
+                    value={formData.fabricNotes}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        fabricNotes: e.target.value,
+                      })
+                    }
+                    rows="2"
+                    placeholder="Pattern, texture, special instructions, defects, etc."
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none text-xs sm:text-sm"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Price Range & Total Display */}
@@ -1842,7 +1916,7 @@ const renderDayContents = useCallback(
                                   </label>
                                   <div className="relative">
                                     <input
-                                      type="number"
+                                      type="text"
                                       value={measurement.value}
                                       onChange={(e) =>
                                         handleMeasurementChange(
@@ -1851,7 +1925,6 @@ const renderDayContents = useCallback(
                                         )
                                       }
                                       placeholder={`Enter ${fieldInfo?.displayName?.toLowerCase() || measurement.name.toLowerCase()}`}
-                                      step="0.1"
                                       className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-12"
                                     />
                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs text-slate-400">
@@ -1904,7 +1977,7 @@ const renderDayContents = useCallback(
                             {measurement.name}
                           </label>
                           <input
-                            type="number"
+                            type="text"
                             value={measurement.value}
                             onChange={(e) =>
                               handleMeasurementChange(
@@ -1912,7 +1985,6 @@ const renderDayContents = useCallback(
                                 e.target.value,
                               )
                             }
-                            step="0.1"
                             className="w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                           />
                         </div>
@@ -1933,7 +2005,7 @@ const renderDayContents = useCallback(
                           {field.displayName}
                         </label>
                         <input
-                          type="number"
+                          type="text"
                           value={manualMeasurements[field.name] || ""}
                           onChange={(e) =>
                             handleManualMeasurementChange(
@@ -1942,7 +2014,6 @@ const renderDayContents = useCallback(
                             )
                           }
                           placeholder={field.unit}
-                          step="0.1"
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         />
                       </div>
