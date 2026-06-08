@@ -2523,7 +2523,12 @@ export const updateGarment = async (req, res) => {
       status,
       existingReferenceImages,
       existingCustomerImages,
-      existingClothImages
+      existingClothImages,
+      fabricSource,
+      fabricPrice,
+      fabricMeters,
+      fabricNotes,
+      fabricSufficiency
     } = req.body || {};
 
     // Parse JSON strings if they came from FormData
@@ -2595,6 +2600,11 @@ export const updateGarment = async (req, res) => {
       garment.finalizedAmount = finalVal;
     }
     if (status) garment.status = status;
+    if (fabricSource !== undefined) garment.fabricSource = fabricSource;
+    if (fabricPrice !== undefined) garment.fabricPrice = Number(fabricPrice) || 0;
+    if (fabricMeters !== undefined) garment.fabricMeters = fabricMeters;
+    if (fabricNotes !== undefined) garment.fabricNotes = fabricNotes;
+    if (fabricSufficiency !== undefined) garment.fabricSufficiency = fabricSufficiency;
 
     // Handle images - keep only those not deleted
     if (keepReferenceKeys.length > 0) {
