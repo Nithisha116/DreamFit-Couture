@@ -34,8 +34,8 @@ const invoiceItemSchema = new mongoose.Schema({
 const invoiceSchema = new mongoose.Schema({
   invoiceId: {
     type: String,
+    sparse: true,
     unique: true,
-    required: true,
     index: true
   },
   invoiceNumber: { 
@@ -46,13 +46,11 @@ const invoiceSchema = new mongoose.Schema({
   },
   orderId: {
     type: String,
-    required: true,
     index: true
   },
   orderRef: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Order",
-    required: true,
     index: true
   },
   order: { 

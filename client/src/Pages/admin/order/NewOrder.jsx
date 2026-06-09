@@ -4661,9 +4661,9 @@ const handleSavePayment = useCallback((paymentData) => {
   // 🎯 ADD THIS MISSING FUNCTION - handleSaveGarment
   const handleSaveGarment = useCallback((garmentData) => {
     console.log("%c📥📥📥 HANDLE SAVE GARMENT CALLED 📥📥📥", "background: blue; color: white; font-size: 14px");
-    console.log("Type:", garmentData instanceof FormData ? "FormData" : "Object");
+    console.log("Type:", (garmentData && typeof garmentData.entries === 'function') ? "FormData" : "Object");
     
-    if (garmentData instanceof FormData) {
+    if (garmentData && typeof garmentData.entries === 'function' && garmentData.append) {
       // Convert FormData to object
       const garmentObj = {
         tempId: editingGarment?.tempId || Date.now() + Math.random(),
@@ -6059,16 +6059,27 @@ const renderDayContents = useCallback((day, date) => {
                 </div>
               </div>
 
-              {garments.length > 0 && (
-                <div className="bg-purple-50 p-4 rounded-xl">
-                  <p className="text-xs text-purple-600 font-black uppercase mb-1">
-                    Garment Delivery Range
-                  </p>
-                  <p className="text-sm font-bold text-purple-700">
-                    {new Date(Math.min(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()} - {new Date(Math.max(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
+              {garments.length > 0 && (() => {
+                const dates = garments
+                  .map(g => new Date(g.estimatedDelivery || formData.deliveryDate))
+                  .filter(d => !isNaN(d.valueOf()));
+                
+                if (dates.length === 0) return null;
+                
+                const minDate = new Date(Math.min(...dates));
+                const maxDate = new Date(Math.max(...dates));
+                
+                return (
+                  <div className="bg-purple-50 p-4 rounded-xl">
+                    <p className="text-xs text-purple-600 font-black uppercase mb-1">
+                      Garment Delivery Range
+                    </p>
+                    <p className="text-sm font-bold text-purple-700">
+                      {minDate.toLocaleDateString()} - {maxDate.toLocaleDateString()}
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div className="border-t border-slate-100 pt-4">
                 <div className="flex items-center justify-between mb-3">

@@ -978,9 +978,9 @@ const renderDayContents = useCallback(
 
       // Add images
       if (formData.studioImages && formData.studioImages.length > 0) {
-        for (const file of formData.studioImages) {
-          if (file instanceof File) {
-            formDataToSend.append("referenceImages", file);
+        for (const imgObj of formData.studioImages) {
+          if (imgObj && imgObj.file instanceof File) {
+            formDataToSend.append("referenceImages", imgObj.file);
           }
         }
       }
@@ -989,9 +989,9 @@ const renderDayContents = useCallback(
         formData.customerProvidedImages &&
         formData.customerProvidedImages.length > 0
       ) {
-        for (const file of formData.customerProvidedImages) {
-          if (file instanceof File) {
-            formDataToSend.append("customerImages", file);
+        for (const imgObj of formData.customerProvidedImages) {
+          if (imgObj && imgObj.file instanceof File) {
+            formDataToSend.append("customerImages", imgObj.file);
           }
         }
       }
@@ -1000,9 +1000,9 @@ const renderDayContents = useCallback(
         formData.customerClothImages &&
         formData.customerClothImages.length > 0
       ) {
-        for (const file of formData.customerClothImages) {
-          if (file instanceof File) {
-            formDataToSend.append("customerClothImages", file);
+        for (const imgObj of formData.customerClothImages) {
+          if (imgObj && imgObj.file instanceof File) {
+            formDataToSend.append("customerClothImages", imgObj.file);
           }
         }
       }
