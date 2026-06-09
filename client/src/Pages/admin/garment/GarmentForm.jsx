@@ -361,35 +361,26 @@ export default function GarmentForm({
         setManualMeasurements(manual);
       }
 
-      const studioPreviews = (editingGarment.referenceImages || []).map(
-        (img) => ({
-          preview: img.url || img,
-          file: null,
-          isExisting: true,
-          url: img.url,
-          key: img.key,
-        }),
-      );
+      const processExistingImage = (img) => {
+        const isFile = img instanceof File;
+        let previewUrl;
+        try {
+          previewUrl = isFile ? URL.createObjectURL(img) : (img.url || img);
+        } catch (e) {
+          previewUrl = img.url || img;
+        }
+        return {
+          preview: previewUrl,
+          file: isFile ? img : null,
+          isExisting: !isFile,
+          url: isFile ? null : (img.url || img),
+          key: isFile ? null : img.key,
+        };
+      };
 
-      const customerPreviews = (editingGarment.customerImages || []).map(
-        (img) => ({
-          preview: img.url || img,
-          file: null,
-          isExisting: true,
-          url: img.url,
-          key: img.key,
-        }),
-      );
-
-      const clothPreviews = (editingGarment.customerClothImages || []).map(
-        (img) => ({
-          preview: img.url || img,
-          file: null,
-          isExisting: true,
-          url: img.url,
-          key: img.key,
-        }),
-      );
+      const studioPreviews = (editingGarment.referenceImages || []).map(processExistingImage);
+      const customerPreviews = (editingGarment.customerImages || []).map(processExistingImage);
+      const clothPreviews = (editingGarment.customerClothImages || []).map(processExistingImage);
 
       setPreviewImages({
         studio: studioPreviews,
@@ -976,11 +967,19 @@ const renderDayContents = useCallback(
         formDataToSend.append("fabricPrice", "0");
       }
 
+      // Prepare existing keys arrays
+      const existingRefKeys = [];
+      const existingCustKeys = [];
+      const existingClothKeys = [];
+
       // Add images
       if (formData.studioImages && formData.studioImages.length > 0) {
-        for (const file of formData.studioImages) {
-          if (file instanceof File) {
-            formDataToSend.append("referenceImages", file);
+        for (const imgObj of formData.studioImages) {
+          if (imgObj && imgObj.file instanceof File) {
+            formDataToSend.append("referenceImages", imgObj.file);
+          } else if (imgObj && imgObj.isExisting) {
+            if (imgObj.key) existingRefKeys.push(imgObj.key);
+            else if (imgObj.url) existingRefKeys.push(imgObj.url);
           }
         }
       }
@@ -989,9 +988,12 @@ const renderDayContents = useCallback(
         formData.customerProvidedImages &&
         formData.customerProvidedImages.length > 0
       ) {
-        for (const file of formData.customerProvidedImages) {
-          if (file instanceof File) {
-            formDataToSend.append("customerImages", file);
+        for (const imgObj of formData.customerProvidedImages) {
+          if (imgObj && imgObj.file instanceof File) {
+            formDataToSend.append("customerImages", imgObj.file);
+          } else if (imgObj && imgObj.isExisting) {
+            if (imgObj.key) existingCustKeys.push(imgObj.key);
+            else if (imgObj.url) existingCustKeys.push(imgObj.url);
           }
         }
       }
@@ -1000,12 +1002,20 @@ const renderDayContents = useCallback(
         formData.customerClothImages &&
         formData.customerClothImages.length > 0
       ) {
-        for (const file of formData.customerClothImages) {
-          if (file instanceof File) {
-            formDataToSend.append("customerClothImages", file);
+        for (const imgObj of formData.customerClothImages) {
+          if (imgObj && imgObj.file instanceof File) {
+            formDataToSend.append("customerClothImages", imgObj.file);
+          } else if (imgObj && imgObj.isExisting) {
+            if (imgObj.key) existingClothKeys.push(imgObj.key);
+            else if (imgObj.url) existingClothKeys.push(imgObj.url);
           }
         }
       }
+
+      // Append existing keys as JSON strings so backend doesn't delete them
+      formDataToSend.append("existingReferenceImages", JSON.stringify(existingRefKeys));
+      formDataToSend.append("existingCustomerImages", JSON.stringify(existingCustKeys));
+      formDataToSend.append("existingClothImages", JSON.stringify(existingClothKeys));
 
       // Clean up blob URLs
       Object.values(previewImages)
