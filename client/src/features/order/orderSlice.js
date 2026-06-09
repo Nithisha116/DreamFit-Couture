@@ -9227,7 +9227,7 @@ export const createNewOrder = createAsyncThunk(
           if (garmentCopy.measurements && Array.isArray(garmentCopy.measurements)) {
             garmentCopy.measurements = garmentCopy.measurements.map(m => ({
               name: m.name,
-              value: Number(m.value) || 0,
+              value: String(m.value),
               unit: m.unit || 'inches'
             }));
           }

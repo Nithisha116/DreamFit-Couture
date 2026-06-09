@@ -10,9 +10,8 @@ export default function MeasurementPreviewModal({
   if (!isOpen || !measurements) return null;
 
   const getMeasurementValue = (value) => {
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string') return parseFloat(value) || 0;
-    return 0;
+    if (value === undefined || value === null) return "";
+    return String(value).trim();
   };
 
   return (
@@ -43,8 +42,8 @@ export default function MeasurementPreviewModal({
             
             <div className="grid grid-cols-2 gap-3">
               {Object.entries(measurements).map(([key, value]) => {
-                const numValue = getMeasurementValue(value);
-                if (numValue <= 0) return null;
+                const displayValue = getMeasurementValue(value);
+                if (displayValue === "") return null;
                 
                 return (
                   <div 
@@ -53,14 +52,14 @@ export default function MeasurementPreviewModal({
                   >
                     <p className="text-xs text-slate-500 capitalize mb-1">{key}</p>
                     <p className="text-xl font-bold text-purple-700">
-                      {numValue} <span className="text-xs font-normal text-slate-400">inches</span>
+                      {displayValue} <span className="text-xs font-normal text-slate-400">inches</span>
                     </p>
                   </div>
                 );
               })}
             </div>
 
-            {Object.entries(measurements).filter(([_, v]) => getMeasurementValue(v) > 0).length === 0 && (
+            {Object.entries(measurements).filter(([_, v]) => getMeasurementValue(v) !== "").length === 0 && (
               <p className="text-center text-slate-400 py-8">No measurements found</p>
             )}
           </div>

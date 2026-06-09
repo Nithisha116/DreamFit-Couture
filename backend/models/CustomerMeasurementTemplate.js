@@ -19,7 +19,7 @@ const customerMeasurementTemplateSchema = new mongoose.Schema({
   // The actual measurements stored as key-value pairs
   measurements: {
     type: Map,
-    of: Number,
+    of: String,
     required: [true, "Measurements are required"]
   },
   

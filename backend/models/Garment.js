@@ -131,7 +131,7 @@ import mongoose from "mongoose";
 
 const measurementSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  value: { type: Number },
+  value: { type: String },
   unit: { type: String, default: "inches" },
 }, { _id: false });
 

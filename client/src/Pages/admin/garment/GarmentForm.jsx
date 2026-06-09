@@ -465,7 +465,7 @@ export default function GarmentForm({
     setFormData((prev) => ({
       ...prev,
       measurements: prev.measurements.map((m) =>
-        m.name === name ? { ...m, value: parseFloat(value) || "" } : m,
+        m.name === name ? { ...m, value: value } : m,
       ),
     }));
   };
@@ -488,8 +488,8 @@ export default function GarmentForm({
 
     if (formData.measurementSource === "template") {
       formData.measurements.forEach((m) => {
-        if (m.value) {
-          currentMeasurements[m.name] = parseFloat(m.value);
+        if (m.value !== undefined && m.value !== null && String(m.value).trim() !== "") {
+          currentMeasurements[m.name] = String(m.value);
         }
       });
     } else {
@@ -498,7 +498,7 @@ export default function GarmentForm({
 
     currentMeasurements = Object.fromEntries(
       Object.entries(currentMeasurements).filter(
-        ([_, value]) => value && value > 0,
+        ([_, value]) => value !== undefined && value !== null && String(value).trim() !== "",
       ),
     );
 
@@ -526,8 +526,8 @@ export default function GarmentForm({
 
     if (formData.measurementSource === "template") {
       formData.measurements.forEach((m) => {
-        if (m.value) {
-          currentMeasurements[m.name] = parseFloat(m.value);
+        if (m.value !== undefined && m.value !== null && String(m.value).trim() !== "") {
+          currentMeasurements[m.name] = String(m.value);
         }
       });
     } else {
@@ -536,14 +536,14 @@ export default function GarmentForm({
 
     currentMeasurements = Object.fromEntries(
       Object.entries(currentMeasurements).filter(
-        ([_, value]) => value && value > 0,
+        ([_, value]) => value !== undefined && value !== null && String(value).trim() !== "",
       ),
     );
 
     const formattedMeasurements = Object.entries(currentMeasurements).map(([key, value]) => ({
       fieldName: key.toLowerCase().replace(/[^a-z0-9]/g, '_'),
       fieldDisplayName: key,
-      value: parseFloat(value),
+      value: String(value),
       unit: "inch"
     }));
 
@@ -883,40 +883,38 @@ const renderDayContents = useCallback(
     // Prepare final measurements
     let finalMeasurements = [];
 
-    if (formData.measurementSource === "template") {
-      finalMeasurements = formData.measurements
-        .filter((m) => m.value && parseFloat(m.value) > 0)
+    // Include template measurements if available
+    if (formData.measurementSource === "template" || formData.measurementSource === "manual") {
+      const templateMeasurements = formData.measurements
+        .filter((m) => m.value !== undefined && m.value !== null && String(m.value).trim() !== "")
         .map((m) => ({
           name: m.name,
-          value: parseFloat(m.value),
+          value: String(m.value),
           unit: m.unit || "inches",
         }));
-      console.log("📏 Template measurements:", finalMeasurements);
-    } else if (formData.measurementSource === "customer") {
-      finalMeasurements = Object.entries(manualMeasurements)
-        .filter(([_, value]) => value && parseFloat(value) > 0)
-        .map(([name, value]) => ({
-          name,
-          value: parseFloat(value),
-          unit: "inches",
-        }));
-      console.log("📏 Customer template measurements:", finalMeasurements);
-    } else if (formData.measurementSource === "manual") {
-      finalMeasurements = Object.entries(manualMeasurements)
-        .filter(([_, value]) => value && parseFloat(value) > 0)
-        .map(([name, value]) => ({
-          name,
-          value: parseFloat(value),
-          unit: "inches",
-        }));
-      console.log("📏 Manual measurements:", finalMeasurements);
+      finalMeasurements = finalMeasurements.concat(templateMeasurements);
+      console.log("📏 Template measurements:", templateMeasurements);
     }
 
-    // Validate measurements
-    if (
-      finalMeasurements.length === 0 &&
-      formData.measurementSource !== "template"
-    ) {
+    // Include manual/customer measurements if provided
+    if (manualMeasurements && Object.keys(manualMeasurements).length > 0) {
+      const manualArr = Object.entries(manualMeasurements)
+        .filter(([_, value]) => value !== undefined && value !== null && String(value).trim() !== "")
+        .map(([name, value]) => ({
+          name,
+          value: String(value),
+          unit: "inches",
+        }));
+      // Avoid duplicates by name
+      manualArr.forEach((m) => {
+        if (!finalMeasurements.find((fm) => fm.name === m.name)) {
+          finalMeasurements.push(m);
+        }
+      });
+      console.log("📏 Manual measurements added:", manualArr);
+    }
+
+    if (finalMeasurements.length === 0 && formData.measurementSource !== "template") {
       showToast.warning("No measurements entered. You can add them later.");
     }
 

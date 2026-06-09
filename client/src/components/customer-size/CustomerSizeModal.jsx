@@ -111,7 +111,7 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
       measurements: validMeasurements.map(m => ({
         fieldName: m.fieldName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
         fieldDisplayName: m.fieldName,
-        value: parseFloat(m.value),
+        value: String(m.value),
         unit: m.unit
       }))
     };
@@ -225,11 +225,10 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
                       <div className="flex-1">
                         <label className="block text-[10px] font-bold text-slate-400 mb-1">Value</label>
                         <input
-                          type="number"
-                          step="0.25"
+                          type="text"
                           value={m.value}
                           onChange={(e) => handleFieldChange(m.id, 'value', e.target.value)}
-                          placeholder="0.00"
+                          placeholder="Value"
                           className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-purple-400"
                         />
                       </div>

@@ -43,9 +43,8 @@ const customerSizeProfileSchema = new mongoose.Schema({
     },
     fieldDisplayName: String,
     value: {
-      type: Number,
-      required: true,
-      min: 0
+      type: String,
+      required: true
     },
     unit: {
       type: String,
@@ -57,7 +56,7 @@ const customerSizeProfileSchema = new mongoose.Schema({
   // 6. Quick Access Object (Easy to use in orders)
   measurements_object: {
     type: Map,
-    of: Number,
+    of: String,
     default: {}
   },
 
@@ -72,7 +71,7 @@ const customerSizeProfileSchema = new mongoose.Schema({
     version: Number,
     measurements: [{
       fieldName: String,
-      value: Number,
+      value: String,
       unit: String
     }],
     changedAt: {
