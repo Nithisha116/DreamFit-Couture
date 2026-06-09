@@ -128,9 +128,16 @@ const ImageUploadSection = ({
         <div className={`w-6 h-6 sm:w-8 sm:h-8 ${currentTheme.bg} rounded-lg flex items-center justify-center flex-shrink-0`}>
           {Icon && <Icon size={16} className={`${currentTheme.text} sm:w-4 sm:h-4`} />}
         </div>
-        <div className="min-w-0">
-          <h4 className="font-bold text-slate-800 text-xs sm:text-sm">{title}</h4>
-          {subtitle && <p className="text-[8px] sm:text-xs text-slate-500">{subtitle}</p>}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h4 className="font-bold text-slate-800 text-xs sm:text-sm">{title}</h4>
+            {images.length > 0 && (
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${currentTheme.bg} ${currentTheme.text}`}>
+                {images.length}
+              </span>
+            )}
+          </div>
+          {subtitle && <p className="text-[8px] sm:text-xs text-slate-500 mt-0.5">{subtitle}</p>}
         </div>
       </div>
 
