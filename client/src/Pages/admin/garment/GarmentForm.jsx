@@ -973,8 +973,8 @@ const renderDayContents = useCallback(
       const existingClothKeys = [];
 
       // Add images
-      if (formData.studioImages && formData.studioImages.length > 0) {
-        for (const imgObj of formData.studioImages) {
+      if (previewImages.studio && previewImages.studio.length > 0) {
+        for (const imgObj of previewImages.studio) {
           if (imgObj && imgObj.file instanceof File) {
             formDataToSend.append("referenceImages", imgObj.file);
           } else if (imgObj && imgObj.isExisting) {
@@ -985,10 +985,10 @@ const renderDayContents = useCallback(
       }
 
       if (
-        formData.customerProvidedImages &&
-        formData.customerProvidedImages.length > 0
+        previewImages.customerProvided &&
+        previewImages.customerProvided.length > 0
       ) {
-        for (const imgObj of formData.customerProvidedImages) {
+        for (const imgObj of previewImages.customerProvided) {
           if (imgObj && imgObj.file instanceof File) {
             formDataToSend.append("customerImages", imgObj.file);
           } else if (imgObj && imgObj.isExisting) {
@@ -999,10 +999,10 @@ const renderDayContents = useCallback(
       }
 
       if (
-        formData.customerClothImages &&
-        formData.customerClothImages.length > 0
+        previewImages.customerCloth &&
+        previewImages.customerCloth.length > 0
       ) {
-        for (const imgObj of formData.customerClothImages) {
+        for (const imgObj of previewImages.customerCloth) {
           if (imgObj && imgObj.file instanceof File) {
             formDataToSend.append("customerClothImages", imgObj.file);
           } else if (imgObj && imgObj.isExisting) {
@@ -1026,8 +1026,8 @@ const renderDayContents = useCallback(
           }
         });
 
-      // Call onSave with FormData
-      onSave(formDataToSend);
+      // Call onSave with FormData - await so loading stays true during API call
+      await onSave(formDataToSend);
     } catch (error) {
       console.error("❌ Error preparing form data:", error);
       showToast.error("Failed to prepare garment data");
