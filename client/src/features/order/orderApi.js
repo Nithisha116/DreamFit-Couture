@@ -1875,16 +1875,8 @@ export const getReadyToDeliveryOrders = async (params = {}) => {
 export const createOrder = async (orderData) => {
   console.log("\n========== 🚀 [API] createOrder START ==========");
   
-  const isFormData = orderData instanceof FormData;
-  
   try {
-    const config = {
-      headers: {
-        'Content-Type': isFormData ? 'multipart/form-data' : 'application/json',
-      }
-    };
-
-    const response = await axiosInstance.post(ORDER_BASE, orderData, config);
+    const response = await axiosInstance.post(ORDER_BASE, orderData);
     
     console.log("✅ [API] createOrder SUCCESS!");
     return response.data;

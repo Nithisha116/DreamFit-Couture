@@ -348,9 +348,7 @@ export const createGarmentApi = async (orderId, garmentData) => {
     }
   }
   
-  const response = await API.post(`/garments/order/${orderId}`, garmentData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await API.post(`/garments/order/${orderId}`, garmentData);
   return response.data;
 };
 
@@ -368,20 +366,13 @@ export const getGarmentByIdApi = async (id) => {
 
 // ===== 4. UPDATE GARMENT =====
 export const updateGarmentApi = async (id, garmentData) => {
-  const isFormData = garmentData instanceof FormData;
-  const response = await API.put(`/garments/${id}`, garmentData, {
-    headers: {
-      'Content-Type': isFormData ? 'multipart/form-data' : 'application/json',
-    },
-  });
+  const response = await API.put(`/garments/${id}`, garmentData);
   return response.data;
 };
 
 // ===== 5. UPDATE GARMENT IMAGES =====
 export const updateGarmentImagesApi = async (id, imageData) => {
-  const response = await API.patch(`/garments/${id}/images`, imageData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await API.patch(`/garments/${id}/images`, imageData);
   return response.data;
 };
 

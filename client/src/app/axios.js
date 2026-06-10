@@ -17,6 +17,12 @@ const API = axios.create({
 // Request interceptor to add token to every request
 API.interceptors.request.use(
   (config) => {
+    // ✅ Let the browser automatically set the multipart/form-data boundary
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+      delete config.headers["content-type"];
+    }
+
     // Get token from localStorage
     const token = localStorage.getItem("token");
 
