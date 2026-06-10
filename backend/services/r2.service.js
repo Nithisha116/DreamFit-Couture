@@ -56,6 +56,9 @@ class R2Service {
    * ✅ Upload a single file (used for Fabrics/User Profile)
    */
   async uploadFile(file, folder = 'fabrics') {
+    if (!process.env.R2_ENDPOINT) {
+      throw new Error("SERVER CONFIGURATION ERROR: R2_ENDPOINT is missing from Render Environment Variables!");
+    }
     try {
       if (!file || !file.buffer) {
         throw new Error("File buffer is missing. Check Multer configuration.");
@@ -93,6 +96,9 @@ class R2Service {
    * Essential for Cutting Master workflow
    */
   async uploadMultiple(files, folder = 'garments') {
+    if (!process.env.R2_ENDPOINT) {
+      throw new Error("SERVER CONFIGURATION ERROR: R2_ENDPOINT is missing from Render Environment Variables!");
+    }
     if (!files || files.length === 0) {
       console.log(`⚠️ No files provided for folder: ${folder}`);
       return [];
