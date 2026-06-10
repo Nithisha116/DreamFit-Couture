@@ -16,19 +16,29 @@ class R2Service {
     console.log("🪣 R2_BUCKET:", process.env.R2_BUCKET || "❌ MISSING");
     console.log("🌐 R2_PUBLIC_URL:", process.env.R2_PUBLIC_URL || "❌ MISSING");
 
+    let endpoint = process.env.R2_ENDPOINT ? process.env.R2_ENDPOINT.trim() : "";
+    if (endpoint && !endpoint.startsWith("http")) {
+      endpoint = `https://${endpoint}`;
+    }
+
     this.client = new S3Client({
       region: 'auto',
-      endpoint: process.env.R2_ENDPOINT,
+      endpoint: endpoint,
       credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY,
-        secretAccessKey: process.env.R2_SECRET_KEY,
+        accessKeyId: process.env.R2_ACCESS_KEY ? process.env.R2_ACCESS_KEY.trim() : "",
+        secretAccessKey: process.env.R2_SECRET_KEY ? process.env.R2_SECRET_KEY.trim() : "",
       },
       forcePathStyle: true,
-      maxAttempts: 3,
+      maxAttempts: 1, // Fail fast on 1st attempt instead of 3 to prevent 30s hangs
     });
     
-    this.bucket = process.env.R2_BUCKET;
-    this.publicUrl = process.env.R2_PUBLIC_URL;
+    this.bucket = process.env.R2_BUCKET ? process.env.R2_BUCKET.trim() : "";
+    let publicUrl = process.env.R2_PUBLIC_URL ? process.env.R2_PUBLIC_URL.trim() : "";
+    // Remove trailing slash if present
+    if (publicUrl.endsWith('/')) {
+      publicUrl = publicUrl.slice(0, -1);
+    }
+    this.publicUrl = publicUrl;
   }
 
   /**
@@ -94,16 +104,22 @@ class R2Service {
       const uploadPromises = files.map(file => this.uploadFile(file, folder));
       const results = await Promise.all(uploadPromises);
       
-      // Filter only successful ones and return their data
-      const successfulUploads = results
-        .filter(r => r.success)
-        .map(r => ({ key: r.key, url: r.url }));
+      const failedUploads = results.filter(r => !r.success);
+      if (failedUploads.length > 0) {
+        const errorMsg = failedUploads[0].error || "Unknown R2 Upload Error";
+        console.error(`❌ ${failedUploads.length} files failed to upload. First error: ${errorMsg}`);
+        // Throw error so order creation fails and alerts the user, instead of silently dropping images
+        throw new Error(`Cloudflare R2 Upload Failed: ${errorMsg}`);
+      }
+
+      // If all successful, return their data
+      const successfulUploads = results.map(r => ({ key: r.key, url: r.url }));
 
       console.log(`✅ Successfully uploaded ${successfulUploads.length}/${files.length} files`);
       return successfulUploads;
     } catch (error) {
-      console.error('❌ R2 multiple upload error:', error);
-      return [];
+      console.error('❌ R2 multiple upload error:', error.message);
+      throw error; // Propagate error to controller
     }
   }
 
