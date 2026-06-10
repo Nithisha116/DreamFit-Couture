@@ -2485,6 +2485,37 @@ export const updateGarment = async (req, res) => {
       fabricSufficiency
     } = req.body || {};
 
+    // ==========================================
+    // 📸 IMAGE RETENTION LOGIC
+    // ==========================================
+    // We only modify the existing image arrays if the request explicitly 
+    // tells us which images to keep (via existing*Images or keep*Keys).
+    // If these fields are completely undefined, it's a partial text update,
+    // so we leave the current images completely untouched.
+    
+    let hasRefUpdate = req.body.existingReferenceImages !== undefined || req.body.keepReferenceKeys !== undefined;
+    let hasCustUpdate = req.body.existingCustomerImages !== undefined || req.body.keepCustomerKeys !== undefined;
+    let hasClothUpdate = req.body.existingClothImages !== undefined || req.body.keepClothKeys !== undefined;
+
+    let keepReferenceKeys = [];
+    let keepCustomerKeys = [];
+    let keepClothKeys = [];
+
+    if (hasRefUpdate) {
+      const val = req.body.existingReferenceImages !== undefined ? req.body.existingReferenceImages : req.body.keepReferenceKeys;
+      keepReferenceKeys = typeof val === 'string' ? JSON.parse(val || "[]") : (val || []);
+    }
+
+    if (hasCustUpdate) {
+      const val = req.body.existingCustomerImages !== undefined ? req.body.existingCustomerImages : req.body.keepCustomerKeys;
+      keepCustomerKeys = typeof val === 'string' ? JSON.parse(val || "[]") : (val || []);
+    }
+
+    if (hasClothUpdate) {
+      const val = req.body.existingClothImages !== undefined ? req.body.existingClothImages : req.body.keepClothKeys;
+      keepClothKeys = typeof val === 'string' ? JSON.parse(val || "[]") : (val || []);
+    }
+
     // Parse JSON strings if they came from FormData
     if (measurements && typeof measurements === 'string') {
       try {
@@ -2499,35 +2530,6 @@ export const updateGarment = async (req, res) => {
         priceRange = JSON.parse(priceRange);
       } catch (e) {
         console.error("Error parsing priceRange:", e);
-      }
-    }
-
-    // Parse existing image keys
-    let keepReferenceKeys = [];
-    let keepCustomerKeys = [];
-    let keepClothKeys = [];
-
-    if (existingReferenceImages && typeof existingReferenceImages === 'string') {
-      try {
-        keepReferenceKeys = JSON.parse(existingReferenceImages);
-      } catch (e) {
-        console.error("Error parsing existingReferenceImages:", e);
-      }
-    }
-
-    if (existingCustomerImages && typeof existingCustomerImages === 'string') {
-      try {
-        keepCustomerKeys = JSON.parse(existingCustomerImages);
-      } catch (e) {
-        console.error("Error parsing existingCustomerImages:", e);
-      }
-    }
-
-    if (existingClothImages && typeof existingClothImages === 'string') {
-      try {
-        keepClothKeys = JSON.parse(existingClothImages);
-      } catch (e) {
-        console.error("Error parsing existingClothImages:", e);
       }
     }
 
@@ -2560,30 +2562,7 @@ export const updateGarment = async (req, res) => {
     if (fabricNotes !== undefined) garment.fabricNotes = fabricNotes;
     if (fabricSufficiency !== undefined) garment.fabricSufficiency = fabricSufficiency;
 
-    // Handle images - keep only those not deleted
-    if (keepReferenceKeys.length > 0) {
-      garment.referenceImages = garment.referenceImages.filter(img => 
-        keepReferenceKeys.includes(img.key)
-      );
-    } else {
-      garment.referenceImages = []; // Remove all if none to keep
-    }
-
-    if (keepCustomerKeys.length > 0) {
-      garment.customerImages = garment.customerImages.filter(img => 
-        keepCustomerKeys.includes(img.key)
-      );
-    } else {
-      garment.customerImages = [];
-    }
-
-    if (keepClothKeys.length > 0) {
-      garment.customerClothImages = garment.customerClothImages.filter(img => 
-        keepClothKeys.includes(img.key)
-      );
-    } else {
-      garment.customerClothImages = [];
-    }
+    // Cloth keys were already handled in the new block
 
     // ✅ Concurrent Upload to R2
     const [refResults, custResults, clothResults] = await Promise.all([
