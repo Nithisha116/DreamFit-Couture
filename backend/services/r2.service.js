@@ -24,6 +24,7 @@ class R2Service {
         secretAccessKey: process.env.R2_SECRET_KEY,
       },
       forcePathStyle: true,
+      maxAttempts: 3,
     });
     
     this.bucket = process.env.R2_BUCKET;
