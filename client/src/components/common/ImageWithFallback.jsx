@@ -23,8 +23,11 @@ const ImageWithFallback = ({
   }
 
   // Determine final image URL
-  const backendUrl = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? 'http://localhost:5000/api' : 'https://dreamfit-couture.onrender.com/api');
-  const baseUrl = backendUrl.replace('/api', '');
+  const envUrl = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? 'http://localhost:5000' : 'https://dreamfit-couture.onrender.com');
+  
+  // Ensure we have both base and api URLs correctly formatted
+  const baseUrl = envUrl.endsWith('/api') ? envUrl.replace('/api', '') : envUrl;
+  const apiUrl = envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`;
   
   let finalSrc = src;
   
@@ -37,7 +40,7 @@ const ImageWithFallback = ({
   }
   // If we need proxy to bypass CORS (especially for html2canvas/PDF)
   else if (useProxy && src.startsWith('http')) {
-    finalSrc = `${backendUrl}/proxy-image?url=${encodeURIComponent(src)}`;
+    finalSrc = `${apiUrl}/proxy-image?url=${encodeURIComponent(src)}`;
   }
 
   return (
