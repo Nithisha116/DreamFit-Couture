@@ -832,6 +832,7 @@ import AssignTailorModal from "../../components/works/AssignTailorModal";
 import UpdateStatusModal from "../../components/works/UpdateStatusModal";
 import ImagePreviewModal from "../../components/ImagePreviewModal";
 import GarmentPDF from "../../components/GarmentPDF";
+import ImageWithFallback from "../../components/common/ImageWithFallback";
 import showToast from "../../utils/toast";
 
 export default function WorkDetailsPage() {
@@ -1703,11 +1704,11 @@ export default function WorkDetailsPage() {
                       }
                       className="relative group aspect-square w-full touch-manipulation"
                     >
-                      <img
+                      <ImageWithFallback
                         src={img.url}
                         alt={`Reference ${index + 1}`}
-                        className="w-full h-full object-cover rounded-lg border-2 border-indigo-200 hover:border-indigo-500 transition-all"
-                        loading="lazy"
+                        className="w-full h-full rounded-lg border-2 border-indigo-200 group-hover:border-indigo-500 transition-all"
+                        useProxy={true}
                       />
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
                         <Eye size={20} className="sm:w-6 sm:h-6 text-white" />
@@ -1736,11 +1737,11 @@ export default function WorkDetailsPage() {
                       }
                       className="relative group aspect-square w-full touch-manipulation"
                     >
-                      <img
+                      <ImageWithFallback
                         src={img.url}
                         alt={`Customer ${index + 1}`}
-                        className="w-full h-full object-cover rounded-lg border-2 border-green-200 hover:border-green-500 transition-all"
-                        loading="lazy"
+                        className="w-full h-full rounded-lg border-2 border-green-200 group-hover:border-green-500 transition-all"
+                        useProxy={true}
                       />
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
                         <Eye size={20} className="sm:w-6 sm:h-6 text-white" />
@@ -1769,11 +1770,11 @@ export default function WorkDetailsPage() {
                       }
                       className="relative group aspect-square w-full touch-manipulation"
                     >
-                      <img
+                      <ImageWithFallback
                         src={img.url}
                         alt={`Cloth ${index + 1}`}
-                        className="w-full h-full object-cover rounded-lg border-2 border-orange-200 hover:border-orange-500 transition-all"
-                        loading="lazy"
+                        className="w-full h-full rounded-lg border-2 border-orange-200 group-hover:border-orange-500 transition-all"
+                        useProxy={true}
                       />
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
                         <Eye size={20} className="sm:w-6 sm:h-6 text-white" />

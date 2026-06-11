@@ -2191,73 +2191,27 @@ export const createGarment = async (req, res) => {
     let customerImages = [];
     let customerClothImages = [];
 
-    // ✅ Upload reference images to R2
-    if (req.files?.referenceImages && req.files.referenceImages.length > 0) {
-      console.log(`📸 Uploading ${req.files.referenceImages.length} reference images`);
-      for (const file of req.files.referenceImages) {
-        console.log(`   Processing: ${file.originalname} (${file.size} bytes)`);
-        const upload = await r2Service.uploadFile(
-          file, 
-          file.originalname, 
-          'garments/reference'
-        );
-        if (upload.success) {
-          referenceImages.push({ 
-            url: upload.url, 
-            key: upload.key,
-            uploadedAt: new Date()
-          });
-          console.log(`   ✅ Uploaded: ${upload.url}`);
-        } else {
-          console.error(`   ❌ Failed to upload: ${file.originalname}`, upload.error);
-        }
-      }
-    }
+    // ✅ Concurrent Upload to R2
+    const [refResults, custResults, clothResults] = await Promise.all([
+      req.files?.referenceImages && req.files.referenceImages.length > 0
+        ? r2Service.uploadMultiple(req.files.referenceImages, 'garments/reference')
+        : Promise.resolve([]),
+      req.files?.customerImages && req.files.customerImages.length > 0
+        ? r2Service.uploadMultiple(req.files.customerImages, 'garments/customer')
+        : Promise.resolve([]),
+      req.files?.customerClothImages && req.files.customerClothImages.length > 0
+        ? r2Service.uploadMultiple(req.files.customerClothImages, 'garments/cloth')
+        : Promise.resolve([])
+    ]);
 
-    // ✅ Upload customer digital images to R2
-    if (req.files?.customerImages && req.files.customerImages.length > 0) {
-      console.log(`📸 Uploading ${req.files.customerImages.length} customer images`);
-      for (const file of req.files.customerImages) {
-        console.log(`   Processing: ${file.originalname} (${file.size} bytes)`);
-        const upload = await r2Service.uploadFile(
-          file, 
-          file.originalname, 
-          'garments/customer'
-        );
-        if (upload.success) {
-          customerImages.push({ 
-            url: upload.url, 
-            key: upload.key,
-            uploadedAt: new Date()
-          });
-          console.log(`   ✅ Uploaded: ${upload.url}`);
-        } else {
-          console.error(`   ❌ Failed to upload: ${file.originalname}`, upload.error);
-        }
-      }
+    for (const res of refResults) {
+      if (res.url && res.key) referenceImages.push({ url: res.url, key: res.key, uploadedAt: new Date() });
     }
-
-    // ✅ Upload customer cloth images to R2
-    if (req.files?.customerClothImages && req.files.customerClothImages.length > 0) {
-      console.log(`📸 Uploading ${req.files.customerClothImages.length} cloth images`);
-      for (const file of req.files.customerClothImages) {
-        console.log(`   Processing: ${file.originalname} (${file.size} bytes)`);
-        const upload = await r2Service.uploadFile(
-          file, 
-          file.originalname, 
-          'garments/cloth'
-        );
-        if (upload.success) {
-          customerClothImages.push({ 
-            url: upload.url, 
-            key: upload.key,
-            uploadedAt: new Date()
-          });
-          console.log(`   ✅ Uploaded: ${upload.url}`);
-        } else {
-          console.error(`   ❌ Failed to upload: ${file.originalname}`, upload.error);
-        }
-      }
+    for (const res of custResults) {
+      if (res.url && res.key) customerImages.push({ url: res.url, key: res.key, uploadedAt: new Date() });
+    }
+    for (const res of clothResults) {
+      if (res.url && res.key) customerClothImages.push({ url: res.url, key: res.key, uploadedAt: new Date() });
     }
 
     // Parse measurements if provided as string
@@ -2531,6 +2485,37 @@ export const updateGarment = async (req, res) => {
       fabricSufficiency
     } = req.body || {};
 
+    // ==========================================
+    // 📸 IMAGE RETENTION LOGIC
+    // ==========================================
+    // We only modify the existing image arrays if the request explicitly 
+    // tells us which images to keep (via existing*Images or keep*Keys).
+    // If these fields are completely undefined, it's a partial text update,
+    // so we leave the current images completely untouched.
+    
+    let hasRefUpdate = req.body.existingReferenceImages !== undefined || req.body.keepReferenceKeys !== undefined;
+    let hasCustUpdate = req.body.existingCustomerImages !== undefined || req.body.keepCustomerKeys !== undefined;
+    let hasClothUpdate = req.body.existingClothImages !== undefined || req.body.keepClothKeys !== undefined;
+
+    let keepReferenceKeys = [];
+    let keepCustomerKeys = [];
+    let keepClothKeys = [];
+
+    if (hasRefUpdate) {
+      const val = req.body.existingReferenceImages !== undefined ? req.body.existingReferenceImages : req.body.keepReferenceKeys;
+      keepReferenceKeys = typeof val === 'string' ? JSON.parse(val || "[]") : (val || []);
+    }
+
+    if (hasCustUpdate) {
+      const val = req.body.existingCustomerImages !== undefined ? req.body.existingCustomerImages : req.body.keepCustomerKeys;
+      keepCustomerKeys = typeof val === 'string' ? JSON.parse(val || "[]") : (val || []);
+    }
+
+    if (hasClothUpdate) {
+      const val = req.body.existingClothImages !== undefined ? req.body.existingClothImages : req.body.keepClothKeys;
+      keepClothKeys = typeof val === 'string' ? JSON.parse(val || "[]") : (val || []);
+    }
+
     // Parse JSON strings if they came from FormData
     if (measurements && typeof measurements === 'string') {
       try {
@@ -2545,35 +2530,6 @@ export const updateGarment = async (req, res) => {
         priceRange = JSON.parse(priceRange);
       } catch (e) {
         console.error("Error parsing priceRange:", e);
-      }
-    }
-
-    // Parse existing image keys
-    let keepReferenceKeys = [];
-    let keepCustomerKeys = [];
-    let keepClothKeys = [];
-
-    if (existingReferenceImages && typeof existingReferenceImages === 'string') {
-      try {
-        keepReferenceKeys = JSON.parse(existingReferenceImages);
-      } catch (e) {
-        console.error("Error parsing existingReferenceImages:", e);
-      }
-    }
-
-    if (existingCustomerImages && typeof existingCustomerImages === 'string') {
-      try {
-        keepCustomerKeys = JSON.parse(existingCustomerImages);
-      } catch (e) {
-        console.error("Error parsing existingCustomerImages:", e);
-      }
-    }
-
-    if (existingClothImages && typeof existingClothImages === 'string') {
-      try {
-        keepClothKeys = JSON.parse(existingClothImages);
-      } catch (e) {
-        console.error("Error parsing existingClothImages:", e);
       }
     }
 
@@ -2606,83 +2562,29 @@ export const updateGarment = async (req, res) => {
     if (fabricNotes !== undefined) garment.fabricNotes = fabricNotes;
     if (fabricSufficiency !== undefined) garment.fabricSufficiency = fabricSufficiency;
 
-    // Handle images - keep only those not deleted
-    if (keepReferenceKeys.length > 0) {
-      garment.referenceImages = garment.referenceImages.filter(img => 
-        keepReferenceKeys.includes(img.key)
-      );
-    } else {
-      garment.referenceImages = []; // Remove all if none to keep
-    }
+    // Cloth keys were already handled in the new block
 
-    if (keepCustomerKeys.length > 0) {
-      garment.customerImages = garment.customerImages.filter(img => 
-        keepCustomerKeys.includes(img.key)
-      );
-    } else {
-      garment.customerImages = [];
-    }
+    // ✅ Concurrent Upload to R2
+    const [refResults, custResults, clothResults] = await Promise.all([
+      req.files?.referenceImages && req.files.referenceImages.length > 0
+        ? r2Service.uploadMultiple(req.files.referenceImages, 'garments/reference')
+        : Promise.resolve([]),
+      req.files?.customerImages && req.files.customerImages.length > 0
+        ? r2Service.uploadMultiple(req.files.customerImages, 'garments/customer')
+        : Promise.resolve([]),
+      req.files?.customerClothImages && req.files.customerClothImages.length > 0
+        ? r2Service.uploadMultiple(req.files.customerClothImages, 'garments/cloth')
+        : Promise.resolve([])
+    ]);
 
-    if (keepClothKeys.length > 0) {
-      garment.customerClothImages = garment.customerClothImages.filter(img => 
-        keepClothKeys.includes(img.key)
-      );
-    } else {
-      garment.customerClothImages = [];
+    for (const res of refResults) {
+      if (res.url && res.key) garment.referenceImages.push({ url: res.url, key: res.key, uploadedAt: new Date() });
     }
-
-    // Upload new reference images
-    if (req.files?.referenceImages) {
-      for (const file of req.files.referenceImages) {
-        const upload = await r2Service.uploadFile(
-          file, 
-          file.originalname, 
-          'garments/reference'
-        );
-        if (upload.success) {
-          garment.referenceImages.push({ 
-            url: upload.url, 
-            key: upload.key,
-            uploadedAt: new Date()
-          });
-        }
-      }
+    for (const res of custResults) {
+      if (res.url && res.key) garment.customerImages.push({ url: res.url, key: res.key, uploadedAt: new Date() });
     }
-
-    // Upload new customer images
-    if (req.files?.customerImages) {
-      for (const file of req.files.customerImages) {
-        const upload = await r2Service.uploadFile(
-          file, 
-          file.originalname, 
-          'garments/customer'
-        );
-        if (upload.success) {
-          garment.customerImages.push({ 
-            url: upload.url, 
-            key: upload.key,
-            uploadedAt: new Date()
-          });
-        }
-      }
-    }
-
-    // Upload new cloth images
-    if (req.files?.customerClothImages) {
-      for (const file of req.files.customerClothImages) {
-        const upload = await r2Service.uploadFile(
-          file, 
-          file.originalname, 
-          'garments/cloth'
-        );
-        if (upload.success) {
-          garment.customerClothImages.push({ 
-            url: upload.url, 
-            key: upload.key,
-            uploadedAt: new Date()
-          });
-        }
-      }
+    for (const res of clothResults) {
+      if (res.url && res.key) garment.customerClothImages.push({ url: res.url, key: res.key, uploadedAt: new Date() });
     }
 
     await garment.save();
@@ -2764,46 +2666,27 @@ export const updateGarmentImages = async (req, res) => {
     let customerImages = [...garment.customerImages];
     let customerClothImages = [...(garment.customerClothImages || [])];
 
-    // Upload new reference images
-    if (req.files?.referenceImages) {
-      for (const file of req.files.referenceImages) {
-        const upload = await r2Service.uploadFile(
-          file, 
-          file.originalname, 
-          'garments/reference'
-        );
-        if (upload.success) {
-          referenceImages.push({ url: upload.url, key: upload.key });
-        }
-      }
-    }
+    // ✅ Concurrent Upload to R2
+    const [refResults, custResults, clothResults] = await Promise.all([
+      req.files?.referenceImages && req.files.referenceImages.length > 0
+        ? r2Service.uploadMultiple(req.files.referenceImages, 'garments/reference')
+        : Promise.resolve([]),
+      req.files?.customerImages && req.files.customerImages.length > 0
+        ? r2Service.uploadMultiple(req.files.customerImages, 'garments/customer-digital')
+        : Promise.resolve([]),
+      req.files?.customerClothImages && req.files.customerClothImages.length > 0
+        ? r2Service.uploadMultiple(req.files.customerClothImages, 'garments/customer-cloth')
+        : Promise.resolve([])
+    ]);
 
-    // Upload new customer digital images
-    if (req.files?.customerImages) {
-      for (const file of req.files.customerImages) {
-        const upload = await r2Service.uploadFile(
-          file, 
-          file.originalname, 
-          'garments/customer-digital'
-        );
-        if (upload.success) {
-          customerImages.push({ url: upload.url, key: upload.key });
-        }
-      }
+    for (const res of refResults) {
+      if (res.url && res.key) referenceImages.push({ url: res.url, key: res.key, uploadedAt: new Date() });
     }
-
-    // Upload new customer cloth images
-    if (req.files?.customerClothImages) {
-      for (const file of req.files.customerClothImages) {
-        const upload = await r2Service.uploadFile(
-          file, 
-          file.originalname, 
-          'garments/customer-cloth'
-        );
-        if (upload.success) {
-          customerClothImages.push({ url: upload.url, key: upload.key });
-        }
-      }
+    for (const res of custResults) {
+      if (res.url && res.key) customerImages.push({ url: res.url, key: res.key, uploadedAt: new Date() });
+    }
+    for (const res of clothResults) {
+      if (res.url && res.key) customerClothImages.push({ url: res.url, key: res.key, uploadedAt: new Date() });
     }
 
     garment.referenceImages = referenceImages;

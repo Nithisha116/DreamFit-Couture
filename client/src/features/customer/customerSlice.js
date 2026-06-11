@@ -1603,7 +1603,7 @@ const customerSlice = createSlice({
         state.loading = false;
         state.currentCustomer = action.payload;
         state.customers = state.customers.map(c => 
-          c._id === action.payload._id ? action.payload : c
+          c._id === action.payload._id ? { ...c, ...action.payload } : c
         );
       })
       .addCase(updateCustomer.rejected, (state, action) => {

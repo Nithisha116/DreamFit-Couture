@@ -1614,11 +1614,7 @@ export const updateCustomer = async (req, res) => {
       }
     }
 
-    const customer = await Customer.findByIdAndUpdate(
-      id,
-      updates,
-      { new: true, runValidators: true }
-    );
+    const customer = await Customer.findById(id);
 
     if (!customer) {
       return res.status(404).json({ 
@@ -1626,6 +1622,9 @@ export const updateCustomer = async (req, res) => {
         message: "Customer not found" 
       });
     }
+
+    Object.assign(customer, updates);
+    await customer.save();
 
     res.status(200).json({
       success: true,
