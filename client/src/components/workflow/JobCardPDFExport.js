@@ -73,44 +73,80 @@ export async function exportJobCardToPdf(job, elementId = "job-card-print") {
   // Small settle delay for layout reflow
   await new Promise((r) => setTimeout(r, 300));
 
-  // 2. Capture at 2× for retina-quality output
-  const canvas = await html2canvas(el, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: false,
-    backgroundColor: "#ffffff",
-    scrollY: 0,
-    windowWidth: el.scrollWidth,
-  });
-
-  // 3. Build PDF with precise A4 page slicing
+  // 2. Build PDF with precise section-based pagination
   const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  let currentY = MARGIN;
+  let pageNumber = 1;
 
-  const imgData = canvas.toDataURL("image/png");
-  const imgW = CONTENT_W;
-  const imgH = (canvas.height * imgW) / canvas.width;
+  // Find all sections that need to be captured
+  const sections = Array.from(el.querySelectorAll(".jc-section, .jc-footer"));
 
-  let remaining = imgH;
-  let srcY = 0;
-  let page = 0;
+  for (let i = 0; i < sections.length; i++) {
+    const section = sections[i];
 
-  while (remaining > 0) {
-    if (page > 0) pdf.addPage();
+    // Capture the section individually
+    const canvas = await html2canvas(section, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      windowWidth: el.scrollWidth,
+    });
 
-    const sliceH = Math.min(remaining, CONTENT_H);
-    const sliceCanvasH = (sliceH * canvas.width) / imgW;
+    const imgData = canvas.toDataURL("image/png");
+    const imgW = CONTENT_W;
+    const imgH = (canvas.height * imgW) / canvas.width;
 
-    const slice = document.createElement("canvas");
-    slice.width = canvas.width;
-    slice.height = sliceCanvasH;
-    const ctx = slice.getContext("2d");
-    ctx.drawImage(canvas, 0, srcY, canvas.width, sliceCanvasH, 0, 0, canvas.width, sliceCanvasH);
+    // Check if adding this section exceeds page height
+    if (currentY + imgH > A4_H_PT - MARGIN && currentY > MARGIN) {
+      // Move to next page (if we aren't already at the top)
+      pdf.addPage();
+      pageNumber++;
+      currentY = MARGIN;
+    }
 
-    pdf.addImage(slice.toDataURL("image/png"), "PNG", MARGIN, MARGIN, imgW, sliceH);
+    // What if the single section is taller than the page?
+    if (imgH > CONTENT_H) {
+      // We have to slice this specific massive section
+      let remaining = imgH;
+      let srcY = 0;
 
-    srcY += sliceCanvasH;
-    remaining -= sliceH;
-    page++;
+      while (remaining > 0) {
+        if (srcY > 0) {
+          pdf.addPage();
+          pageNumber++;
+          currentY = MARGIN;
+        }
+
+        const sliceH = Math.min(remaining, CONTENT_H - currentY);
+        const sliceCanvasH = (sliceH * canvas.width) / imgW;
+
+        const slice = document.createElement("canvas");
+        slice.width = canvas.width;
+        slice.height = sliceCanvasH;
+        const ctx = slice.getContext("2d");
+        ctx.drawImage(canvas, 0, srcY, canvas.width, sliceCanvasH, 0, 0, canvas.width, sliceCanvasH);
+
+        pdf.addImage(slice.toDataURL("image/png"), "PNG", MARGIN, currentY, imgW, sliceH);
+
+        srcY += sliceCanvasH;
+        remaining -= sliceH;
+        currentY += sliceH;
+      }
+    } else {
+      pdf.addImage(imgData, "PNG", MARGIN, currentY, imgW, imgH);
+      currentY += imgH + 15; // Add a small 15pt margin between sections
+    }
+  }
+
+  // Add footer text with page numbers on every page
+  const pageCount = pdf.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    pdf.setPage(i);
+    pdf.setFontSize(8);
+    pdf.setTextColor(150);
+    const trackingId = job?.workflowTrackingId || job?.orderId || "export";
+    pdf.text(`Tracking: ${trackingId}  |  Page ${i} of ${pageCount}`, MARGIN, A4_H_PT - 10);
   }
 
   const filename = `job-card-${job?.orderId || job?.workflowTrackingId || "export"}.pdf`;
