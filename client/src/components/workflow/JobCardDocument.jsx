@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { format } from "date-fns";
 import WorkflowStageTimeline from "./WorkflowStageTimeline";
 import { PIPELINE_STAGE_DEFS, getStageLabelFromDef } from "../../workflow/workflowConstants";
+import ImageWithFallback from "../common/ImageWithFallback";
 
 /* ── Print-safe CSS injected once ─────────────────────────────── */
 const PRINT_STYLES = `
@@ -317,13 +318,15 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Reference Images</p>
             <div className="flex flex-wrap gap-2">
               {allImages.slice(0, 6).map((src, i) => (
-                <img
-                  key={i}
-                  src={src}
-                  crossOrigin="anonymous"
-                  alt=""
-                  className="h-16 w-16 object-cover rounded-lg border border-slate-200"
-                />
+                <div key={i} className="h-16 w-16 rounded-lg border border-slate-200 overflow-hidden shrink-0">
+                  <ImageWithFallback
+                    src={src}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    useProxy={true}
+                    crossOrigin="anonymous"
+                  />
+                </div>
               ))}
             </div>
           </div>
