@@ -522,6 +522,7 @@ const InvoiceList = lazy(() => import("../Pages/admin/billing/InvoiceList"));
 const CreateInvoice = lazy(() => import("../Pages/admin/billing/CreateInvoice"));
 const InvoiceDetails = lazy(() => import("../Pages/admin/billing/InvoiceDetails"));
 const PublicInvoiceView = lazy(() => import("../Pages/public/PublicInvoiceView"));
+const PublicOrderCardView = lazy(() => import("../Pages/public/PublicOrderCardView"));
 
 // 🚀 LAZY LOADING - CUSTOMER SIZE PROFILES
 const CustomerSizePage = lazy(() => import("../Pages/admin/customer-size/CustomerSizePage"));
@@ -664,6 +665,9 @@ export default function AppRouter() {
 
           {/* 📄 Public customer invoice (read-only, no auth) */}
           <Route path="/invoice/view/:orderId" element={<PublicInvoiceView />} />
+
+          {/* 📋 Public customer order card (read-only, no auth) */}
+          <Route path="/order-card/view/:orderId" element={<PublicOrderCardView />} />
 
 
           {/* 🛡️ ADMIN ROUTES (Full Access) */}

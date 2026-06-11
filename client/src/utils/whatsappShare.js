@@ -50,24 +50,39 @@ export function formatWhatsAppAmount(amount) {
  * Public invoice page URL for WhatsApp (business order ID, not Mongo _id).
  * Override base with VITE_PUBLIC_APP_URL in production (e.g. Vercel domain).
  */
+function getPublicAppBase() {
+  const envBase = import.meta.env.VITE_PUBLIC_APP_URL;
+  return (
+    (typeof envBase === "string" && envBase.trim()) ||
+    (typeof window !== "undefined" ? window.location.origin : "")
+  ).replace(/\/$/, "");
+}
+
 export function getPublicInvoiceUrl(order) {
   const businessOrderId = order?.orderId;
   if (!businessOrderId) return null;
 
-  const envBase = import.meta.env.VITE_PUBLIC_APP_URL;
-  const base =
-    (typeof envBase === "string" && envBase.trim()) ||
-    (typeof window !== "undefined" ? window.location.origin : "");
-
+  const base = getPublicAppBase();
   if (!base) return null;
 
   const path = `/invoice/view/${encodeURIComponent(String(businessOrderId).trim())}`;
-  return `${base.replace(/\/$/, "")}${path}`;
+  return `${base}${path}`;
+}
+
+export function getPublicOrderCardUrl(order) {
+  const businessOrderId = order?.orderId;
+  if (!businessOrderId) return null;
+
+  const base = getPublicAppBase();
+  if (!base) return null;
+
+  const path = `/order-card/view/${encodeURIComponent(String(businessOrderId).trim())}`;
+  return `${base}${path}`;
 }
 
 /**
  * Build a professional order summary message from live order data.
- * @param {{ order, customer, totalPaid, statusLabel, deliveryDate, invoiceUrl? }} params
+ * @param {{ order, customer, totalPaid, statusLabel, deliveryDate, invoiceUrl?, orderCardUrl? }} params
  */
 export function buildOrderWhatsAppMessage({
   order,
@@ -76,6 +91,7 @@ export function buildOrderWhatsAppMessage({
   statusLabel,
   deliveryDate,
   invoiceUrl,
+  orderCardUrl,
 }) {
   const orderId = order?.orderId || "N/A";
   const customerName = customer?.name || "Customer";
@@ -98,6 +114,10 @@ export function buildOrderWhatsAppMessage({
 
   if (invoiceUrl) {
     lines.push("", "Invoice:", invoiceUrl);
+  }
+
+  if (orderCardUrl) {
+    lines.push("", "Order Card:", orderCardUrl);
   }
 
   lines.push("", "Thank you for choosing DreamFit Couture.");

@@ -1743,6 +1743,7 @@ import WhatsAppShareButton from "../../../components/WhatsAppShareButton";
 import {
   buildOrderWhatsAppMessage,
   getPublicInvoiceUrl,
+  getPublicOrderCardUrl,
   openWhatsAppShare,
   resolveCustomerPhone,
 } from "../../../utils/whatsappShare";
@@ -2635,6 +2636,7 @@ const handleSavePayment = async (paymentData) => {
       return;
     }
     const invoiceUrl = getPublicInvoiceUrl(currentOrder);
+    const orderCardUrl = getPublicOrderCardUrl(currentOrder);
     const message = buildOrderWhatsAppMessage({
       order: currentOrder,
       customer,
@@ -2642,6 +2644,7 @@ const handleSavePayment = async (paymentData) => {
       statusLabel: statusBadge.label,
       deliveryDate: currentOrder.deliveryDate,
       invoiceUrl: invoiceUrl || undefined,
+      orderCardUrl: orderCardUrl || undefined,
     });
     openWhatsAppShare({ phoneDigits, message });
   };
