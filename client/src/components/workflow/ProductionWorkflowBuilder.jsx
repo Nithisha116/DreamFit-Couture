@@ -34,21 +34,22 @@ const PRESETS = [
     ],
   },
   {
-    id: "aari",
-    label: "Aari",
-    stages: [
-      "marking",
-      "aari_started",
-      "aari_completed",
-      "cutting",
-      "stitching",
-      "final_finishing",
-      "ironing_packing",
-      "trial",
-      "alteration",
-      "delivered"
-    ],
-  },
+  id: "aari",
+  label: "Aari",
+  stages: [
+    "marking",
+    "purchase",
+    "aari_started",
+    "aari_completed",
+    "cutting",
+    "stitching",
+    "final_finishing",
+    "ironing_packing",
+    "trial",
+    "alteration",
+    "delivered"
+  ],
+},
 ];
 export default function ProductionWorkflowBuilder({ stages, onChange }) {
   const selected = stages?.length ? stages : [...DEFAULT_WORKFLOW_STAGES];
