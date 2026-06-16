@@ -180,7 +180,7 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
         <div className="jc-section grid grid-cols-3 gap-3 text-sm mb-5">
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase">Work ID</p>
-            <p className="font-semibold truncate">{job.workCode || job.workflowTrackingId || job.orderId}</p>
+            <p className="font-semibold break-words leading-tight">{job.workCode || job.workflowTrackingId || job.orderId}</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase">Due Date</p>
@@ -192,11 +192,11 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase">Category</p>
-            <p className="truncate">{job.categoryName || garment?.categoryName || "—"}</p>
+            <p className="break-words leading-tight">{job.categoryName || garment?.categoryName || "—"}</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase">Item</p>
-            <p className="truncate">{job.itemName || garment?.itemName || "—"}</p>
+            <p className="break-words leading-tight">{job.itemName || garment?.itemName || "—"}</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase">Status</p>
@@ -218,10 +218,10 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
               const workerRole = s?.assignedTo?.role || "Pending";
               const label = getStageLabelFromDef(key, job?.workflowStages);
               return (
-                <div key={String(key)} className="rounded-lg bg-slate-50 border border-slate-100 p-2.5">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-                  <p className="font-semibold text-slate-800 mt-0.5 truncate text-xs">{workerName}</p>
-                  <p className="text-[9px] text-slate-500 capitalize">{workerRole}</p>
+                <div key={String(key)} className="rounded-lg bg-slate-50 border border-slate-100 p-2.5 flex flex-col justify-center min-w-0">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider break-words">{label}</p>
+                  <p className="font-semibold text-slate-800 mt-0.5 break-words text-xs leading-tight">{workerName}</p>
+                  <p className="text-[9px] text-slate-500 capitalize break-words">{workerRole}</p>
                   {s?.state === "completed" && (
                     <span className="inline-block mt-0.5 text-[8px] font-bold bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded uppercase">Done</span>
                   )}
@@ -260,12 +260,12 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
               {measurements.map((m, i) => (
                 <div
                   key={`m-${m.label}-${i}`}
-                  className="rounded-lg border border-violet-100 bg-violet-50 px-2 py-2 text-center"
+                  className="rounded-lg border border-violet-100 bg-violet-50 px-2 py-2 text-center flex flex-col justify-center min-w-0"
                 >
-                  <p className="text-[8px] font-bold text-violet-400 uppercase truncate leading-tight">{m.label}</p>
-                  <p className="font-black text-violet-900 text-sm leading-tight mt-0.5">
+                  <p className="text-[8px] font-bold text-violet-400 uppercase break-words leading-tight">{m.label}</p>
+                  <p className="font-black text-violet-900 text-[13px] leading-tight mt-1 break-all">
                     {m.value}
-                    <span className="text-[8px] font-normal text-violet-400 ml-0.5">{m.unit || "in"}</span>
+                    <span className="text-[8px] font-normal text-violet-400 ml-0.5 whitespace-nowrap">{m.unit || "in"}</span>
                   </p>
                 </div>
               ))}
@@ -322,7 +322,7 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
                   <ImageWithFallback
                     src={src}
                     alt=""
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                     useProxy={true}
                     crossOrigin="anonymous"
                   />
