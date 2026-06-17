@@ -15,7 +15,10 @@ const PRINT_STYLES = `
   .jc-measurement-grid { page-break-inside: avoid; }
   .jc-notes { page-break-inside: avoid; }
   .jc-images { page-break-inside: avoid; }
-  .jc-images img { max-height: 70px !important; width: 70px !important; }
+  .jc-images img {
+  max-height: 150px !important;
+  width: 150px !important;
+}
   .jc-qr img { width: 110px !important; height: 110px !important; }
   .jc-footer { page-break-before: avoid; }
 }
@@ -121,7 +124,16 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
     ...(job.customerImages || []),
     ...(job.customerClothImages || []),
   ];
-  const allImages = [...refImages, ...custImages].map(imageUrl).filter(Boolean);
+  const allImages = [
+  ...new Set(
+    [...refImages, ...custImages]
+      .map(imageUrl)
+      .filter(Boolean)
+  ),
+];
+  console.log("REF", refImages);
+console.log("CUST", custImages);
+console.log("ALL", allImages);
 
   // ── Stage History ──
   const stageHistory = (job.stageKeys || [])
@@ -316,13 +328,16 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
         {allImages.length > 0 && (
           <div className="jc-section jc-images mb-5">
             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Reference Images</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-4">
               {allImages.slice(0, 6).map((src, i) => (
-                <div key={i} className="h-16 w-16 rounded-lg border border-slate-200 overflow-hidden shrink-0">
+                <div
+  key={i}
+  className="h-52 w-52 rounded-lg border border-slate-200 overflow-hidden shrink-0"
+>
                   <ImageWithFallback
                     src={src}
                     alt=""
-                    className="h-full w-full object-contain"
+                    className="h-full w-full object-cover"
                     useProxy={true}
                     crossOrigin="anonymous"
                   />
