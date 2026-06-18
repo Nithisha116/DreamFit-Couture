@@ -4,7 +4,7 @@ import CustomerOrderCard from "../../components/CustomerOrderCard";
 import { fetchPublicOrderCard } from "../../api/publicOrderCardApi";
 import html2canvas from "html2canvas-pro";
 
-// ─── html2canvas helpers (inline — no separate util file needed) ──────────────
+// ─── html2canvas helpers ──────────────────────────────────────────────────────
 
 async function preConvertImages(container) {
   const images = container.querySelectorAll("img");
@@ -47,9 +47,7 @@ function releaseCanvas(canvas) {
     ctx?.clearRect(0, 0, canvas.width, canvas.height);
     canvas.width = 0;
     canvas.height = 0;
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
 }
 
 async function captureElementAsImage(element, { scale = 2, overrideHeight = null } = {}) {
@@ -57,9 +55,9 @@ async function captureElementAsImage(element, { scale = 2, overrideHeight = null
 
   await preConvertImages(element);
   if (document.fonts?.ready) await document.fonts.ready;
-  await new Promise((r) => setTimeout(r, 300));
+  await new Promise((r) => setTimeout(r, 500));
 
-  const finalHeight = overrideHeight || element.scrollHeight;
+  const finalHeight = overrideHeight && overrideHeight > 50 ? overrideHeight : element.scrollHeight;
 
   const canvas = await html2canvas(element, {
     scale,
@@ -68,8 +66,16 @@ async function captureElementAsImage(element, { scale = 2, overrideHeight = null
     backgroundColor: "#ffffff",
     logging: false,
     windowWidth: element.scrollWidth,
+    windowHeight: finalHeight,
     height: finalHeight,
+    y: 0,
+    x: 0,
   });
+
+  if (canvas.width < 100 || canvas.height < 100) {
+    releaseCanvas(canvas);
+    throw new Error(`Canvas too small: ${canvas.width}x${canvas.height}`);
+  }
 
   try {
     return canvas.toDataURL("image/png");
@@ -78,9 +84,6 @@ async function captureElementAsImage(element, { scale = 2, overrideHeight = null
   }
 }
 
-// ─── Word-wrap injection styles ───────────────────────────────────────────────
-// Applied only to the off-screen capture container so long IDs / strings
-// (e.g. garmentId "GRM20260618-8185-7748") never slice off the right edge.
 const CAPTURE_WRAP_STYLES = `
   #oc-capture-root * {
     overflow-wrap: break-word !important;
@@ -95,44 +98,24 @@ const CAPTURE_WRAP_STYLES = `
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-/**
- * Customer-facing read-only order card (no admin chrome, no auth).
- *
- * ─── MOBILE STRATEGY ─────────────────────────────────────────────────────────
- * Identical pipeline to PublicInvoiceView:
- *
- *   1. Render <CustomerOrderCard> off-screen at a fixed 850px desktop width.
- *   2. Measure the true content bottom via getBoundingClientRect() traversal
- *      (layout-accurate regardless of DOM nesting / positioned ancestors).
- *   3. Capture a trimmed PNG via html2canvas-pro with overrideHeight.
- *   4. Display the PNG scaled to fit the mobile viewport width using
- *      CSS transform scale + a sized clip-wrapper to eliminate phantom space.
- *   5. Pinch-zoom via touch-action: pan-y pinch-zoom.
- *
- * Desktop (≥ 768px): live HTML template rendered as before — untouched.
- */
 export default function PublicOrderCardView() {
   const { orderId } = useParams();
 
-  const [payload,  setPayload]  = useState(null);
-  const [error,    setError]    = useState(null);
-  const [loading,  setLoading]  = useState(true);
-
-  // Mobile-capture state
-  const [capturing,       setCapturing]       = useState(false);
-  const [imageUrl,        setImageUrl]        = useState(null);
-  const [mobileScale,     setMobileScale]     = useState(1);
-  const [imgNaturalHeight,setImgNaturalHeight] = useState(0);
+  const [payload,          setPayload]          = useState(null);
+  const [error,            setError]            = useState(null);
+  const [loading,          setLoading]          = useState(true);
+  const [capturing,        setCapturing]        = useState(false);
+  const [imageUrl,         setImageUrl]         = useState(null);
+  const [mobileScale,      setMobileScale]      = useState(1);
+  const [imgNaturalHeight, setImgNaturalHeight] = useState(0);
 
   const captureRef  = useRef(null);
   const imageUrlRef = useRef(null);
 
-  const CARD_WIDTH = 850;  // off-screen render width — wide enough for sm: grid cols
-  const H_PADDING  = 24;   // 12px each side on mobile
+  const CARD_WIDTH = 850;
+  const H_PADDING  = 24;
 
-  // ─── Detect mobile & compute fit-to-screen scale ─────────────────────────
-  const isMobile = () => typeof window !== "undefined" && window.innerWidth < 768;
-
+  // ─── Fit-to-screen scale ──────────────────────────────────────────────────
   useEffect(() => {
     const compute = () => {
       if (window.innerWidth >= 768) { setMobileScale(1); return; }
@@ -144,14 +127,13 @@ export default function PublicOrderCardView() {
     return () => window.removeEventListener("resize", compute);
   }, []);
 
-  // ─── Fetch order card ─────────────────────────────────────────────────────
+  // ─── Fetch ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!orderId) {
       setError("Invalid order card link");
       setLoading(false);
       return;
     }
-
     let cancelled = false;
     (async () => {
       try {
@@ -165,11 +147,10 @@ export default function PublicOrderCardView() {
         if (!cancelled) setLoading(false);
       }
     })();
-
     return () => { cancelled = true; };
   }, [orderId]);
 
-  // ─── Capture (mobile only) ────────────────────────────────────────────────
+  // ─── Capture ──────────────────────────────────────────────────────────────
   const runCapture = useCallback(async () => {
     const node = captureRef.current;
     if (!node || !payload?.order) return;
@@ -178,20 +159,21 @@ export default function PublicOrderCardView() {
     setError(null);
 
     try {
-      // getBoundingClientRect() is viewport-space — accurate regardless of
-      // how deeply nested or how many positioned ancestors exist in the tree.
-      const containerRect = node.getBoundingClientRect();
-      let maxViewportBottom = containerRect.top; // baseline = container top
+      // Extra tick for DOM paint after mount
+      await new Promise((r) => setTimeout(r, 200));
 
+      // Use offsetTop (relative to node) — reliable because the element is
+      // positioned at top:-99999px left:0 and still in horizontal layout flow.
+      // getBoundingClientRect is NOT used here because fixed+far-offscreen
+      // elements still have unreliable viewport coords on mobile Chrome.
+      let maxBottom = 0;
       node.querySelectorAll("*").forEach((el) => {
-        // Skip invisible / zero-size nodes (display:none, collapsed flex items)
         if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-        const r = el.getBoundingClientRect();
-        if (r.bottom > maxViewportBottom) maxViewportBottom = r.bottom;
+        const bottom = el.offsetTop + el.offsetHeight;
+        if (bottom > maxBottom) maxBottom = bottom;
       });
 
-      // Height relative to the container's own top + 48px breathing room
-      const contentHeight = maxViewportBottom - containerRect.top;
+      const contentHeight = Math.max(node.scrollHeight, maxBottom);
       const overrideHeight = Math.ceil(contentHeight) + 48;
 
       const dataUrl = await captureElementAsImage(node, { scale: 2, overrideHeight });
@@ -206,15 +188,15 @@ export default function PublicOrderCardView() {
     }
   }, [payload]);
 
-  // Trigger capture once payload is ready (mobile only, once per load)
+  // Trigger on mobile once payload is ready
   useEffect(() => {
     if (!payload?.order || imageUrl || capturing) return;
-    if (!isMobile()) return; // desktop renders live HTML — no capture needed
-    const timer = setTimeout(runCapture, 150);
+    if (window.innerWidth >= 768) return;
+    const timer = setTimeout(runCapture, 200);
     return () => clearTimeout(timer);
   }, [payload, imageUrl, capturing, runCapture]);
 
-  // Cleanup on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
       imageUrlRef.current = null;
@@ -258,16 +240,14 @@ export default function PublicOrderCardView() {
     );
   }
 
-  // ─── Scaled dimensions for mobile clip-wrapper ────────────────────────────
   const scaledWidth  = CARD_WIDTH * mobileScale;
   const scaledHeight = imgNaturalHeight > 0 ? imgNaturalHeight * mobileScale : "auto";
 
   return (
     <>
-      {/* Word-wrap injection — scoped to off-screen capture root only */}
       <style dangerouslySetInnerHTML={{ __html: CAPTURE_WRAP_STYLES }} />
 
-      {/* ─── MOBILE VIEW ─────────────────────────────────────────────────── */}
+      {/* ─── MOBILE ────────────────────────────────────────────────────────── */}
       <div className="md:hidden min-h-screen bg-slate-200">
 
         {/* Spinner while capturing */}
@@ -280,21 +260,37 @@ export default function PublicOrderCardView() {
           </div>
         )}
 
-        {/* Off-screen capture target — fixed 850px so sm: grid columns render correctly */}
+        {/*
+          Off-screen capture target.
+
+          CRITICAL POSITIONING:
+          - position: fixed   → removed from normal flow, won't affect page scroll
+          - top: -99999px     → hidden above the viewport
+          - left: 0           → stays inside horizontal layout bounds
+
+          WHY NOT left:-20000px:
+          Mobile Chrome refuses to compute layout for elements positioned
+          thousands of pixels outside the horizontal scroll area. offsetTop,
+          offsetHeight, and scrollHeight all return 0 or garbage, causing
+          html2canvas to capture a near-empty canvas and produce a broken PNG.
+
+          left:0 + top:-99999px keeps it in-flow horizontally so the browser
+          computes the full 850px layout correctly, while keeping it invisible.
+        */}
         {!imageUrl && payload?.order && (
           <div
             id="oc-capture-root"
             ref={captureRef}
             aria-hidden="true"
             style={{
-              position:    "absolute",
-              left:        "-20000px",
-              top:         0,
-              width:       `${CARD_WIDTH}px`,
-              minWidth:    `${CARD_WIDTH}px`,
-              zIndex:      -1,
-              pointerEvents: "none",
-              overflow:    "visible",
+              position:        "fixed",
+              top:             "-99999px",
+              left:            0,
+              width:           `${CARD_WIDTH}px`,
+              minWidth:        `${CARD_WIDTH}px`,
+              zIndex:          -1,
+              pointerEvents:   "none",
+              overflow:        "visible",
               backgroundColor: "#ffffff",
             }}
           >
@@ -302,12 +298,12 @@ export default function PublicOrderCardView() {
           </div>
         )}
 
-        {/* Captured PNG — fit-to-screen with pinch-zoom */}
+        {/* Captured PNG viewer */}
         {imageUrl && (
           <div
             style={{
               minHeight:       "100dvh",
-              backgroundColor: "#e2e8f0", // slate-200
+              backgroundColor: "#e2e8f0",
               overflowY:       "auto",
               overflowX:       "hidden",
               paddingTop:      "20px",
@@ -315,7 +311,6 @@ export default function PublicOrderCardView() {
               touchAction:     "pan-y pinch-zoom",
             }}
           >
-            {/* Flex centering + side padding */}
             <div
               style={{
                 display:        "flex",
@@ -324,11 +319,7 @@ export default function PublicOrderCardView() {
                 paddingRight:   "12px",
               }}
             >
-              {/*
-               * Clip wrapper — sized to POST-scale dimensions so layout flow
-               * has no phantom whitespace below the scaled image.
-               * overflow:hidden clips any sub-pixel bleed from the transform.
-               */}
+              {/* Clip wrapper — sized to post-scale dimensions to eliminate phantom whitespace */}
               <div
                 style={{
                   width:           `${scaledWidth}px`,
@@ -348,7 +339,7 @@ export default function PublicOrderCardView() {
                   style={{
                     width:           `${CARD_WIDTH}px`,
                     height:          "auto",
-                    maxWidth:        "none",   // CRITICAL: prevents browser clamping to viewport
+                    maxWidth:        "none",
                     display:         "block",
                     transform:       `scale(${mobileScale})`,
                     transformOrigin: "top left",
@@ -360,7 +351,7 @@ export default function PublicOrderCardView() {
         )}
       </div>
 
-      {/* ─── DESKTOP VIEW — completely untouched ─────────────────────────── */}
+      {/* ─── DESKTOP — untouched ───────────────────────────────────────────── */}
       <div className="hidden md:block min-h-screen bg-slate-200 py-6 sm:py-10 print:bg-white print:py-0">
         <div className="max-w-4xl mx-auto px-2 sm:px-4">
           <div className="hidden print:hidden sm:block text-center mb-4">
