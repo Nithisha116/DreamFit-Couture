@@ -6,29 +6,6 @@ import { captureElementAsImage } from "../../utils/captureInvoiceImage";
 
 /**
  * Customer-facing invoice as a single document image (no admin chrome, no auth).
- *
- * ─── MOBILE VIEWER STRATEGY ───────────────────────────────────────────────
- *
- * The invoice PNG is 794px wide (A4). On a ~390px mobile viewport we need it
- * to fit on ONE screen with no horizontal scrolling, no word cuts, no font
- * changes — exactly like a PDF viewer or Android Gallery certificate view.
- *
- * Technique: CSS transform scale-to-fit.
- *
- *   scale = (viewportWidth - 24px padding) / 794px
- *
- * The image renders at its natural 794px width inside a container sized to
- * the POST-scale dimensions. `transform: scale(s); transform-origin: top left`
- * shrinks it visually while keeping pixel sharpness. The container is sized
- * to (794*s) × (naturalHeight*s) so layout flow has no phantom whitespace.
- *
- * The naturalHeight is measured via an onLoad handler on the img element.
- * Until it loads, the container height is 0 (invisible), then snaps to the
- * correct scaled height — no layout jump visible to the user since the image
- * appears only after capture is complete.
- *
- * Pinch-zoom: `touch-action: pinch-zoom` on the scroll container lets the
- * browser handle native magnification — user can zoom in to read fine print.
  */
 export default function PublicInvoiceView() {
   const { orderId } = useParams();
@@ -39,7 +16,7 @@ export default function PublicInvoiceView() {
   const [imageUrl, setImageUrl] = useState(null);
   // Scale factor for mobile fit-to-screen
   const [mobileScale, setMobileScale] = useState(1);
-  // Natural pixel height of the captured image (needed to size the wrapper correctly)
+  // Natural pixel height of the captured image
   const [imgNaturalHeight, setImgNaturalHeight] = useState(0);
   const captureRef = useRef(null);
   const imageUrlRef = useRef(null);
@@ -48,7 +25,6 @@ export default function PublicInvoiceView() {
   const H_PADDING = 24;      // 12px each side breathing room on mobile
 
   // ─── Compute fit-to-screen scale ─────────────────────────────────────────
-  // Runs on mount and on resize (orientation flip).
   useEffect(() => {
     const compute = () => {
       if (window.innerWidth >= 768) {
@@ -161,7 +137,7 @@ export default function PublicInvoiceView() {
 
   const { order, garments = [], payments = [] } = payload || {};
 
-  // Scaled dimensions for the wrapper (so layout flow matches visual size)
+  // Scaled dimensions for the wrapper
   const scaledWidth  = INVOICE_WIDTH * mobileScale;
   const scaledHeight = imgNaturalHeight > 0 ? imgNaturalHeight * mobileScale : "auto";
 
@@ -178,7 +154,7 @@ export default function PublicInvoiceView() {
         </div>
       )}
 
-      {/* Off-screen render target — fixed A4 width so html2canvas captures at full resolution */}
+      {/* Off-screen render target — Added height-adaptive baseline constraints */}
       {!imageUrl && payload?.order && (
         <div
           ref={captureRef}
@@ -189,56 +165,33 @@ export default function PublicInvoiceView() {
             top: 0,
             width: `${INVOICE_WIDTH}px`,
             minWidth: `${INVOICE_WIDTH}px`,
+            height: "auto",
             zIndex: -1,
             pointerEvents: "none",
             overflow: "visible",
           }}
         >
-          <OrderInvoice order={order} garments={garments} payments={payments} />
+          <div style={{ backgroundColor: "#ffffff", overflow: "hidden" }}>
+            <OrderInvoice order={order} garments={garments} payments={payments} />
+          </div>
         </div>
       )}
 
       {imageUrl && (
         <>
-          {/*
-           * ─── MOBILE VIEWER ─────────────────────────────────────────────
-           *
-           * Scroll container: vertical scroll only (overflow-x:hidden).
-           * The invoice is scaled to fit width, so no horizontal scroll needed.
-           * Pinch-zoom (touch-action:pinch-zoom) lets users magnify details.
-           *
-           * Structure:
-           *   [scroll container]
-           *     [flex centering wrapper + padding]
-           *       [clip wrapper — sized to SCALED dimensions]
-           *         [img — natural 794px width, shrunk via transform]
-           *
-           * The clip wrapper:
-           *   width  = 794 * scale  (so the flex parent sizes it correctly)
-           *   height = naturalHeight * scale  (eliminates phantom whitespace
-           *            that transform leaves in layout flow)
-           *   overflow: hidden  (clips any sub-pixel bleed from the transform)
-           *
-           * The img:
-           *   width: 794px; maxWidth: none  (natural size, no browser clamping)
-           *   transform: scale(s); transform-origin: top left
-           *   (top-left origin aligns with the clip wrapper's top-left corner)
-           *
-           * The naturalHeight is read via onLoad on the img element and stored
-           * in state. Until it resolves, scaledHeight is "auto" (wrapper
-           * sizes itself by content — brief flash but invisible since spinner
-           * hides the view until imageUrl is set).
-           */}
+          {/* ─── MOBILE VIEWER ───────────────────────────────────────────── */}
           <div
             className="md:hidden"
             style={{
-              minHeight: "100dvh",
-              backgroundColor: "#d1d5db",   /* neutral-300 equivalent — clean document bg */
+              height: "100dvh",            /* Tight view lock prevents bottom empty stretching */
+              maxHeight: "100dvh",
+              backgroundColor: "#d1d5db",
               overflowY: "auto",
               overflowX: "hidden",
-              paddingTop: "20px",
-              paddingBottom: "32px",
-              touchAction: "pan-y pinch-zoom",  /* vertical scroll + pinch-zoom; no horizontal pan */
+              paddingTop: "16px",
+              paddingBottom: "16px",
+              boxSizing: "border-box",
+              touchAction: "pan-y pinch-zoom",
             }}
           >
             {/* Flex centering + side padding */}
@@ -248,6 +201,8 @@ export default function PublicInvoiceView() {
                 justifyContent: "center",
                 paddingLeft: "12px",
                 paddingRight: "12px",
+                width: "100%",
+                boxSizing: "border-box",
               }}
             >
               {/* Clip wrapper — sized to post-scale dimensions */}
@@ -255,11 +210,10 @@ export default function PublicInvoiceView() {
                 style={{
                   width:    `${scaledWidth}px`,
                   height:   scaledHeight !== "auto" ? `${scaledHeight}px` : "auto",
-                  overflow: "hidden",           /* clips sub-pixel bleed from transform */
-                  flexShrink: 0,                /* prevent flex from squeezing it */
+                  overflow: "hidden",
+                  flexShrink: 0,
                   backgroundColor: "#ffffff",
                   borderRadius: "6px",
-                  /* Layered shadow: close shadow for depth + far shadow for lift */
                   boxShadow:
                     "0 2px 8px rgba(0,0,0,0.12), 0 12px 40px rgba(0,0,0,0.22)",
                 }}
@@ -269,18 +223,15 @@ export default function PublicInvoiceView() {
                   alt={`DreamFit Couture Invoice ${order?.orderId || ""}`}
                   draggable={false}
                   onLoad={(e) => {
-                    // Measure the natural pixel height of the PNG so we can
-                    // size the clip wrapper to (naturalHeight * scale) and
-                    // eliminate phantom whitespace below the scaled image.
                     setImgNaturalHeight(e.currentTarget.naturalHeight);
                   }}
                   style={{
                     width:    `${INVOICE_WIDTH}px`,
                     height:   "auto",
-                    maxWidth: "none",            /* CRITICAL: prevents browser clamping to viewport */
+                    maxWidth: "none",
                     display:  "block",
                     transform: `scale(${mobileScale})`,
-                    transformOrigin: "top left", /* aligns with clip wrapper's origin */
+                    transformOrigin: "top left",
                   }}
                 />
               </div>
