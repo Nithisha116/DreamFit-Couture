@@ -69,7 +69,7 @@ export default function CustomerOrderCard({ payload }) {
     <>
       <style dangerouslySetInnerHTML={{ __html: PRINT_STYLES }} />
 
-      <div id="customer-order-card" className="bg-white text-slate-900 p-6 sm:p-10 max-w-3xl mx-auto font-sans">
+      <div id="customer-order-card" className="bg-white text-slate-900 p-4 sm:p-10 w-full max-w-3xl mx-auto font-sans">
         {/* Header */}
         <div className="coc-section border-b-2 border-pink-200 pb-6 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -84,7 +84,7 @@ export default function CustomerOrderCard({ payload }) {
           <button
             type="button"
             onClick={() => window.print()}
-            className="coc-no-print self-start sm:self-center px-4 py-2 rounded-xl bg-pink-600 text-white text-sm font-bold hover:bg-pink-700 transition-colors"
+            className="coc-no-print hidden sm:inline-flex self-start sm:self-center px-4 py-2 rounded-xl bg-pink-600 text-white text-sm font-bold hover:bg-pink-700 transition-colors"
           >
             Print
           </button>
