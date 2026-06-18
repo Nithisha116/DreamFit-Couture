@@ -5,272 +5,300 @@ import { fetchPublicInvoice } from "../../api/publicInvoiceApi";
 import { captureElementAsImage } from "../../utils/captureInvoiceImage";
 
 /**
- * Customer-facing invoice as a single document image (no admin chrome, no auth).
- * Renders OrderInvoice off-screen, captures once, then shows only the image.
- *
- * Mobile viewer: behaves like Android Gallery / PDF viewer — full A4 width,
- * horizontal + vertical scroll, pinch-zoom via touch-action: pan-x pan-y pinch-zoom.
- *
- * Root cause of original bug:
- *   position:fixed + overflow-x:auto has a long-standing WebKit/Chrome-mobile bug
- *   where the scrollable area is clipped to the viewport even when the child is wider.
- *   Simultaneously locking document.body overflow removed the only fallback scroll path.
- *   Fix: use a non-fixed full-viewport container (position:absolute on a relative root,
- *   or simply a block-level div that fills the screen via height:100dvh on html/body).
- */
+ * Customer-facing invoice as a single document image (no admin chrome, no auth).
+ *
+ * ─── MOBILE VIEWER STRATEGY ───────────────────────────────────────────────
+ *
+ * The invoice PNG is 794px wide (A4). On a ~390px mobile viewport we need it
+ * to fit on ONE screen with no horizontal scrolling, no word cuts, no font
+ * changes — exactly like a PDF viewer or Android Gallery certificate view.
+ *
+ * Technique: CSS transform scale-to-fit.
+ *
+ *   scale = (viewportWidth - 24px padding) / 794px
+ *
+ * The image renders at its natural 794px width inside a container sized to
+ * the POST-scale dimensions. `transform: scale(s); transform-origin: top left`
+ * shrinks it visually while keeping pixel sharpness. The container is sized
+ * to (794*s) × (naturalHeight*s) so layout flow has no phantom whitespace.
+ *
+ * The naturalHeight is measured via an onLoad handler on the img element.
+ * Until it loads, the container height is 0 (invisible), then snaps to the
+ * correct scaled height — no layout jump visible to the user since the image
+ * appears only after capture is complete.
+ *
+ * Pinch-zoom: `touch-action: pinch-zoom` on the scroll container lets the
+ * browser handle native magnification — user can zoom in to read fine print.
+ */
 export default function PublicInvoiceView() {
-  const { orderId } = useParams();
-  const [payload, setPayload] = useState(null);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [capturing, setCapturing] = useState(false);
-  const [imageUrl, setImageUrl] = useState(null);
-  const captureRef = useRef(null);
-  const imageUrlRef = useRef(null);
+  const { orderId } = useParams();
+  const [payload, setPayload] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [capturing, setCapturing] = useState(false);
+  const [imageUrl, setImageUrl] = useState(null);
+  // Scale factor for mobile fit-to-screen
+  const [mobileScale, setMobileScale] = useState(1);
+  // Natural pixel height of the captured image (needed to size the wrapper correctly)
+  const [imgNaturalHeight, setImgNaturalHeight] = useState(0);
+  const captureRef = useRef(null);
+  const imageUrlRef = useRef(null);
 
-  // ─── Mobile body lock ─────────────────────────────────────────────────────
-  // When the image viewer is shown on mobile we make <html> and <body>
-  // exactly viewport-sized so the viewer div can be the sole scroll host.
-  // This prevents double-scroll bars and lets touch events go to the viewer.
-  useEffect(() => {
-    if (!imageUrl) return undefined;
+  const INVOICE_WIDTH = 794; // px — must match captureRef width and capture canvas width
+  const H_PADDING = 24;      // 12px each side breathing room on mobile
 
-    const mq = window.matchMedia("(max-width: 767px)");
+  // ─── Compute fit-to-screen scale ─────────────────────────────────────────
+  // Runs on mount and on resize (orientation flip).
+  useEffect(() => {
+    const compute = () => {
+      if (window.innerWidth >= 768) {
+        setMobileScale(1);
+        return;
+      }
+      const available = window.innerWidth - H_PADDING;
+      setMobileScale(Math.min(1, available / INVOICE_WIDTH));
+    };
 
-    const applyLock = () => {
-      if (!mq.matches) {
-        // Desktop: release any lock
-        document.documentElement.style.cssText = "";
-        document.body.style.cssText = "";
-        return;
-      }
-      // Mobile: constrain root so the viewer div owns all scrolling
-      document.documentElement.style.cssText =
-        "height:100%;overflow:hidden;";
-      document.body.style.cssText =
-        "height:100%;overflow:hidden;margin:0;";
-    };
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, []);
 
-    applyLock();
-    mq.addEventListener("change", applyLock);
+  // ─── Fetch invoice ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!orderId) {
+      setError("Invalid invoice link");
+      setLoading(false);
+      return;
+    }
 
-    return () => {
-      mq.removeEventListener("change", applyLock);
-      document.documentElement.style.cssText = "";
-      document.body.style.cssText = "";
-    };
-  }, [imageUrl]);
+    let cancelled = false;
 
-  // ─── Fetch invoice ────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!orderId) {
-      setError("Invalid invoice link");
-      setLoading(false);
-      return;
-    }
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await fetchPublicInvoice(orderId);
+        if (!cancelled) setPayload(data);
+      } catch (err) {
+        if (!cancelled) setError(err.message || "Unable to load invoice");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
 
-    let cancelled = false;
+    return () => { cancelled = true; };
+  }, [orderId]);
 
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await fetchPublicInvoice(orderId);
-        if (!cancelled) setPayload(data);
-      } catch (err) {
-        if (!cancelled) setError(err.message || "Unable to load invoice");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+  // ─── Capture ──────────────────────────────────────────────────────────────
+  const runCapture = useCallback(async () => {
+    const node = captureRef.current;
+    if (!node || !payload?.order) return;
 
-    return () => {
-      cancelled = true;
-    };
-  }, [orderId]);
+    setCapturing(true);
+    setError(null);
 
-  // ─── Capture ──────────────────────────────────────────────────────────────
-  const runCapture = useCallback(async () => {
-    const node = captureRef.current;
-    if (!node || !payload?.order) return;
+    try {
+      const dataUrl = await captureElementAsImage(node, { scale: 2 });
+      imageUrlRef.current = dataUrl;
+      setImageUrl(dataUrl);
+    } catch (err) {
+      console.error("Public invoice capture failed:", err);
+      setError("Unable to display invoice. Please try again.");
+    } finally {
+      setCapturing(false);
+    }
+  }, [payload]);
 
-    setCapturing(true);
-    setError(null);
+  useEffect(() => {
+    if (!payload?.order || imageUrl || capturing) return;
+    const timer = setTimeout(runCapture, 100);
+    return () => clearTimeout(timer);
+  }, [payload, imageUrl, capturing, runCapture]);
 
-    try {
-      const dataUrl = await captureElementAsImage(node, { scale: 2 });
-      imageUrlRef.current = dataUrl;
-      setImageUrl(dataUrl);
-    } catch (err) {
-      console.error("Public invoice capture failed:", err);
-      setError("Unable to display invoice. Please try again.");
-    } finally {
-      setCapturing(false);
-    }
-  }, [payload]);
+  useEffect(() => {
+    return () => {
+      imageUrlRef.current = null;
+      setImageUrl(null);
+    };
+  }, []);
 
-  useEffect(() => {
-    if (!payload?.order || imageUrl || capturing) return;
-    const timer = setTimeout(runCapture, 100);
-    return () => clearTimeout(timer);
-  }, [payload, imageUrl, capturing, runCapture]);
+  // ─── Loading state ────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-neutral-300 flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="mt-4 text-slate-700 font-medium">Loading invoice…</p>
+        </div>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    return () => {
-      imageUrlRef.current = null;
-      setImageUrl(null);
-    };
-  }, []);
+  // ─── Error state ──────────────────────────────────────────────────────────
+  if (error && !imageUrl) {
+    return (
+      <div className="min-h-screen bg-neutral-300 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+          <p className="text-lg font-bold text-slate-800">Invoice unavailable</p>
+          <p className="text-sm text-slate-500 mt-2">{error}</p>
+          {orderId && (
+            <p className="text-xs text-slate-400 mt-4 font-mono">Order #{orderId}</p>
+          )}
+          {payload?.order && (
+            <button
+              type="button"
+              onClick={runCapture}
+              className="mt-6 px-5 py-2.5 rounded-xl bg-pink-600 text-white text-sm font-bold hover:bg-pink-700"
+            >
+              Try again
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
-  // ─── Loading state ────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-neutral-300 flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="mt-4 text-slate-700 font-medium">Loading invoice…</p>
-        </div>
-      </div>
-    );
-  }
+  const { order, garments = [], payments = [] } = payload || {};
 
-  // ─── Error state ──────────────────────────────────────────────────────────
-  if (error && !imageUrl) {
-    return (
-      <div className="min-h-screen bg-neutral-300 flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
-          <p className="text-lg font-bold text-slate-800">Invoice unavailable</p>
-          <p className="text-sm text-slate-500 mt-2">{error}</p>
-          {orderId && (
-            <p className="text-xs text-slate-400 mt-4 font-mono">Order #{orderId}</p>
-          )}
-          {payload?.order && (
-            <button
-              type="button"
-              onClick={runCapture}
-              className="mt-6 px-5 py-2.5 rounded-xl bg-pink-600 text-white text-sm font-bold hover:bg-pink-700"
-            >
-              Try again
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // Scaled dimensions for the wrapper (so layout flow matches visual size)
+  const scaledWidth  = INVOICE_WIDTH * mobileScale;
+  const scaledHeight = imgNaturalHeight > 0 ? imgNaturalHeight * mobileScale : "auto";
 
-  const { order, garments = [], payments = [] } = payload || {};
+  return (
+    <div className="min-h-screen bg-neutral-300">
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-  return (
-    <div className="min-h-screen bg-neutral-300">
+      {/* Spinner while capturing */}
+      {(capturing || !imageUrl) && (
+        <div className="min-h-screen flex items-center justify-center p-6">
+          <div className="text-center">
+            <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="mt-4 text-slate-700 font-medium">Preparing your invoice…</p>
+          </div>
+        </div>
+      )}
 
-      {/* Spinner while capturing */}
-      {(capturing || !imageUrl) && (
-        <div className="min-h-screen flex items-center justify-center p-6">
-          <div className="text-center">
-            <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="mt-4 text-slate-700 font-medium">Preparing your invoice…</p>
-          </div>
-        </div>
-      )}
+      {/* Off-screen render target — fixed A4 width so html2canvas captures at full resolution */}
+      {!imageUrl && payload?.order && (
+        <div
+          ref={captureRef}
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: "-10000px",
+            top: 0,
+            width: `${INVOICE_WIDTH}px`,
+            minWidth: `${INVOICE_WIDTH}px`,
+            zIndex: -1,
+            pointerEvents: "none",
+            overflow: "visible",
+          }}
+        >
+          <OrderInvoice order={order} garments={garments} payments={payments} />
+        </div>
+      )}
 
-      {/* Off-screen render target — fixed A4 width so html2canvas captures correctly */}
-      {!imageUrl && payload?.order && (
-        <div
-          ref={captureRef}
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            left: "-10000px",
-            top: 0,
-            width: "794px",
-            minWidth: "794px",
-            zIndex: -1,
-            pointerEvents: "none",
-            overflow: "visible",
-          }}
-        >
-          <OrderInvoice order={order} garments={garments} payments={payments} />
-        </div>
-      )}
+      {imageUrl && (
+        <>
+          {/*
+           * ─── MOBILE VIEWER ─────────────────────────────────────────────
+           *
+           * Scroll container: vertical scroll only (overflow-x:hidden).
+           * The invoice is scaled to fit width, so no horizontal scroll needed.
+           * Pinch-zoom (touch-action:pinch-zoom) lets users magnify details.
+           *
+           * Structure:
+           *   [scroll container]
+           *     [flex centering wrapper + padding]
+           *       [clip wrapper — sized to SCALED dimensions]
+           *         [img — natural 794px width, shrunk via transform]
+           *
+           * The clip wrapper:
+           *   width  = 794 * scale  (so the flex parent sizes it correctly)
+           *   height = naturalHeight * scale  (eliminates phantom whitespace
+           *            that transform leaves in layout flow)
+           *   overflow: hidden  (clips any sub-pixel bleed from the transform)
+           *
+           * The img:
+           *   width: 794px; maxWidth: none  (natural size, no browser clamping)
+           *   transform: scale(s); transform-origin: top left
+           *   (top-left origin aligns with the clip wrapper's top-left corner)
+           *
+           * The naturalHeight is read via onLoad on the img element and stored
+           * in state. Until it resolves, scaledHeight is "auto" (wrapper
+           * sizes itself by content — brief flash but invisible since spinner
+           * hides the view until imageUrl is set).
+           */}
+          <div
+            className="md:hidden"
+            style={{
+              minHeight: "100dvh",
+              backgroundColor: "#d1d5db",   /* neutral-300 equivalent — clean document bg */
+              overflowY: "auto",
+              overflowX: "hidden",
+              paddingTop: "20px",
+              paddingBottom: "32px",
+              touchAction: "pan-y pinch-zoom",  /* vertical scroll + pinch-zoom; no horizontal pan */
+            }}
+          >
+            {/* Flex centering + side padding */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                paddingLeft: "12px",
+                paddingRight: "12px",
+              }}
+            >
+              {/* Clip wrapper — sized to post-scale dimensions */}
+              <div
+                style={{
+                  width:    `${scaledWidth}px`,
+                  height:   scaledHeight !== "auto" ? `${scaledHeight}px` : "auto",
+                  overflow: "hidden",           /* clips sub-pixel bleed from transform */
+                  flexShrink: 0,                /* prevent flex from squeezing it */
+                  backgroundColor: "#ffffff",
+                  borderRadius: "6px",
+                  /* Layered shadow: close shadow for depth + far shadow for lift */
+                  boxShadow:
+                    "0 2px 8px rgba(0,0,0,0.12), 0 12px 40px rgba(0,0,0,0.22)",
+                }}
+              >
+                <img
+                  src={imageUrl}
+                  alt={`DreamFit Couture Invoice ${order?.orderId || ""}`}
+                  draggable={false}
+                  onLoad={(e) => {
+                    // Measure the natural pixel height of the PNG so we can
+                    // size the clip wrapper to (naturalHeight * scale) and
+                    // eliminate phantom whitespace below the scaled image.
+                    setImgNaturalHeight(e.currentTarget.naturalHeight);
+                  }}
+                  style={{
+                    width:    `${INVOICE_WIDTH}px`,
+                    height:   "auto",
+                    maxWidth: "none",            /* CRITICAL: prevents browser clamping to viewport */
+                    display:  "block",
+                    transform: `scale(${mobileScale})`,
+                    transformOrigin: "top left", /* aligns with clip wrapper's origin */
+                  }}
+                />
+              </div>
+            </div>
+          </div>
 
-      {imageUrl && (
-        <>
-          {/*
-           * ─── MOBILE VIEWER ───────────────────────────────────────────────
-           *
-           * WHY this approach works (and fixed/overflow-x:auto did NOT):
-           *
-           * Mobile WebKit & Chrome have a bug: overflow-x:auto on a
-           * position:fixed element doesn't expand the scrollable area beyond
-           * 100vw — the browser clips it. This is why your right-swipe was dead.
-           *
-           * Solution:
-           *  • html + body are locked to height:100% overflow:hidden (done in useEffect).
-           *  • This outer div fills the screen using width:100vw height:100dvh.
-           *    It is NOT fixed — it's in normal flow, but since body is 100% tall
-           *    and clipped, it naturally occupies exactly the viewport.
-           *  • overflow:auto on a non-fixed, block-level element works correctly
-           *    on all mobile browsers — this is the same pattern Android Gallery
-           *    and PDF viewers use internally.
-           *  • touch-action:pan-x pan-y pinch-zoom enables native pinch-zoom
-           *    without any JS library.
-           *  • The inner wrapper is exactly 794px wide (A4) + 40px horizontal
-           *    padding = 834px total, which forces the horizontal scrollbar to appear.
-           *  • The img has width:794px and maxWidth:none — critical. Without
-           *    maxWidth:none, browsers silently clamp images to 100% of parent.
-           */}
-          <div
-            className="md:hidden"
-            style={{
-              width: "100vw",
-              height: "100dvh",   /* dvh = dynamic viewport height — avoids mobile browser chrome overlap */
-              overflow: "auto",   /* both axes — same as Android Gallery scroll container */
-              backgroundColor: "#000",
-              WebkitOverflowScrolling: "touch",  /* smooth momentum scroll on older iOS */
-              touchAction: "pan-x pan-y pinch-zoom", /* native pinch-zoom, no JS needed */
-            }}
-          >
-            {/*
-             * Inner wrapper: fixed content width.
-             * padding creates breathing room around the document (like a PDF viewer margin).
-             * This div MUST be wider than the viewport to make horizontal scroll work.
-             */}
-            <div
-              style={{
-                width: "834px",      /* 794px image + 20px left + 20px right padding */
-                minWidth: "834px",   /* belt-and-suspenders: prevent any shrink */
-                padding: "20px",
-                boxSizing: "border-box",
-              }}
-            >
-              <img
-                src={imageUrl}
-                alt="Invoice"
-                draggable={false}
-                style={{
-                  width: "794px",
-                  maxWidth: "none",   /* CRITICAL: prevent browser from scaling down to viewport */
-                  height: "auto",
-                  display: "block",
-                  boxShadow: "0 4px 32px rgba(0,0,0,0.5)",
-                }}
-              />
-            </div>
-          </div>
-
-          {/* ─── DESKTOP VIEWER — ────────────────────────────── */}
-          <div className="hidden md:flex md:justify-center md:p-4 md:min-h-screen md:bg-neutral-300">
-            <img
-              src={imageUrl}
-              alt={`DreamFit Couture Invoice ${order?.orderId || ""}`}
-              className="w-full max-w-[210mm] h-auto shadow-2xl bg-white"
-              style={{ display: capturing ? "none" : "block" }}
-              draggable={false}
-            />
-          </div>
-        </>
-      )}
-    </div>
-  );
-}                                                                                                                                                                        
+          {/* ─── DESKTOP VIEWER — unchanged ──────────────────────────────── */}
+          <div className="hidden md:flex md:justify-center md:p-4 md:min-h-screen md:bg-neutral-300">
+            <img
+              src={imageUrl}
+              alt={`DreamFit Couture Invoice ${order?.orderId || ""}`}
+              className="w-full max-w-[210mm] h-auto shadow-2xl bg-white"
+              style={{ display: capturing ? "none" : "block" }}
+              draggable={false}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
