@@ -18,7 +18,8 @@ import {
   DollarSign,
   Receipt,
   User,
-  Plus
+  Plus,
+  Download
 } from "lucide-react";
 import showToast from "../../../utils/toast";
 import RangeBadge from "../../../components/RangeBadge";
@@ -154,10 +155,10 @@ const InvoiceDetails = () => {
           )}
           <button 
             onClick={handlePrint}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 font-semibold text-xs shadow-sm active:scale-95 transition-all"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-900 font-bold text-xs shadow-sm active:scale-95 transition-all"
           >
-            <Printer className="h-4.5 w-4.5" />
-            <span>Print Tax Receipt</span>
+            <Download className="h-4.5 w-4.5" />
+            <span>Download Invoice</span>
           </button>
         </div>
       </div>
@@ -196,7 +197,7 @@ const InvoiceDetails = () => {
             <p className="text-xs text-gray-500">Contact: +91 98765 43210 | info@dreamfit.in</p>
           </div>
           <div className="text-right space-y-1">
-            <span className="px-3 py-1 rounded-full text-xs font-bold uppercase bg-indigo-50 border border-indigo-100 text-indigo-600 print:border-none print:bg-none print:text-black">
+            <span className="px-3 py-1 rounded-full text-xs font-bold uppercase bg-indigo-50 border border-indigo-100 text-indigo-600 print:text-black print:bg-none print:border-none">
               TAX INVOICE
             </span>
             <h4 className="text-lg font-black text-gray-800 mt-2">{invoice.invoiceNumber}</h4>
@@ -227,24 +228,20 @@ const InvoiceDetails = () => {
 
         {/* Items Table */}
         <div className="space-y-3">
-          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">Detailed Services Ledger Ledger</span>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">Detailed Services Ledger</span>
           <div className="overflow-hidden border border-gray-200 rounded-xl print:border-none print:rounded-none">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 font-bold text-gray-500">
+                <tr className="bg-gray-50 border-b border-gray-200 font-bold text-gray-500 uppercase">
                   <th className="py-3 px-4">Line Item Description</th>
                   <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4 text-right">Service Value</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {invoice.items?.map((item, idx) => (
                   <tr key={idx} className="hover:bg-gray-50/50">
                     <td className="py-3.5 px-4 font-bold text-gray-800">{item.name}</td>
-                    <td className="py-3.5 px-4 text-gray-500 capitalize">{item.category || "stitching"}</td>
-                    <td className="py-3.5 px-4 text-right font-extrabold text-gray-900">
-                      <RangeBadge min={item.minPrice ?? item.price} max={item.maxPrice ?? item.price} type="standard" />
-                    </td>
+                    <td className="py-3.5 px-4 text-gray-500 capitalize">{item.category || "Stitching"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -290,7 +287,6 @@ const InvoiceDetails = () => {
                 <span>- ₹{invoice.summary.discountAmount.toLocaleString("en-IN")}</span>
               </div>
             )}
-            
             {invoice.summary?.taxAmount > 0 && (
               <div className="flex justify-between py-1 border-b border-gray-200 text-emerald-600 font-semibold">
                 <span>GST Tax Added</span>

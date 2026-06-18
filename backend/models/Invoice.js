@@ -6,6 +6,10 @@ const invoiceItemSchema = new mongoose.Schema({
     required: true,
     trim: true 
   },
+  category: {
+    type: String,
+    trim: true
+  },
   qty: { 
     type: Number, 
     default: 1,

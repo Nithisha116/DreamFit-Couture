@@ -18,6 +18,25 @@ import {
 } from "lucide-react";
 import showToast from "../../../utils/toast";
 
+// Helper: Format payment range display
+const RangeBadge = ({ min, max, type }) => {
+  const fmt = (v) => Number(v || 0).toLocaleString("en-IN");
+  const minVal = Number(min) || 0;
+  const maxVal = Number(max) || 0;
+
+  if (minVal === 0 && maxVal === 0) {
+    return <span className="text-gray-400 text-xs font-semibold">Not Available</span>;
+  }
+  if (minVal === maxVal || maxVal === 0) {
+    return <span className="font-bold text-gray-800 text-xs">₹{fmt(minVal)}</span>;
+  }
+  return (
+    <span className="font-bold text-gray-800 text-xs">
+      ₹{fmt(minVal)} – ₹{fmt(maxVal)}
+    </span>
+  );
+};
+
 const CreateInvoice = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -51,20 +70,42 @@ const CreateInvoice = () => {
         
         // Auto initialize Stitching & Fabric line items from order garments
         if (orderData.garments && orderData.garments.length > 0) {
-          const stitches = orderData.garments.map((g, idx) => ({
-            id: `stitch-${idx}`,
-            name: `${g.itemName || g.name} Stitching Fee`,
-            amount: Number(g.priceRange?.min) || 2500 // Fallback stitching
-          }));
-          setStitchingLineItems(stitches);
+          const stitches = [];
+          const fabrics = [];
 
-          const fabrics = orderData.garments
-            .filter(g => g.fabricSource === "store")
-            .map((g, idx) => ({
-              id: `fabric-${idx}`,
-              name: `${g.itemName || g.name} Fabric (${g.fabricPrice || "0"})`,
-              amount: Number(g.fabricPrice) || 0
-            }));
+          orderData.garments.forEach((g, idx) => {
+            // Primary Garment Stitching
+            stitches.push({
+              id: `stitch-${idx}`,
+              name: g.itemName || g.name || "Stitching Fee",
+              category: g.categoryName || (typeof g.category === 'object' ? g.category?.name : g.category) || "Stitching",
+              amount: Number(g.finalizedPrice || g.priceRange?.min) || 0
+            });
+
+            // Sub-Garments if any
+            if (g.subGarments && Array.isArray(g.subGarments)) {
+              g.subGarments.forEach((sub, sIdx) => {
+                stitches.push({
+                  id: `stitch-${idx}-sub-${sIdx}`,
+                  name: sub.itemName || sub.name || "Sub-Garment Fee",
+                  category: sub.categoryName || (typeof sub.category === 'object' ? sub.category?.name : sub.category) || "Stitching",
+                  amount: Number(sub.finalizedPrice || sub.priceRange?.min) || 0
+                });
+              });
+            }
+
+            // Garment Fabric
+            if (g.fabricSource === "store" || g.fabricSource === "shop") {
+              fabrics.push({
+                id: `fabric-${idx}`,
+                name: `${g.itemName || g.name} Fabric`,
+                category: "Fabric",
+                amount: Number(g.fabricPrice) || 0
+              });
+            }
+          });
+
+          setStitchingLineItems(stitches);
           setFabricLineItems(fabrics);
         }
       })
@@ -164,11 +205,19 @@ const CreateInvoice = () => {
 
   // Issue Invoicing
   const handleIssueInvoiceSubmit = () => {
+    const mapItem = (item) => ({
+      name: item.name,
+      category: item.category || "General",
+      price: Number(item.amount) || 0,
+      qty: 1,
+      total: Number(item.amount) || 0
+    });
+
     const payload = {
       items: [
-        ...stitchingLineItems.map(item => ({ name: item.name, price: Number(item.amount) || 0, qty: 1, total: Number(item.amount) || 0 })),
-        ...fabricLineItems.map(item => ({ name: item.name, price: Number(item.amount) || 0, qty: 1, total: Number(item.amount) || 0 })),
-        ...additionLineItems.map(item => ({ name: item.name, price: Number(item.amount) || 0, qty: 1, total: Number(item.amount) || 0 }))
+        ...stitchingLineItems.map(mapItem),
+        ...fabricLineItems.map(mapItem),
+        ...additionLineItems.map(mapItem)
       ],
       discountType: discountType,
       discountValue: Number(discountVal) || 0,
@@ -286,17 +335,19 @@ const CreateInvoice = () => {
               <div className="overflow-hidden border border-gray-200 rounded-xl">
                 <table className="w-full text-left border-collapse text-sm">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200 font-bold text-gray-500">
-                      <th className="py-3 px-4">Garment</th>
+                    <tr className="bg-gray-50 border-b border-gray-200 font-bold text-gray-500 text-[10px] uppercase tracking-wider">
+                      <th className="py-3 px-4">Garment Item</th>
                       <th className="py-3 px-4">Category</th>
                       <th className="py-3 px-4">Priority</th>
-                      <th className="py-3 px-4 text-right">Stitching Estimate</th>
+                      <th className="py-3 px-4 text-right">Payment Range</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {order.garments?.map((g, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50/50">
-                        <td className="py-3 px-4 font-bold text-gray-800">{g.itemName || g.name}</td>
+                    {order.garments?.map((g, index) => (
+                      <tr key={index} className="text-xs hover:bg-gray-50/50">
+                        <td className="py-3 px-4 font-bold text-gray-800">
+                          {g.name || "Unnamed Garment"}
+                        </td>
                         <td className="py-3 px-4 text-gray-500 capitalize">
                           {g.categoryName || (typeof g.category === 'object' ? g.category?.name : g.category) || "General"}
                         </td>
@@ -307,7 +358,13 @@ const CreateInvoice = () => {
                             {g.priority || "Normal"}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-right font-semibold">₹{g.priceRange?.min || "2,500"}</td>
+                        <td className="py-3 px-4 text-right">
+                          <RangeBadge 
+                            min={g.priceRange?.min} 
+                            max={g.priceRange?.max} 
+                            type="standard" 
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -563,14 +620,24 @@ const CreateInvoice = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Detailed items ledger breakdown */}
               <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 space-y-4">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">Ledger Lines Preview</span>
-                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                  {[...stitchingLineItems, ...fabricLineItems, ...additionLineItems].map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-100 text-xs">
-                      <span className="font-bold text-gray-700">{item.name}</span>
-                      <span className="font-extrabold text-gray-900">₹{item.amount.toLocaleString("en-IN")}</span>
-                    </div>
-                  ))}
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">Detailed Services Ledger Preview</span>
+                <div className="overflow-hidden border border-gray-200 rounded-xl bg-white">
+                  <table className="w-full text-left border-collapse text-[10px]">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200 font-bold text-gray-500 uppercase">
+                        <th className="py-2 px-3">Line Item Description</th>
+                        <th className="py-2 px-3">Category</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {[...stitchingLineItems, ...fabricLineItems, ...additionLineItems].map((item, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50/50">
+                          <td className="py-2 px-3 font-bold text-gray-700">{item.name}</td>
+                          <td className="py-2 px-3 text-gray-500">{item.category || "General"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
@@ -602,6 +669,7 @@ const CreateInvoice = () => {
                   <span>Taxes (GST @{taxRate}%)</span>
                   <span>+ ₹{calculatedTax.toLocaleString("en-IN")}</span>
                 </div>
+
 
                 {/* Grand Total */}
                 <div className="flex justify-between py-2 border-b-2 border-gray-100 text-base font-extrabold text-gray-900">
