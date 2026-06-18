@@ -5,7 +5,8 @@ import { fetchPublicInvoice } from "../../api/publicInvoiceApi";
 import { captureElementAsImage } from "../../utils/captureInvoiceImage";
 
 /**
- * Customer-facing invoice as a single document image (no admin chrome, no auth).
+ * Customer-facing invoice as a single document image.
+ * Forcefully flattens artificial A4 min-height values during capture to eliminate empty trailing page space.
  */
 export default function PublicInvoiceView() {
   const { orderId } = useParams();
@@ -88,7 +89,7 @@ export default function PublicInvoiceView() {
 
   useEffect(() => {
     if (!payload?.order || imageUrl || capturing) return;
-    const timer = setTimeout(runCapture, 100);
+    const timer = setTimeout(runCapture, 150);
     return () => clearTimeout(timer);
   }, [payload, imageUrl, capturing, runCapture]);
 
@@ -154,7 +155,7 @@ export default function PublicInvoiceView() {
         </div>
       )}
 
-      {/* Off-screen render target — Added height-adaptive baseline constraints */}
+      {/* OFF-SCREEN CAPTURE CANVAS ENGINE OVERRIDES */}
       {!imageUrl && payload?.order && (
         <div
           ref={captureRef}
@@ -165,13 +166,23 @@ export default function PublicInvoiceView() {
             top: 0,
             width: `${INVOICE_WIDTH}px`,
             minWidth: `${INVOICE_WIDTH}px`,
-            height: "auto",
             zIndex: -1,
             pointerEvents: "none",
             overflow: "visible",
           }}
         >
-          <div style={{ backgroundColor: "#ffffff", overflow: "hidden" }}>
+          {/* 
+            CRITICAL CSS INJECTION: Forces all nested children layers inside OrderInvoice 
+            to collapse extra trailing print min-heights, stopping canvas stretching instantly.
+          */}
+          <style>{`
+            #capture-box-inner, #capture-box-inner *, [class*="min-h-"], [class*="h-"] {
+              min-height: 0px !important;
+              height: auto !important;
+            }
+          `}</style>
+          
+          <div id="capture-box-inner" style={{ backgroundColor: "#ffffff", paddingBottom: "32px", overflow: "hidden" }}>
             <OrderInvoice order={order} garments={garments} payments={payments} />
           </div>
         </div>
@@ -183,7 +194,7 @@ export default function PublicInvoiceView() {
           <div
             className="md:hidden"
             style={{
-              height: "100dvh",            /* Tight view lock prevents bottom empty stretching */
+              height: "100dvh",
               maxHeight: "100dvh",
               backgroundColor: "#d1d5db",
               overflowY: "auto",
@@ -194,7 +205,6 @@ export default function PublicInvoiceView() {
               touchAction: "pan-y pinch-zoom",
             }}
           >
-            {/* Flex centering + side padding */}
             <div
               style={{
                 display: "flex",
@@ -238,7 +248,7 @@ export default function PublicInvoiceView() {
             </div>
           </div>
 
-          {/* ─── DESKTOP VIEWER — unchanged ──────────────────────────────── */}
+          {/* ─── DESKTOP VIEWER ──────────────────────────────────────────── */}
           <div className="hidden md:flex md:justify-center md:p-4 md:min-h-screen md:bg-neutral-300">
             <img
               src={imageUrl}
