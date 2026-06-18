@@ -6,8 +6,7 @@ import { captureElementAsImage } from "../../utils/captureInvoiceImage";
 
 /**
  * Customer-facing invoice document viewer.
- * Forces high-resolution desktop rendering during capture, preventing text clipping on mobile.
- * Enables standalone image gallery-style multi-axis scrolling and native pinch-to-zoom.
+ * Provides a crisp 1200px full wide canvas matching certificate gallery panning layout specs.
  */
 export default function PublicInvoiceView() {
   const { orderId } = useParams();
@@ -56,7 +55,6 @@ export default function PublicInvoiceView() {
     setError(null);
 
     try {
-      // Scale 2 handles crisp details for older eyes when zooming in
       const dataUrl = await captureElementAsImage(node, { scale: 2 });
       imageUrlRef.current = dataUrl;
       setImageUrl(dataUrl);
@@ -70,7 +68,7 @@ export default function PublicInvoiceView() {
 
   useEffect(() => {
     if (!payload?.order || imageUrl || capturing) return;
-    const timer = setTimeout(runCapture, 300); // 300ms fallback buffer for font files
+    const timer = setTimeout(runCapture, 300);
     return () => clearTimeout(timer);
   }, [payload, imageUrl, capturing, runCapture]);
 
@@ -133,26 +131,23 @@ export default function PublicInvoiceView() {
         </div>
       )}
 
-      {/* CRITICAL FIX FOR CAPTURE ENGINE: 
-        We wrap OrderInvoice inside an absolute-sized inline style canvas block.
-        This blocks Tailwind responsive layouts from seeing the phone screen size,
-        forcing a beautiful wide-aspect desktop layout even on small devices.
-      */}
+      {/* OFF-SCREEN HIDDEN DESIGN TARGET */}
       {!imageUrl && payload?.order && (
         <div
           ref={captureRef}
+          id="invoice-capture-target-wrapper"
           aria-hidden="true"
           style={{
             position: "absolute",
             left: "-9999px",
             top: "-9999px",
-            width: "800px",
-            minWidth: "800px",
-            maxWidth: "800px",
+            width: "1200px",
+            minWidth: "1200px",
+            maxWidth: "1200px",
             overflow: "visible",
           }}
         >
-          <div style={{ width: "800px", minWidth: "800px", backgroundColor: "#fff" }}>
+          <div style={{ width: "1200px", minWidth: "1200px", maxWidth: "1200px", backgroundColor: "#ffffff" }}>
             <OrderInvoice order={order} garments={garments} payments={payments} />
           </div>
         </div>
@@ -160,7 +155,7 @@ export default function PublicInvoiceView() {
 
       {imageUrl && (
         <>
-          {/* ─── MOBILE VIEWER (Acts exactly like NPTEL Certificate Gallery Viewer) ─── */}
+          {/* ─── MOBILE SCROLL CANVAS VIEW ─── */}
           <div
             className="block md:hidden absolute inset-0 w-full h-full overflow-x-scroll overflow-y-scroll"
             style={{
@@ -172,7 +167,7 @@ export default function PublicInvoiceView() {
             <div
               style={{
                 display: "inline-block",
-                padding: "24px 12px",
+                padding: "24px 16px",
                 minWidth: "max-content",
               }}
             >
@@ -181,18 +176,18 @@ export default function PublicInvoiceView() {
                 alt="Invoice Document"
                 draggable={false}
                 style={{
-                  width: "800px",
-                  minWidth: "800px",
-                  maxWidth: "800px",
+                  width: "1200px",
+                  minWidth: "1200px",
+                  maxWidth: "1200px",
                   height: "auto",
                   display: "block",
-                  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.6)",
+                  boxShadow: "0 10px 40px rgba(0, 0, 0, 0.7)",
                 }}
               />
             </div>
           </div>
 
-          {/* ─── DESKTOP VIEWER ────────────────────────────────────────────── */}
+          {/* ─── DESKTOP CANVAS VIEW ──────────────────────────────────────── */}
           <div className="hidden md:flex absolute inset-0 w-full h-full items-start justify-center overflow-y-auto p-8 bg-neutral-300">
             <img
               src={imageUrl}

@@ -31,7 +31,6 @@ async function preConvertImages(container) {
               resolve();
             }
           };
-          probe.crossOrigin = "anonymous";
           probe.onerror = () => resolve();
           setTimeout(resolve, 6000);
         }),
@@ -53,7 +52,7 @@ function releaseCanvas(canvas) {
 
 /**
  * Capture a DOM node as a single PNG data URL (full height, one image).
- * Dynamically forces a desktop breakpoint context inside html2canvas sandboxed clone.
+ * Locks the viewport structural layout frame to 1200px wide to provide complete right-side column clearance.
  */
 export async function captureElementAsImage(element, { scale = 2 } = {}) {
   if (!element) throw new Error("Nothing to capture");
@@ -64,40 +63,54 @@ export async function captureElementAsImage(element, { scale = 2 } = {}) {
   }
   await new Promise((r) => setTimeout(r, 300));
 
+  // We push the capture bounding frame to 1200px wide to prevent column clipping
   const canvas = await html2canvas(element, {
     scale,
     useCORS: true,
     allowTaint: false,
     backgroundColor: "#ffffff",
     logging: false,
-    width: 1024,
-    windowWidth: 1024,
-    // The onclone hook manipulates the hidden rendering sandbox document
+    width: 1200,
+    windowWidth: 1200,
     onclone: (clonedDocument) => {
-      // 1. Force the viewport meta tag to behave like a large screen device layout
-      const meta = clonedDocument.querySelector("meta[name=viewport]");
-      if (meta) {
-        meta.setAttribute("content", "width=1024, initial-scale=1");
+      const target = clonedDocument.getElementById("invoice-capture-target-wrapper");
+      if (target) {
+        // Enforce the wrapper and its direct child container to hold the full layout width safely
+        target.style.setProperty("width", "1200px", "important");
+        target.style.setProperty("min-width", "1200px", "important");
+        target.style.setProperty("max-width", "1200px", "important");
+
+        const firstChild = target.firstElementChild;
+        if (firstChild) {
+          firstChild.style.setProperty("width", "1200px", "important");
+          firstChild.style.setProperty("min-width", "1200px", "important");
+          firstChild.style.setProperty("max-width", "1200px", "important");
+          firstChild.style.setProperty("padding-right", "60px", "important"); // Gives structural breathing room to totals
+        }
+
+        // Fix flex layouts inside the invoice template without forcing row alignment blindly
+        const allElements = target.getElementsByTagName("*");
+        for (let el of allElements) {
+          if (el.className && typeof el.className === "string") {
+            let updatedClass = el.className
+              .replace(/\bflex-col\b/g, "flex-row")
+              .replace(/\bgrid-cols-1\b/g, "grid-cols-2")
+              .replace(/\bmd:grid-cols-3\b/g, "grid-cols-2");
+            el.className = updatedClass;
+          }
+        }
       }
 
-      // 2. Inject global desktop forcing overrides to kill flex-wrap and responsive squeezing
+      // Explicitly adjust global rules inside the sandbox copy
       const styleTag = clonedDocument.createElement("style");
       styleTag.innerHTML = `
-        /* Overwrite body width inside sandbox */
-        body {
-          width: 1024px !important;
-          min-width: 1024px !important;
+        html, body {
+          width: 1200px !important;
+          min-width: 1200px !important;
         }
-        /* Break down common grid/flex column drops and text clamping on phone viewports */
-        div, table, tr, td, th, section, span, p {
-          flex-direction: row !important;
-          flex-wrap: nowrap !important;
-          word-break: keep-all !important;
+        /* Ensure specific items like names or titles stay on one line */
+        .customer-name, .garment-title-class {
           white-space: nowrap !important;
-        }
-        /* Keep labels/subtitles wrapped neatly but avoid column breaking */
-        .payment-summary-class, p.address, span.text-muted, .g-details {
-          white-space: normal !important;
         }
       `;
       clonedDocument.head.appendChild(styleTag);
