@@ -2143,6 +2143,12 @@ export default function Products() {
     }
   }, [selectedCategory, dispatch]);
 
+  useEffect(() => {
+    if (activeTab === "inventory") {
+      fetchInventorySummary();
+    }
+  }, [activeTab]);
+
   // ========== FABRIC FUNCTIONS ==========
   const handleFabricSubmit = async (e) => {
     e.preventDefault();
@@ -2173,6 +2179,7 @@ export default function Products() {
       }
       setShowModal(false);
       resetForms();
+      fetchInventorySummary();
     } catch (error) {
       showToast.error(error || "Operation failed");
     }
@@ -2318,6 +2325,7 @@ export default function Products() {
         if (activeTab === "fabric") {
           await dispatch(deleteFabric(id)).unwrap();
           showToast.success("Fabric deleted successfully! 🗑️");
+          fetchInventorySummary();
         } else if (activeTab === "category") {
           await dispatch(deleteCategory(id)).unwrap();
           showToast.success("Category deleted successfully! 🗑️");
@@ -2340,6 +2348,7 @@ export default function Products() {
       if (activeTab === "fabric") {
         await dispatch(toggleFabricStatus(id)).unwrap();
         showToast.success(`Fabric ${currentStatus ? 'deactivated' : 'activated'} successfully`);
+        fetchInventorySummary();
       }
       // Add similar for categories and items when you have toggle functions
     } catch (error) {

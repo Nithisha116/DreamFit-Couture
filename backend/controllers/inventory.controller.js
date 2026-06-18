@@ -1,28 +1,37 @@
 import InventoryMovement from "../models/InventoryMovement.js";
-import Item from "../models/Item.js";
+import Fabric from "../models/Fabric.js";
 
 export const getInventorySummary = async (req, res) => {
   try {
-    const movementTotals = await InventoryMovement.aggregate([
-      {
-        $group: {
-          _id: "$item",
-          inQty: {
-            $sum: {
-              $cond: [{ $eq: ["$type", "IN"] }, "$qty", 0],
-            },
-          },
-          outQty: {
-            $sum: {
-              $cond: [{ $eq: ["$type", "OUT"] }, "$qty", 0],
-            },
-          },
-          lastMovementAt: { $max: "$createdAt" },
-        },
-      },
-    ]);
+    const fabrics = await Fabric.find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .lean();
 
-    const totalsByItem = new Map(
+    const fabricIds = fabrics.map((fabric) => fabric._id);
+
+    const movementTotals = fabricIds.length
+      ? await InventoryMovement.aggregate([
+          { $match: { item: { $in: fabricIds } } },
+          {
+            $group: {
+              _id: "$item",
+              inQty: {
+                $sum: {
+                  $cond: [{ $eq: ["$type", "IN"] }, "$qty", 0],
+                },
+              },
+              outQty: {
+                $sum: {
+                  $cond: [{ $eq: ["$type", "OUT"] }, "$qty", 0],
+                },
+              },
+              lastMovementAt: { $max: "$createdAt" },
+            },
+          },
+        ])
+      : [];
+
+    const totalsByFabric = new Map(
       movementTotals.map((row) => [
         String(row._id),
         {
@@ -34,28 +43,23 @@ export const getInventorySummary = async (req, res) => {
       ])
     );
 
-    const items = await Item.find({ isActive: true })
-      .populate("category")
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const rows = items.map((item) => {
-      const totals = totalsByItem.get(String(item._id)) || {
+    const rows = fabrics.map((fabric) => {
+      const totals = totalsByFabric.get(String(fabric._id)) || {
         inQty: 0,
         outQty: 0,
         stock: 0,
-        lastMovementAt: item.updatedAt || item.createdAt,
+        lastMovementAt: fabric.updatedAt || fabric.createdAt,
       };
 
       return {
-        itemId: item._id,
-        itemName: item.name,
-        category: item.category?.name || "Uncategorized",
+        itemId: fabric._id,
+        itemName: fabric.name,
+        category: fabric.color || "—",
         stock: totals.stock,
         inQty: totals.inQty,
         outQty: totals.outQty,
-        unit: "pcs",
-        updatedAt: totals.lastMovementAt || item.updatedAt || item.createdAt,
+        unit: "meters",
+        updatedAt: totals.lastMovementAt || fabric.updatedAt || fabric.createdAt,
       };
     });
 
