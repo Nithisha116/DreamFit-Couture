@@ -5,8 +5,9 @@ import { fetchPublicInvoice } from "../../api/publicInvoiceApi";
 import { captureElementAsImage } from "../../utils/captureInvoiceImage";
 
 /**
- * Customer-facing invoice document viewer.
- * Provides a crisp 1200px full wide canvas matching certificate gallery panning layout specs.
+ * Customer-facing invoice view.
+ * Restores original pristine desktop layout styling while optimizing 
+ * mobile image sizing to prevent text clipping and wrapping.
  */
 export default function PublicInvoiceView() {
   const { orderId } = useParams();
@@ -17,6 +18,32 @@ export default function PublicInvoiceView() {
   const [imageUrl, setImageUrl] = useState(null);
   const captureRef = useRef(null);
   const imageUrlRef = useRef(null);
+
+  // ─── Mobile body lock ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!imageUrl) return undefined;
+
+    const mq = window.matchMedia("(max-width: 767px)");
+
+    const applyLock = () => {
+      if (!mq.matches) {
+        document.documentElement.style.cssText = "";
+        document.body.style.cssText = "";
+        return;
+      }
+      document.documentElement.style.cssText = "height:100%;overflow:hidden;";
+      document.body.style.cssText = "height:100%;overflow:hidden;margin:0;";
+    };
+
+    applyLock();
+    mq.addEventListener("change", applyLock);
+
+    return () => {
+      mq.removeEventListener("change", applyLock);
+      document.documentElement.style.cssText = "";
+      document.body.style.cssText = "";
+    };
+  }, [imageUrl]);
 
   // ─── Fetch invoice ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -68,7 +95,7 @@ export default function PublicInvoiceView() {
 
   useEffect(() => {
     if (!payload?.order || imageUrl || capturing) return;
-    const timer = setTimeout(runCapture, 300);
+    const timer = setTimeout(runCapture, 150);
     return () => clearTimeout(timer);
   }, [payload, imageUrl, capturing, runCapture]);
 
@@ -82,7 +109,7 @@ export default function PublicInvoiceView() {
   // ─── Loading state ────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-neutral-100 flex items-center justify-center p-6 z-50">
+      <div className="min-h-screen bg-neutral-300 flex items-center justify-center p-6">
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="mt-4 text-slate-700 font-medium">Loading invoice…</p>
@@ -94,7 +121,7 @@ export default function PublicInvoiceView() {
   // ─── Error state ──────────────────────────────────────────────────────────
   if (error && !imageUrl) {
     return (
-      <div className="fixed inset-0 bg-neutral-100 flex items-center justify-center p-6 z-50">
+      <div className="min-h-screen bg-neutral-300 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
           <p className="text-lg font-bold text-slate-800">Invoice unavailable</p>
           <p className="text-sm text-slate-500 mt-2">{error}</p>
@@ -119,11 +146,11 @@ export default function PublicInvoiceView() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 w-screen h-screen bg-neutral-900 select-none">
+    <div className="min-h-screen bg-neutral-300">
 
       {/* Spinner while capturing */}
       {(capturing || !imageUrl) && (
-        <div className="absolute inset-0 bg-neutral-100 flex items-center justify-center p-6 z-40">
+        <div className="min-h-screen flex items-center justify-center p-6">
           <div className="text-center">
             <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="mt-4 text-slate-700 font-medium">Preparing your invoice…</p>
@@ -131,7 +158,7 @@ export default function PublicInvoiceView() {
         </div>
       )}
 
-      {/* OFF-SCREEN HIDDEN DESIGN TARGET */}
+      {/* Off-screen render target — Fixed A4 baseline size */}
       {!imageUrl && payload?.order && (
         <div
           ref={captureRef}
@@ -139,15 +166,17 @@ export default function PublicInvoiceView() {
           aria-hidden="true"
           style={{
             position: "absolute",
-            left: "-9999px",
-            top: "-9999px",
-            width: "1200px",
-            minWidth: "1200px",
-            maxWidth: "1200px",
+            left: "-10000px",
+            top: 0,
+            width: "850px",
+            minWidth: "850px",
+            maxWidth: "850px",
+            zIndex: -1,
+            pointerEvents: "none",
             overflow: "visible",
           }}
         >
-          <div style={{ width: "1200px", minWidth: "1200px", maxWidth: "1200px", backgroundColor: "#ffffff" }}>
+          <div style={{ width: "850px", minWidth: "850px", maxWidth: "850px", backgroundColor: "#ffffff" }}>
             <OrderInvoice order={order} garments={garments} payments={payments} />
           </div>
         </div>
@@ -155,44 +184,51 @@ export default function PublicInvoiceView() {
 
       {imageUrl && (
         <>
-          {/* ─── MOBILE SCROLL CANVAS VIEW ─── */}
+          {/* ─── MOBILE VIEWER (Matches Image Gallery Style) ─── */}
           <div
-            className="block md:hidden absolute inset-0 w-full h-full overflow-x-scroll overflow-y-scroll"
+            className="md:hidden"
             style={{
+              width: "100vw",
+              height: "100dvh",
+              overflowX: "scroll",
+              overflowY: "scroll",
+              backgroundColor: "#171717",
               WebkitOverflowScrolling: "touch",
               touchAction: "pan-x pan-y pinch-zoom",
-              backgroundColor: "#171717",
             }}
           >
             <div
               style={{
+                width: "890px", // Provides breathing margin padding around canvas bounds
+                minWidth: "890px",
+                padding: "20px",
+                boxSizing: "border-box",
                 display: "inline-block",
-                padding: "24px 16px",
-                minWidth: "max-content",
               }}
             >
               <img
                 src={imageUrl}
-                alt="Invoice Document"
+                alt="Invoice"
                 draggable={false}
                 style={{
-                  width: "1200px",
-                  minWidth: "1200px",
-                  maxWidth: "1200px",
+                  width: "850px",
+                  minWidth: "850px",
+                  maxWidth: "850px",
                   height: "auto",
                   display: "block",
-                  boxShadow: "0 10px 40px rgba(0, 0, 0, 0.7)",
+                  boxShadow: "0 4px 32px rgba(0,0,0,0.6)",
                 }}
               />
             </div>
           </div>
 
-          {/* ─── DESKTOP CANVAS VIEW ──────────────────────────────────────── */}
-          <div className="hidden md:flex absolute inset-0 w-full h-full items-start justify-center overflow-y-auto p-8 bg-neutral-300">
+          {/* ─── DESKTOP VIEWER (Keeps Original Design Aspect) ─── */}
+          <div className="hidden md:flex md:justify-center md:p-4 md:min-h-screen md:bg-neutral-300">
             <img
               src={imageUrl}
-              alt={`Invoice ${order?.orderId || ""}`}
-              className="w-full max-w-[210mm] h-auto shadow-2xl bg-white mb-8"
+              alt={`DreamFit Couture Invoice ${order?.orderId || ""}`}
+              className="w-full max-w-[210mm] h-auto shadow-2xl bg-white"
+              style={{ display: capturing ? "none" : "block" }}
               draggable={false}
             />
           </div>

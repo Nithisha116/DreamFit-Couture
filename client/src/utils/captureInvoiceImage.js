@@ -51,8 +51,8 @@ function releaseCanvas(canvas) {
 }
 
 /**
- * Capture a DOM node as a single PNG data URL (full height, one image).
- * Locks the viewport structural layout frame to 1200px wide to provide complete right-side column clearance.
+ * Capture a DOM node as a single PNG data URL.
+ * Normalizes container breakpoints to block mobile layout collapsing.
  */
 export async function captureElementAsImage(element, { scale = 2 } = {}) {
   if (!element) throw new Error("Nothing to capture");
@@ -61,56 +61,49 @@ export async function captureElementAsImage(element, { scale = 2 } = {}) {
   if (document.fonts?.ready) {
     await document.fonts.ready;
   }
-  await new Promise((r) => setTimeout(r, 300));
+  await new Promise((r) => setTimeout(r, 200));
 
-  // We push the capture bounding frame to 1200px wide to prevent column clipping
   const canvas = await html2canvas(element, {
     scale,
     useCORS: true,
     allowTaint: false,
     backgroundColor: "#ffffff",
     logging: false,
-    width: 1200,
-    windowWidth: 1200,
+    width: 850,
+    windowWidth: 850,
     onclone: (clonedDocument) => {
-      const target = clonedDocument.getElementById("invoice-capture-target-wrapper");
-      if (target) {
-        // Enforce the wrapper and its direct child container to hold the full layout width safely
-        target.style.setProperty("width", "1200px", "important");
-        target.style.setProperty("min-width", "1200px", "important");
-        target.style.setProperty("max-width", "1200px", "important");
-
-        const firstChild = target.firstElementChild;
-        if (firstChild) {
-          firstChild.style.setProperty("width", "1200px", "important");
-          firstChild.style.setProperty("min-width", "1200px", "important");
-          firstChild.style.setProperty("max-width", "1200px", "important");
-          firstChild.style.setProperty("padding-right", "60px", "important"); // Gives structural breathing room to totals
-        }
-
-        // Fix flex layouts inside the invoice template without forcing row alignment blindly
-        const allElements = target.getElementsByTagName("*");
-        for (let el of allElements) {
+      const wrapper = clonedDocument.getElementById("invoice-capture-target-wrapper");
+      if (wrapper) {
+        // Enforce horizontal constraints over all table rows and text blocks
+        const targetElements = wrapper.querySelectorAll("div, p, span, td, th");
+        targetElements.forEach((el) => {
           if (el.className && typeof el.className === "string") {
-            let updatedClass = el.className
+            // Revert responsive drop rules to preserve desktop row layout
+            let normalizedClass = el.className
               .replace(/\bflex-col\b/g, "flex-row")
               .replace(/\bgrid-cols-1\b/g, "grid-cols-2")
-              .replace(/\bmd:grid-cols-3\b/g, "grid-cols-2");
-            el.className = updatedClass;
+              .replace(/\bitems-stretch\b/g, "items-start");
+            el.className = normalizedClass;
           }
-        }
+        });
       }
 
-      // Explicitly adjust global rules inside the sandbox copy
+      // Append global landscape style enforcement inside the sandbox clone
       const styleTag = clonedDocument.createElement("style");
       styleTag.innerHTML = `
-        html, body {
-          width: 1200px !important;
-          min-width: 1200px !important;
+        html, body, #invoice-capture-target-wrapper {
+          width: 850px !important;
+          min-width: 850px !important;
+          max-width: 850px !important;
         }
-        /* Ensure specific items like names or titles stay on one line */
-        .customer-name, .garment-title-class {
+        /* Lock specific table content strings to prevent wrapping text */
+        td, th, .garment-name, h1, h2, h3 {
           white-space: nowrap !important;
+          word-break: keep-all !important;
+        }
+        /* Keep address lines stacked neatly */
+        .address, p {
+          white-space: normal !important;
         }
       `;
       clonedDocument.head.appendChild(styleTag);
