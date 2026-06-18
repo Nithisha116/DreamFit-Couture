@@ -6,7 +6,7 @@ import { captureElementAsImage } from "../../utils/captureInvoiceImage";
 
 /**
  * Customer-facing invoice as a single document image.
- * Dynamically computes content boundaries to trim trailing canvas whitespace perfectly.
+ * Dynamically computes content boundaries using client bounding rects to trim trailing space perfectly.
  */
 export default function PublicInvoiceView() {
   const { orderId } = useParams();
@@ -76,36 +76,34 @@ export default function PublicInvoiceView() {
     setError(null);
 
     try {
-      // Find the element inside our node to compute the cut line dynamically
-      let customHeight = node.scrollHeight;
-      
-      // Look for standard invoice endings like "Thank you" messages or footers
-      const elements = node.querySelectorAll("p, div, span, footer");
-      let maxBottom = 0;
-      
-      elements.forEach((el) => {
-        if (el.textContent && (
-          el.textContent.includes("Thank you") || 
-          el.textContent.includes("Generated on") ||
-          el.textContent.includes("Authorized Signature")
-        )) {
-          const rect = el.offsetTop + el.offsetHeight;
-          if (rect > maxBottom) {
-            maxBottom = rect;
-          }
+      // getBoundingClientRect() gives viewport-space coords — accurate regardless
+      // of how deeply nested or how many positioned ancestors exist in the tree.
+      const containerRect = node.getBoundingClientRect();
+
+      // Walk every descendant and find the one whose bottom edge is lowest
+      // in the viewport. That's the true content boundary.
+      let maxViewportBottom = containerRect.top; // start at container top as baseline
+
+      node.querySelectorAll("*").forEach((el) => {
+        // Skip elements that are invisible or zero-size (e.g. display:none, ::before)
+        if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
+        const r = el.getBoundingClientRect();
+        if (r.bottom > maxViewportBottom) {
+          maxViewportBottom = r.bottom;
         }
       });
 
-      // If we successfully found the text end point, crop it cleanly with a tight 40px padding safety line
-      if (maxBottom > 0) {
-        customHeight = maxBottom + 40;
-      }
+      // Convert viewport bottom → height relative to the container top
+      const contentHeight = maxViewportBottom - containerRect.top;
 
-      const dataUrl = await captureElementAsImage(node, { 
+      // Add a small breathing room below the last element (48px safety margin)
+      const customHeight = Math.ceil(contentHeight) + 48;
+
+      const dataUrl = await captureElementAsImage(node, {
         scale: 2,
-        overrideHeight: customHeight 
+        overrideHeight: customHeight,
       });
-      
+
       imageUrlRef.current = dataUrl;
       setImageUrl(dataUrl);
     } catch (err) {
