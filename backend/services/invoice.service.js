@@ -392,17 +392,38 @@ export const syncOrderInvoice = async (orderId, session = null) => {
       .find({ order: orderId, isActive: true })
       .session(session);
 
-    const invoiceItems = garments.map(g => {
+    const invoiceItems = [];
+    garments.forEach(g => {
       const minVal = Number(g.minPrice || g.priceRange?.min) || 0;
       const maxVal = Number(g.maxPrice || g.priceRange?.max) || 0;
-      return {
-        name: g.name || "Custom Garment",
+      
+      // Primary garment item
+      invoiceItems.push({
+        name: g.itemName || g.name || "Custom Garment",
+        category: g.categoryName || "Stitching",
         qty: 1,
         price: maxVal,
         total: maxVal,
         minPrice: minVal,
         maxPrice: maxVal
-      };
+      });
+
+      // Sub-garments
+      if (g.subGarments && Array.isArray(g.subGarments)) {
+        g.subGarments.forEach(sub => {
+          const sMin = Number(sub.minPrice || sub.priceRange?.min) || 0;
+          const sMax = Number(sub.maxPrice || sub.priceRange?.max) || 0;
+          invoiceItems.push({
+            name: sub.itemName || sub.name || "Sub-Garment",
+            category: sub.categoryName || "Stitching",
+            qty: 1,
+            price: sMax,
+            total: sMax,
+            minPrice: sMin,
+            maxPrice: sMax
+          });
+        });
+      }
     });
 
     if (invoiceItems.length === 0) {
@@ -410,6 +431,7 @@ export const syncOrderInvoice = async (orderId, session = null) => {
       const maxVal = order.maxPrice || order.priceSummary?.totalMax || 0;
       invoiceItems.push({
         name: "Custom Tailoring Services",
+        category: "General",
         qty: 1,
         price: maxVal,
         total: maxVal,
@@ -430,6 +452,13 @@ export const syncOrderInvoice = async (orderId, session = null) => {
       garments.forEach(g => {
         totalMin += Number(g.minPrice || g.priceRange?.min) || 0;
         totalMax += Number(g.maxPrice || g.priceRange?.max) || 0;
+
+        if (g.subGarments && Array.isArray(g.subGarments)) {
+          g.subGarments.forEach(sub => {
+            totalMin += Number(sub.minPrice || sub.priceRange?.min) || 0;
+            totalMax += Number(sub.maxPrice || sub.priceRange?.max) || 0;
+          });
+        }
       });
     } else {
       totalMin = order.minPrice || order.priceSummary?.totalMin || 0;

@@ -30,19 +30,31 @@
 
 /* Print-specific overrides to avoid dashboard/sidebar printing and ensure high-fidelity layouts */
 @media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+  
   body {
     background: white !important;
+    margin: 0;
+    padding: 0;
   }
 
-  .no-print {
+  .no-print, .print\:hidden {
     display: none !important;
   }
 
-  .print-container {
+  .print\:block {
+    display: block !important;
+  }
+
+  #a4-invoice-sheet {
     width: 100%;
-    padding: 0;
     margin: 0;
-    background: white !important;
+    padding: 0;
+    border: none;
+    box-shadow: none;
   }
 }/* Custom Scrollbars */
 .styled-scrollbar::-webkit-scrollbar {
