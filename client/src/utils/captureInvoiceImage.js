@@ -51,10 +51,10 @@ function releaseCanvas(canvas) {
 }
 
 /**
- * Capture a DOM node as a single PNG data URL (full height, one image).
- * Used for public invoice document view only.
+ * Capture a DOM node as a single PNG data URL.
+ * Uses explicit height clipping to ensure perfect bottom boundaries.
  */
-export async function captureElementAsImage(element, { scale = 2 } = {}) {
+export async function captureElementAsImage(element, { scale = 2, overrideHeight = null } = {}) {
   if (!element) throw new Error("Nothing to capture");
 
   await preConvertImages(element);
@@ -63,6 +63,9 @@ export async function captureElementAsImage(element, { scale = 2 } = {}) {
   }
   await new Promise((r) => setTimeout(r, 300));
 
+  // Determine height parameter based on the override calculation block
+  const finalHeight = overrideHeight || element.scrollHeight;
+
   const canvas = await html2canvas(element, {
     scale,
     useCORS: true,
@@ -70,7 +73,7 @@ export async function captureElementAsImage(element, { scale = 2 } = {}) {
     backgroundColor: "#ffffff",
     logging: false,
     windowWidth: element.scrollWidth,
-    height: element.scrollHeight,
+    height: finalHeight, // Hard-crops the engine box perfectly below the footer
   });
 
   try {

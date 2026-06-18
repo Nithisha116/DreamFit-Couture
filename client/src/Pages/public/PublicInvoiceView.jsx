@@ -6,7 +6,7 @@ import { captureElementAsImage } from "../../utils/captureInvoiceImage";
 
 /**
  * Customer-facing invoice as a single document image.
- * Forcefully flattens artificial A4 min-height values during capture to eliminate empty trailing page space.
+ * Dynamically computes content boundaries to trim trailing canvas whitespace perfectly.
  */
 export default function PublicInvoiceView() {
   const { orderId } = useParams();
@@ -76,7 +76,36 @@ export default function PublicInvoiceView() {
     setError(null);
 
     try {
-      const dataUrl = await captureElementAsImage(node, { scale: 2 });
+      // Find the element inside our node to compute the cut line dynamically
+      let customHeight = node.scrollHeight;
+      
+      // Look for standard invoice endings like "Thank you" messages or footers
+      const elements = node.querySelectorAll("p, div, span, footer");
+      let maxBottom = 0;
+      
+      elements.forEach((el) => {
+        if (el.textContent && (
+          el.textContent.includes("Thank you") || 
+          el.textContent.includes("Generated on") ||
+          el.textContent.includes("Authorized Signature")
+        )) {
+          const rect = el.offsetTop + el.offsetHeight;
+          if (rect > maxBottom) {
+            maxBottom = rect;
+          }
+        }
+      });
+
+      // If we successfully found the text end point, crop it cleanly with a tight 40px padding safety line
+      if (maxBottom > 0) {
+        customHeight = maxBottom + 40;
+      }
+
+      const dataUrl = await captureElementAsImage(node, { 
+        scale: 2,
+        overrideHeight: customHeight 
+      });
+      
       imageUrlRef.current = dataUrl;
       setImageUrl(dataUrl);
     } catch (err) {
@@ -155,7 +184,7 @@ export default function PublicInvoiceView() {
         </div>
       )}
 
-      {/* OFF-SCREEN CAPTURE CANVAS ENGINE OVERRIDES */}
+      {/* OFF-SCREEN CAPTURE TARGET */}
       {!imageUrl && payload?.order && (
         <div
           ref={captureRef}
@@ -171,18 +200,7 @@ export default function PublicInvoiceView() {
             overflow: "visible",
           }}
         >
-          {/* 
-            CRITICAL CSS INJECTION: Forces all nested children layers inside OrderInvoice 
-            to collapse extra trailing print min-heights, stopping canvas stretching instantly.
-          */}
-          <style>{`
-            #capture-box-inner, #capture-box-inner *, [class*="min-h-"], [class*="h-"] {
-              min-height: 0px !important;
-              height: auto !important;
-            }
-          `}</style>
-          
-          <div id="capture-box-inner" style={{ backgroundColor: "#ffffff", paddingBottom: "32px", overflow: "hidden" }}>
+          <div style={{ backgroundColor: "#ffffff", overflow: "hidden" }}>
             <OrderInvoice order={order} garments={garments} payments={payments} />
           </div>
         </div>
@@ -215,7 +233,6 @@ export default function PublicInvoiceView() {
                 boxSizing: "border-box",
               }}
             >
-              {/* Clip wrapper — sized to post-scale dimensions */}
               <div
                 style={{
                   width:    `${scaledWidth}px`,
@@ -248,7 +265,7 @@ export default function PublicInvoiceView() {
             </div>
           </div>
 
-          {/* ─── DESKTOP VIEWER ──────────────────────────────────────────── */}
+          {/* ─── DESKTOP VIEWER — Unchanged ──────────────────────────────── */}
           <div className="hidden md:flex md:justify-center md:p-4 md:min-h-screen md:bg-neutral-300">
             <img
               src={imageUrl}
