@@ -1,3 +1,5 @@
+import React, { useRef } from "react";
+import GarmentPDF from "./GarmentPDF";
 import { Search } from "lucide-react";
 import { OUTFIT_TYPES } from "./taskConstants";
 
@@ -13,7 +15,13 @@ export default function CompletedTaskFilters({
   setDateTo,
   search,
   setSearch,
+  garment,
+  order,
+  job
 }) {
+  // Setup reference instance to link the download triggers cleanly
+  const printEngineRef = useRef(null);
+
   return (
     <div className="rounded-2xl bg-white border border-slate-200/80 p-4 sm:p-5 mb-6 shadow-sm">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -70,6 +78,14 @@ export default function CompletedTaskFilters({
         Date filters apply to completion date (UI only; refine with your backend
         later).
       </p>
+
+      {/* Hidden layout printing target wrapper mapped context node definitions */}
+      <GarmentPDF 
+        ref={printEngineRef} 
+        garment={garment} 
+        order={order} 
+        job={job} 
+      />
     </div>
   );
 }
