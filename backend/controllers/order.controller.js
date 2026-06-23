@@ -13,6 +13,11 @@ import r2Service from "../services/r2.service.js";
 import crypto from "crypto";
 import multer from "multer";
 import { calculateRangeTotals } from "../utils/rangeUtils.js";
+import {
+  parseWorkflowStagesInput,
+  resolveWorkflowForGarment,
+  garmentsHaveWorkflow,
+} from "../utils/workflowStages.util.js";
 
 // Configure multer for memory storage
 export const upload = multer({ 
@@ -220,6 +225,12 @@ const createWorksFromGarments = async (orderId, garmentIds, creatorId) => {
       await new Promise(resolve => setTimeout(resolve, 10));
       
       console.log(`📝 Creating work for garment: ${garment.name || garment._id}`);
+
+      const garmentWorkflow = resolveWorkflowForGarment(garment, order);
+      const stageKeys = garmentWorkflow.stageKeys;
+      const workflowStages = garmentWorkflow.workflowStages;
+      const activeStage = stageKeys[0] || order.currentStage || "cutting";
+
       const work = await Work.create({
         workId,
         order: orderId,
@@ -227,10 +238,9 @@ const createWorksFromGarments = async (orderId, garmentIds, creatorId) => {
         createdBy: creatorId,
         status: "pending",
         cuttingMaster: null,
-        currentStage: order.currentStage || "cutting",
-        // Dynamic propagation fix: Direct structural replication
-        workflowStages: order.workflowStages,
-        stageKeys: order.stageKeys,
+        currentStage: activeStage,
+        workflowStages,
+        stageKeys,
         estimatedDelivery: garment.estimatedDelivery || new Date(Date.now() + 7*24*60*60*1000)
       });
       
@@ -470,7 +480,9 @@ export const createOrder = async (req, res) => {
       })
       .filter(Boolean);
 
-    if (processedStages.length === 0) {
+    const perGarmentWorkflow = garmentsHaveWorkflow(garments);
+
+    if (processedStages.length === 0 && !perGarmentWorkflow) {
       const defaultKeys = ["cutting", "stitching", "ironing", "packed"];
       processedStages = defaultKeys.map((k, i) => ({
         key: k,
@@ -480,7 +492,7 @@ export const createOrder = async (req, res) => {
     }
 
     const stageKeys = processedStages.map((s) => s.key);
-    const activeStage = stageKeys[0] || "cutting";
+    const activeStage = stageKeys[0] || "new";
     const workflowStagesObj = {};
 
     stageKeys.forEach((key) => {
@@ -534,10 +546,9 @@ export const createOrder = async (req, res) => {
       orderId,
       customer,
       deliveryDate,
-      currentStage: activeStage,
-      // Fix: Both fields explicitly populated from our parsed execution pipeline
-      workflowStages: workflowStagesObj,
-      stageKeys: stageKeys,
+      currentStage: perGarmentWorkflow ? "new" : activeStage,
+      workflowStages: perGarmentWorkflow ? {} : workflowStagesObj,
+      stageKeys: perGarmentWorkflow ? [] : stageKeys,
       specialNotes,
       advancePayment: {
         amount: allPayments.find(p => p.type === 'advance')?.amount || 0,
@@ -626,6 +637,10 @@ export const createOrder = async (req, res) => {
             uploadedImages.customerClothImages = await r2Service.uploadMultiple(fileGroups[i].customerClothImages, `orders/${order._id}/garment_${i}/cloth`);
           }
 
+          const garmentWorkflow = parseWorkflowStagesInput(
+            g.stageKeys?.length ? g.stageKeys : g.workflowStages,
+          );
+
           const garmentData = {
             name: g.name,
             garmentType: g.garmentType || g.item || g.itemName || g.name,
@@ -652,6 +667,8 @@ export const createOrder = async (req, res) => {
             referenceImages: uploadedImages.referenceImages,
             customerImages: uploadedImages.customerImages,
             customerClothImages: uploadedImages.customerClothImages,
+            stageKeys: garmentWorkflow.stageKeys,
+            workflowStages: garmentWorkflow.workflowStages,
             order: order._id,
             createdBy: creatorId,
             status: 'pending',

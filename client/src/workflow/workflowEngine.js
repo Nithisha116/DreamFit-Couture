@@ -81,10 +81,57 @@ export function recomputeJobMeta(job) {
   };
 }
 
+function resolveWorkflowSources(work, order, garmentObj) {
+  if (garmentObj?.stageKeys?.length) {
+    return {
+      workflowStages: garmentObj.workflowStages?.length
+        ? garmentObj.workflowStages
+        : garmentObj.stageKeys.map((key, index) => ({
+            key,
+            label: getStageLabelFromDef(key, garmentObj.workflowStages),
+            order: index + 1,
+          })),
+      stageKeys: garmentObj.stageKeys,
+    };
+  }
+
+  if (
+    Array.isArray(garmentObj?.workflowStages) &&
+    garmentObj.workflowStages.length > 0 &&
+    garmentObj.workflowStages[0]?.key
+  ) {
+    const stageKeys = garmentObj.workflowStages
+      .slice()
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .map((s) => s.key)
+      .filter(Boolean);
+    return { workflowStages: garmentObj.workflowStages, stageKeys };
+  }
+
+  if (work?.stageKeys?.length) {
+    return {
+      workflowStages: work.workflowStages || null,
+      stageKeys: work.stageKeys,
+    };
+  }
+
+  return {
+    workflowStages: order?.workflowStages || work?.workflowStages || null,
+    stageKeys:
+      (order?.stageKeys?.length ? order.stageKeys : null) ||
+      (work?.stageKeys?.length ? work.stageKeys : null) ||
+      extractOrderedStageKeys({
+        workflowStages: order?.workflowStages || work?.workflowStages,
+        stageKeys: order?.stageKeys || work?.stageKeys,
+      }),
+  };
+}
+
 function workToJobFields(work) {
   const order = work?.order;
   const garment = work?.garment;
   const garmentObj = typeof garment === "object" ? garment : null;
+  const { workflowStages, stageKeys } = resolveWorkflowSources(work, order, garmentObj);
   return {
     workMongoId: work._id,
     workCode: work.workId,
@@ -99,14 +146,8 @@ function workToJobFields(work) {
     priority: garmentObj?.priority || work?.priority || "normal",
     dueDate: work?.estimatedDelivery || order?.deliveryDate || null,
     workStatus: work?.status || "pending",
-    workflowStages: order?.workflowStages || work?.workflowStages || null,
-    stageKeys:
-      (order?.stageKeys?.length ? order.stageKeys : null) ||
-      (work?.stageKeys?.length ? work.stageKeys : null) ||
-      extractOrderedStageKeys({
-        workflowStages: order?.workflowStages || work?.workflowStages,
-        stageKeys: order?.stageKeys || work?.stageKeys,
-      }),
+    workflowStages,
+    stageKeys,
     garment,
     // ── Measurements ──────────────────────────────
     measurements: garmentObj?.measurements || [],

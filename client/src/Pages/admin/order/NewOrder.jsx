@@ -3955,9 +3955,7 @@ import ImagePreviewModal from "../../../components/ImagePreviewModal";
 import showToast from "../../../utils/toast";
 import { fetchWorks, fetchWorkflowJobs } from "../../../features/work/workSlice";
 import RangeBadge from "../../../components/RangeBadge";
-import ProductionWorkflowBuilder from "../../../components/workflow/ProductionWorkflowBuilder";
 import {
-  DEFAULT_WORKFLOW_STAGES,
   isValidWorkflowStages,
   normalizeWorkflowStages,
 } from "../../../workflow/workflowStageUtils";
@@ -4030,9 +4028,6 @@ export default function NewOrder() {
   
   // 🔥 NEW: Track current order ID for payments after creation
   const [currentOrderId, setCurrentOrderId] = useState("temp");
-
-  // 🧵 Per-order production workflow (SSOT for tasks, QR, pipeline)
-  const [workflowStages, setWorkflowStages] = useState([...DEFAULT_WORKFLOW_STAGES]);
 
   // 👕 Garments management
   const [garments, setGarments] = useState([]);
@@ -4689,7 +4684,7 @@ const handleSavePayment = useCallback((paymentData) => {
           const displayValue = value && value.length > 50 ? value.substring(0, 50) + '...' : value;
           console.log(`  📝 ${key}: ${displayValue}`);
           
-          if (key === 'measurements' || key === 'priceRange') {
+          if (key === 'measurements' || key === 'priceRange' || key === 'workflowStages' || key === 'stageKeys') {
             try {
               garmentObj[key] = JSON.parse(value);
             } catch (e) {
@@ -5257,8 +5252,13 @@ const renderDayContents = useCallback((day, date) => {
       
       console.log("💰 Price summary:", { safeTotalMin, safeTotalMax, safeTotalPayments });
       
-      if (!isValidWorkflowStages(workflowStages)) {
-        showToast.error("Add at least one production workflow stage");
+      const garmentsMissingWorkflow = garments.filter(
+        (g) => !isValidWorkflowStages(g.workflowStages || g.stageKeys),
+      );
+      if (garmentsMissingWorkflow.length > 0) {
+        showToast.error(
+          `Configure production workflow for: ${garmentsMissingWorkflow.map((g) => g.name).join(", ")}`,
+        );
         isSubmittingRef.current = false;
         setIsSubmitting(false);
         return;
@@ -5268,7 +5268,6 @@ const renderDayContents = useCallback((day, date) => {
         customer: formData.customer,
         deliveryDate: formData.deliveryDate,
         specialNotes: formData.specialNotes || "",
-        workflowStages: normalizeWorkflowStages(workflowStages),
         payments: mappedPayments,
         // NOTE: advancePayment is derived from payments[] on the backend.
         // Do NOT send it separately to avoid duplicate entries.
@@ -5326,7 +5325,9 @@ const renderDayContents = useCallback((day, date) => {
             fabricPrice: fabricPrice,
             referenceImages: g.referenceImages || [],
             customerImages: g.customerImages || [],
-            customerClothImages: g.customerClothImages || []
+            customerClothImages: g.customerClothImages || [],
+            workflowStages: normalizeWorkflowStages(g.workflowStages || g.stageKeys || []),
+            stageKeys: normalizeWorkflowStages(g.workflowStages || g.stageKeys || []),
           };
         })
       };
@@ -5657,13 +5658,6 @@ const renderDayContents = useCallback((day, date) => {
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
               />
             </div>
-          </div>
-
-          <div className="mb-6">
-            <ProductionWorkflowBuilder
-              stages={workflowStages}
-              onChange={setWorkflowStages}
-            />
           </div>
 
           {/* 🔥 GARMENTS SECTION - WITH UPDATED IMAGE LAYOUT */}

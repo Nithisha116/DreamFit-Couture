@@ -35,6 +35,12 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import showToast from "../../../utils/toast";
 import ImageUploadSection from "../../../components/common/ImageUploadSection";
+import ProductionWorkflowBuilder from "../../../components/workflow/ProductionWorkflowBuilder";
+import {
+  DEFAULT_WORKFLOW_STAGES,
+  isValidWorkflowStages,
+  normalizeWorkflowStages,
+} from "../../../workflow/workflowStageUtils";
 
 export default function GarmentForm({
   onClose,
@@ -104,6 +110,7 @@ export default function GarmentForm({
     customerCloth: [],
   });
   const [loading, setLoading] = useState(false);
+  const [workflowStages, setWorkflowStages] = useState([...DEFAULT_WORKFLOW_STAGES]);
 
   const [selectedDate, setSelectedDate] = useState(null);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -322,6 +329,12 @@ export default function GarmentForm({
   }, [formData.measurementSource, profiles, formData.categoryName]);
 
   useEffect(() => {
+    if (!editingGarment) {
+      setWorkflowStages([...DEFAULT_WORKFLOW_STAGES]);
+    }
+  }, [editingGarment]);
+
+  useEffect(() => {
     if (editingGarment) {
       setFormData({
         name: editingGarment.name || "",
@@ -352,6 +365,15 @@ export default function GarmentForm({
         fabricNotes: editingGarment.fabricNotes || "",
         fabricSufficiency: editingGarment.fabricSufficiency || "To Be Verified",
       });
+
+      const existingStages = editingGarment.stageKeys?.length
+        ? editingGarment.stageKeys
+        : editingGarment.workflowStages;
+      setWorkflowStages(
+        existingStages?.length
+          ? normalizeWorkflowStages(existingStages)
+          : [...DEFAULT_WORKFLOW_STAGES],
+      );
 
       if (editingGarment.measurementSource === "manual" && editingGarment.measurements) {
         const manual = {};
@@ -880,6 +902,12 @@ const renderDayContents = useCallback(
       }
     }
 
+    if (!isValidWorkflowStages(workflowStages)) {
+      showToast.error("Add at least one production workflow stage for this garment");
+      setLoading(false);
+      return;
+    }
+
     // Prepare final measurements
     let finalMeasurements = [];
 
@@ -957,6 +985,8 @@ const renderDayContents = useCallback(
       formDataToSend.append("fabricMeters", formData.fabricMeters);
       formDataToSend.append("fabricNotes", formData.fabricNotes);
       formDataToSend.append("fabricSufficiency", formData.fabricSufficiency);
+      formDataToSend.append("workflowStages", JSON.stringify(normalizeWorkflowStages(workflowStages)));
+      formDataToSend.append("stageKeys", JSON.stringify(normalizeWorkflowStages(workflowStages)));
 
       if (formData.fabricSource === "shop") {
         formDataToSend.append("selectedFabric", formData.selectedFabric);
@@ -2066,6 +2096,13 @@ const renderDayContents = useCallback(
                 type="customerCloth"
                 images={previewImages.customerCloth}
                 onImagesChange={(newImages) => handleImagesChange(newImages, 'customerCloth')}
+              />
+            </div>
+
+            <div className="mb-4 sm:mb-6">
+              <ProductionWorkflowBuilder
+                stages={workflowStages}
+                onChange={setWorkflowStages}
               />
             </div>
 

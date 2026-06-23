@@ -178,8 +178,16 @@ export function buildPipelineViewModel(work, boutiqueTasks = loadBoutiqueTasks()
   if (job) return buildPipelineViewModelFromJob(job);
 
 return buildPipelineViewModelFromJob({
-  workflowStages: work.order?.workflowStages || work.workflowStages || [],
-  stageKeys: work.order?.stageKeys || work.stageKeys || [],
+  workflowStages:
+    work.garment?.workflowStages ||
+    work.workflowStages ||
+    work.order?.workflowStages ||
+    [],
+  stageKeys:
+    work.garment?.stageKeys ||
+    work.stageKeys ||
+    work.order?.stageKeys ||
+    [],
   stages: work.stages || {},
   currentStageLabel: work.currentStage,
   garmentName: work.garmentName,

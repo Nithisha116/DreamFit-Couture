@@ -67,6 +67,26 @@ export function resolveOrderedStageKeys(work) {
       .filter(Boolean);
   }
 
+  const garment = work.garment;
+
+  // 2b. garment.stageKeys / garment.workflowStages (per-garment SSOT for new orders)
+  if (garment && typeof garment === 'object') {
+    if (Array.isArray(garment.stageKeys) && garment.stageKeys.length > 0) {
+      return garment.stageKeys.map(normalizeStageKey).filter(Boolean);
+    }
+    if (
+      Array.isArray(garment.workflowStages) &&
+      garment.workflowStages.length > 0 &&
+      typeof garment.workflowStages[0] === 'object' &&
+      garment.workflowStages[0]?.key
+    ) {
+      return [...garment.workflowStages]
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(s => normalizeStageKey(s.key))
+        .filter(Boolean);
+    }
+  }
+
   const order = work.order;
 
   // 3. order.stageKeys
