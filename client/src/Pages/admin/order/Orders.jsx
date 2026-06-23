@@ -138,7 +138,7 @@ export default function Orders() {
 
   // ── fetch data from backend ──
   const fetchData = useCallback(() => {
-    const statusParam = (activeTab === 'all' || activeTab === '__overdue') ? '' : activeTab;
+    const statusParam = activeTab === 'all' ? '' : activeTab;
     
     // Fetch paginated orders
     dispatch(fetchOrders({
@@ -163,6 +163,13 @@ export default function Orders() {
   }, [fetchData]);
 
   useEffect(() => () => dispatch(clearOrderError()), [dispatch]);
+
+  // Redirect to page 1 if current page exceeds available pages
+  useEffect(() => {
+    if (pagination?.pages > 0 && currentPage > pagination.pages) {
+      setCurrentPage(1);
+    }
+  }, [pagination?.pages, currentPage]);
 
   // ── filter for __overdue tab (client-side) ──
   const displayedOrders = useMemo(() => {

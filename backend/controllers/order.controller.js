@@ -735,6 +735,11 @@ export const getAllOrders = async (req, res) => {
         query.status = { $in: ['in-progress', 'progress', 'cutting', 'stitching', 'trial', 'finishing'] };
       } else if (status === 'ready-to-delivery') {
         query.status = { $in: ['ready-to-delivery', 'ready-to-deliver', 'ready'] };
+      } else if (status === '__overdue') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        query.deliveryDate = { $lt: today };
+        query.status = { $nin: ['delivered', 'cancelled'] };
       } else if (['cutting', 'stitching', 'trial', 'finishing'].includes(status)) {
         // Safe mapping to capture current stage even if explicit status hasn't synced
         query.$and = query.$and || [];
