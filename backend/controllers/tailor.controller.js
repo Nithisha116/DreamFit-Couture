@@ -1503,6 +1503,11 @@ import Tailor from "../models/Tailor.js";
 import Work from "../models/Work.js";
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
+import CuttingMaster from "../models/CuttingMaster.js";
+import StoreKeeper from "../models/StoreKeeper.js";
+import AariWorker from "../models/AariWorker.js";
+import EmbroideryWorker from "../models/EmbroideryWorker.js";
+import Helper from "../models/Helper.js";
 
 // ===== CREATE TAILOR =====
 export const createTailor = async (req, res) => {
@@ -1713,45 +1718,76 @@ export const getAllTailors = async (req, res) => {
       matchQuery.isAvailable = availability === 'available';
     }
 
-    // 🚀 HIGH-PERFORMANCE AGGREGATION PIPELINE
+    // 🚀 HIGH-PERFORMANCE AGGREGATION PIPELINE (Requirement 1 & 5)
+    // Deriving all stats directly from Work stage history SSOT
     const tailors = await Tailor.aggregate([
       { $match: matchQuery },
       { $sort: { createdAt: -1 } },
       
-      // 🔥 Join with Work collection (Single Call)
+      // 🔥 Join with Work collection via assignments array
       {
         $lookup: {
-          from: "works", // Unga Work collection name check pannikonga
+          from: "works",
           localField: "_id",
-          foreignField: "tailor",
+          foreignField: "assignments.workerId",
           as: "allWorks"
         }
       },
 
-      // 📊 Calculate stats in Backend itself
+      // 📊 Calculate stats dynamically (Requirement: Job Card SSOT)
       {
         $addFields: {
-          workStats: {
-            totalAssigned: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { $eq: ["$$w.isActive", true] } } } 
-            },
-            completed: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { $eq: ["$$w.status", "ready-to-deliver"] } } } 
-            },
-            pending: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { $in: ["$$w.status", ["pending", "accepted"]] } } } 
-            },
-            inProgress: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { 
-                $in: ["$$w.status", ["cutting-started", "cutting-completed", "sewing-started", "sewing-completed", "ironing"]] 
-              } } } 
+          // Flatten all assignments for this worker
+          myAssignments: {
+            $filter: {
+              input: {
+                $reduce: {
+                  input: "$allWorks",
+                  initialValue: [],
+                  in: { $concatArrays: ["$$value", "$$this.assignments"] }
+                }
+              },
+              as: "asgn",
+              cond: { $eq: ["$$asgn.workerId", "$_id"] }
             }
           }
         }
       },
+      {
+        $addFields: {
+          // Done = Count all workflow stages completed by the worker
+          totalCompleted: {
+            $size: {
+              $filter: {
+                input: "$myAssignments",
+                as: "a",
+                cond: { $eq: ["$$a.status", "completed"] }
+              }
+            }
+          },
+          // Assigned = Count all active workflow stages currently assigned to the worker (Not yet completed)
+          // Pending = Same as Assigned (per user requirement)
+          totalAssigned: {
+            $size: {
+              $filter: {
+                input: "$myAssignments",
+                as: "a",
+                cond: { $ne: ["$$a.status", "completed"] }
+              }
+            }
+          }
+        }
+      },
+      {
+        $addFields: {
+          totalPending: "$totalAssigned",
+          tailorName: "$name",
+          tailorId: "$tailorId"
+        }
+      },
 
-      // 🧹 Clean up: remove the heavy works array, only keep stats
-      { $project: { allWorks: 0 } }
+      // 🧹 Clean up
+      { $project: { allWorks: 0, myAssignments: 0 } }
     ]);
 
     res.status(200).json(tailors);
@@ -1764,7 +1800,7 @@ export const getAllTailors = async (req, res) => {
 // ===== GET TAILOR BY ID =====
 export const getTailorById = async (req, res) => {
   try {
-    const tailor = await Tailor.findById(req.params.id)
+    let tailor = await Tailor.findById(req.params.id)
       .populate('createdBy', 'name')
       .populate({
         path: 'performance.feedback.from',
@@ -1772,17 +1808,36 @@ export const getTailorById = async (req, res) => {
       });
 
     if (!tailor) {
+      // Fallback search in other collections
+      tailor = await CuttingMaster.findById(req.params.id).populate('createdBy', 'name') ||
+               await StoreKeeper.findById(req.params.id).populate('createdBy', 'name') ||
+               await AariWorker.findById(req.params.id).populate('createdBy', 'name') ||
+               await EmbroideryWorker.findById(req.params.id).populate('createdBy', 'name') ||
+               await Helper.findById(req.params.id).populate('createdBy', 'name');
+      
+      if (tailor) {
+        tailor = tailor.toObject ? tailor.toObject() : tailor;
+        tailor.tailorId = tailor.tailorId || 
+                          tailor.cuttingMasterId || 
+                          tailor.storeKeeperId || 
+                          tailor.aariWorkerId || 
+                          tailor.embroideryWorkerId || 
+                          tailor.helperId || 
+                          'N/A';
+      }
+    }
+
+    if (!tailor) {
       return res.status(404).json({ message: "Tailor not found" });
     }
 
-    // ✅ Get all works assigned to this tailor
+    // ✅ Derive all history and stats from Work SSOT
     const works = await Work.find({ 
-      tailor: tailor._id,
-      isActive: true 
+      "assignments.workerId": tailor._id
     })
       .populate({
         path: 'order',
-        select: 'orderId customer deliveryDate',
+        select: 'orderId customer deliveryDate status',
         populate: {
           path: 'customer',
           select: 'name'
@@ -1790,41 +1845,29 @@ export const getTailorById = async (req, res) => {
       })
       .populate({
         path: 'garment',
-        select: 'name garmentId measurements priceRange'
+        select: 'name garmentId'
       })
-      .populate('cuttingMaster', 'name')
       .sort({ createdAt: -1 });
 
-    // ✅ Calculate work statistics from actual works
-    const workStats = {
-      totalAssigned: works.length,
-      completed: works.filter(w => w.status === 'ready-to-deliver').length,
-      pending: works.filter(w => ['pending', 'accepted'].includes(w.status)).length,
-      inProgress: works.filter(w => 
-        ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing']
-        .includes(w.status)
-      ).length
+    // ✅ Flatten all assignments for this worker from all fetched works
+    const allMyAssignments = works.reduce((acc, w) => {
+      const mine = w.assignments?.filter(a => a.workerId?.toString() === tailor._id.toString()) || [];
+      return [...acc, ...mine];
+    }, []);
+
+    // ✅ Stats derived purely from Work.assignments SSOT
+    const stats = {
+      totalAssigned: allMyAssignments.length,
+      completed: allMyAssignments.filter(a => a.status === 'completed').length,
+      inProgress: allMyAssignments.filter(a => a.status === 'active').length,
+      pending: allMyAssignments.filter(a => a.status === 'pending').length
     };
-
-    console.log('📊 Recalculated workStats for tailor:', {
-      tailorId: tailor.tailorId,
-      name: tailor.name,
-      totalWorks: works.length,
-      workStats,
-      worksBreakdown: works.map(w => ({
-        workId: w.workId,
-        status: w.status
-      }))
-    });
-
-    // ✅ Update the tailor's workStats in database
-    tailor.workStats = workStats;
-    await tailor.save();
 
     res.json({
       tailor,
       works,
-      workStats
+      stats,
+      workStats: stats
     });
   } catch (error) {
     console.error("Get tailor error:", error);
@@ -2036,11 +2079,13 @@ export const getTailorStats = async (req, res) => {
       }
     ]);
 
-    // ✅ Get work distribution using actual works
+    // ✅ Get work distribution using assignments array
     const workDistribution = await Work.aggregate([
-      { $match: { isActive: true, tailor: { $ne: null } } },
+      { $match: { isActive: true } },
+      { $unwind: "$assignments" },
+      { $match: { "assignments.workerId": { $ne: null } } },
       { $group: {
-        _id: "$tailor",
+        _id: "$assignments.workerId",
         count: { $sum: 1 }
       }},
       { $group: {
@@ -2103,50 +2148,65 @@ export const getTopTailors = async (req, res) => {
 
     // Get all active tailors
     const tailors = await Tailor.find({ isActive: true })
-      .select('name tailorId specialization experience workStats isAvailable leaveStatus')
+      .select('name tailorId specialization experience isAvailable leaveStatus')
       .lean();
 
-    // Get works completed in the period
-    const completedWorks = await Work.find({
-      status: 'ready-to-deliver',
-      updatedAt: { $gte: startDate, $lte: endDate },
-      tailor: { $ne: null }
+    // ✅ Get ALL works with assignments for these tailors (no reliance on stored workStats)
+    const allWorks = await Work.find({
+      isActive: true,
+      "assignments.workerId": { $ne: null }
     })
-      .select('tailor')
+      .select('assignments updatedAt')
       .lean();
 
-    // Count completed works per tailor
-    const completedCounts = {};
-    completedWorks.forEach(work => {
-      if (work.tailor) {
-        const tailorId = work.tailor.toString();
-        completedCounts[tailorId] = (completedCounts[tailorId] || 0) + 1;
-      }
+    // ✅ Build per-tailor stats purely from Work.assignments
+    const tailorStatsMap = {};
+    allWorks.forEach(work => {
+      (work.assignments || []).forEach(asgn => {
+        if (!asgn.workerId) return;
+        const tId = asgn.workerId.toString();
+        if (!tailorStatsMap[tId]) {
+          tailorStatsMap[tId] = { totalAssigned: 0, completed: 0, completedInPeriod: 0 };
+        }
+        tailorStatsMap[tId].totalAssigned++;
+        if (asgn.status === 'completed') {
+          tailorStatsMap[tId].completed++;
+          // Check if completed within the period
+          const completedAt = asgn.completedAt ? new Date(asgn.completedAt) : null;
+          if (completedAt && completedAt >= startDate && completedAt <= endDate) {
+            tailorStatsMap[tId].completedInPeriod++;
+          }
+        }
+      });
     });
 
-    // Enhance tailors with calculated data
-    const enhancedTailors = tailors.map(tailor => ({
-      _id: tailor._id,
-      name: tailor.name,
-      tailorId: tailor.tailorId,
-      specialization: Array.isArray(tailor.specialization) ? tailor.specialization[0] : tailor.specialization || 'General',
-      experience: tailor.experience || 0,
-      completedOrders: completedCounts[tailor._id.toString()] || 0,
-      totalAssigned: tailor.workStats?.totalAssigned || 0,
-      isAvailable: tailor.isAvailable,
-      leaveStatus: tailor.leaveStatus,
-      // Calculate efficiency (completed / total assigned)
-      efficiency: tailor.workStats?.totalAssigned > 0 
-        ? Math.round((tailor.workStats.completed / tailor.workStats.totalAssigned) * 100) 
-        : 0
-    }));
+    // Enhance tailors with dynamically calculated data
+    const enhancedTailors = tailors.map(tailor => {
+      const stats = tailorStatsMap[tailor._id.toString()] || { totalAssigned: 0, completed: 0, completedInPeriod: 0 };
+      return {
+        _id: tailor._id,
+        name: tailor.name,
+        tailorId: tailor.tailorId,
+        specialization: Array.isArray(tailor.specialization) ? tailor.specialization[0] : tailor.specialization || 'General',
+        experience: tailor.experience || 0,
+        completedOrders: stats.completedInPeriod,
+        totalAssigned: stats.totalAssigned,
+        isAvailable: tailor.isAvailable,
+        leaveStatus: tailor.leaveStatus,
+        efficiency: stats.totalAssigned > 0 
+          ? Math.round((stats.completed / stats.totalAssigned) * 100) 
+          : 0
+      };
+    });
 
     // Sort by completed orders and take top performers
     const topTailors = enhancedTailors
       .sort((a, b) => b.completedOrders - a.completedOrders)
       .slice(0, parseInt(limit));
 
-    console.log(`✅ Top ${topTailors.length} tailors prepared`);
+    const totalCompletedInPeriod = Object.values(tailorStatsMap).reduce((sum, s) => sum + s.completedInPeriod, 0);
+
+    console.log(`✅ Top ${topTailors.length} tailors prepared (dynamic from Work SSOT)`);
 
     res.json({
       success: true,
@@ -2154,7 +2214,7 @@ export const getTopTailors = async (req, res) => {
       summary: {
         averageCompletionTime: "4.5 days",
         totalActiveTailors: tailors.length,
-        totalCompletedOrders: Object.values(completedCounts).reduce((a, b) => a + b, 0),
+        totalCompletedOrders: totalCompletedInPeriod,
         period,
         dateRange: {
           start: startDate,
@@ -2179,118 +2239,96 @@ export const getTailorPerformance = async (req, res) => {
   try {
     const { period = 'month', tailorId } = req.query;
 
-    console.log('📈 Getting tailor performance for period:', period);
+    console.log('📈 Getting tailor performance (Work SSOT) for period:', period);
 
-    // Calculate date range
-    let startDate = new Date();
-    const endDate = new Date();
-    
-    if (period === 'week') {
-      startDate.setDate(startDate.getDate() - 7);
-    } else if (period === 'month') {
-      startDate.setMonth(startDate.getMonth() - 1);
-    } else if (period === 'quarter') {
-      startDate.setMonth(startDate.getMonth() - 3);
-    } else if (period === 'year') {
-      startDate.setFullYear(startDate.getFullYear() - 1);
-    }
+    // ✅ Get ALL workers from all collections so we have name/ID mapping
+    const [tailors, cuttingMasters, storeKeepers, aariWorkers, embroideryWorkers, helpers] = await Promise.all([
+      Tailor.find().select('name tailorId').lean(),
+      CuttingMaster.find().select('name cuttingMasterId').lean(),
+      StoreKeeper.find().select('name storeKeeperId').lean(),
+      AariWorker.find().select('name aariWorkerId').lean(),
+      EmbroideryWorker.find().select('name embroideryWorkerId').lean(),
+      Helper.find().select('name helperId').lean()
+    ]);
 
-    // Build query
-    const query = {
-      status: 'ready-to-deliver',
-      updatedAt: { $gte: startDate, $lte: endDate },
-      tailor: { $ne: null }
+    const tailorLookup = {};
+    tailors.forEach(t => { tailorLookup[t._id.toString()] = { name: t.name, tailorId: t.tailorId }; });
+    cuttingMasters.forEach(t => { tailorLookup[t._id.toString()] = { name: t.name, tailorId: t.cuttingMasterId }; });
+    storeKeepers.forEach(t => { tailorLookup[t._id.toString()] = { name: t.name, tailorId: t.storeKeeperId }; });
+    aariWorkers.forEach(t => { tailorLookup[t._id.toString()] = { name: t.name, tailorId: t.aariWorkerId }; });
+    embroideryWorkers.forEach(t => { tailorLookup[t._id.toString()] = { name: t.name, tailorId: t.embroideryWorkerId }; });
+    helpers.forEach(t => { tailorLookup[t._id.toString()] = { name: t.name, tailorId: t.helperId }; });
+
+    // ✅ Query ALL active works that have any worker assignment
+    const workQuery = {
+      isActive: true,
+      "assignments.workerId": { $ne: null }
     };
 
-    // If specific tailor requested
+    // If specific tailor requested, narrow down
     if (tailorId) {
-      query.tailor = tailorId;
+      workQuery["assignments.workerId"] = tailorId;
     }
 
-    // Get completed works with details
-    const works = await Work.find(query)
-      .populate('tailor', 'name tailorId')
-      .populate({
-        path: 'order',
-        select: 'orderId customer',
-        populate: {
-          path: 'customer',
-          select: 'name'
-        }
-      })
-      .populate('garment', 'name')
-      .sort({ updatedAt: -1 })
+    const works = await Work.find(workQuery)
+      .select('assignments workId')
       .lean();
 
-    // Group by tailor if not specified
-    let performance = [];
-    
-    if (tailorId) {
-      // Single tailor performance
-      const tailor = works[0]?.tailor;
-      performance = [{
-        tailor,
-        works: works.map(w => ({
-          workId: w.workId,
-          orderId: w.order?.orderId,
-          customer: w.order?.customer?.name,
-          garment: w.garment?.name,
-          completedAt: w.updatedAt
-        })),
-        totalCompleted: works.length
-      }];
-    } else {
-      // Group by tailor
-      const tailorMap = new Map();
-      
-      works.forEach(work => {
-        if (work.tailor) {
-          const tailorId = work.tailor._id.toString();
-          if (!tailorMap.has(tailorId)) {
-            tailorMap.set(tailorId, {
-              tailor: work.tailor,
-              works: [],
-              totalCompleted: 0
-            });
-          }
-          const entry = tailorMap.get(tailorId);
-          entry.works.push({
-            workId: w.workId,
-            orderId: w.order?.orderId,
-            customer: w.order?.customer?.name,
-            garment: w.garment?.name,
-            completedAt: w.updatedAt
+    // ✅ Aggregate per-worker stats purely from Work.assignments
+    const workerMap = new Map();
+
+    works.forEach(work => {
+      (work.assignments || []).forEach(asgn => {
+        if (!asgn.workerId) return;
+        const wId = asgn.workerId.toString();
+
+        if (!workerMap.has(wId)) {
+          const info = tailorLookup[wId] || {};
+          workerMap.set(wId, {
+            _id: wId,
+            tailorName: info.name || asgn.workerName || 'Unknown',
+            tailorId: info.tailorId || 'N/A',
+            totalAssigned: 0,
+            totalCompleted: 0,
+            totalPending: 0
           });
+        }
+
+        const entry = workerMap.get(wId);
+        entry.totalAssigned++;
+        if (asgn.status === 'completed') {
           entry.totalCompleted++;
+        } else if (asgn.status === 'active') {
+          // active assignment - does not increment pending
+        } else {
+          entry.totalPending++;
         }
       });
+    });
 
-      performance = Array.from(tailorMap.values())
-        .sort((a, b) => b.totalCompleted - a.totalCompleted);
-    }
+    // Build performance array sorted by totalAssigned descending
+    const performance = Array.from(workerMap.values())
+      .sort((a, b) => b.totalAssigned - a.totalAssigned);
 
-    // Calculate summary statistics
-    const totalCompleted = works.length;
+    // Summary statistics
+    const totalCompleted = performance.reduce((s, p) => s + p.totalCompleted, 0);
+    const totalAssigned = performance.reduce((s, p) => s + p.totalAssigned, 0);
     const activeTailors = performance.length;
-    const avgPerTailor = activeTailors > 0 ? Math.round(totalCompleted / activeTailors) : 0;
+    const avgPerTailor = activeTailors > 0 ? Math.round((totalAssigned + totalCompleted) / activeTailors) : 0;
 
     const summary = {
       totalCompleted,
+      totalAssigned,
       activeTailors,
       avgPerTailor,
-      period,
-      dateRange: {
-        start: startDate,
-        end: endDate
-      }
+      period
     };
 
-    console.log('✅ Performance data prepared:', summary);
+    console.log('✅ Performance data prepared (Work SSOT):', summary);
 
     res.json({
       success: true,
       period,
-      dateRange: { start: startDate, end: endDate },
       performance,
       summary
     });
@@ -2304,50 +2342,13 @@ export const getTailorPerformance = async (req, res) => {
   }
 };
 
-// ===== TEMPORARY: FIX ALL TAILOR STATS =====
+// ===== DEPRECATED: Stats are now derived dynamically from Work SSOT =====
 export const fixAllTailorStats = async (req, res) => {
-  try {
-    const tailors = await Tailor.find({ isActive: true });
-    let updated = 0;
-    let fixed = [];
-
-    for (let tailor of tailors) {
-      const works = await Work.find({ 
-        tailor: tailor._id,
-        isActive: true 
-      });
-
-      const workStats = {
-        totalAssigned: works.length,
-        completed: works.filter(w => w.status === 'ready-to-deliver').length,
-        pending: works.filter(w => ['pending', 'accepted'].includes(w.status)).length,
-        inProgress: works.filter(w => 
-          ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing']
-          .includes(w.status)
-        ).length
-      };
-
-      // Only update if stats are different
-      if (JSON.stringify(tailor.workStats) !== JSON.stringify(workStats)) {
-        tailor.workStats = workStats;
-        await tailor.save();
-        updated++;
-        fixed.push({
-          name: tailor.name,
-          tailorId: tailor.tailorId,
-          oldStats: tailor.workStats,
-          newStats: workStats
-        });
-      }
-    }
-
-    res.json({
-      message: `Fixed stats for ${updated} tailors`,
-      updated,
-      fixed
-    });
-  } catch (error) {
-    console.error("Fix stats error:", error);
-    res.status(500).json({ message: error.message });
-  }
+  // No-op: Worker stats are now computed dynamically from Work.assignments.
+  // This endpoint is kept for backward compatibility but does not mutate any records.
+  res.json({
+    message: 'Stats are now derived dynamically from Work assignments. No database updates needed.',
+    updated: 0,
+    fixed: []
+  });
 };

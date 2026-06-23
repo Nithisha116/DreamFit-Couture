@@ -60,13 +60,15 @@ export default function AssignedTaskCards({ jobs, basePath }) {
                   {job.customerName}
                 </p>
                 
-                {uniqueAssignees.length > 0 && (
+                {job.assignments && job.assignments.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-1 mb-2">
-                    {uniqueAssignees.map((assignee, idx) => (
-                      <span key={idx} className="inline-flex items-center text-[10px] bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
-                        <span className="font-semibold text-slate-700">{assignee.name}</span>
-                        <span className="text-slate-400 ml-1 capitalize">({assignee.role})</span>
-                      </span>
+                    {job.assignments.map((asgn, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-700">👤 {asgn.workerName}</span>
+                        <span className="text-[9px] text-slate-400">
+                          {asgn.assignedAt ? format(new Date(asgn.assignedAt), 'dd MMM') : '-'}
+                        </span>
+                      </div>
                     ))}
                   </div>
                 )}

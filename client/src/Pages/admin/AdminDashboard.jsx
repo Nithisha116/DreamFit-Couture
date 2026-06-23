@@ -124,6 +124,8 @@ import showToast from '../../utils/toast';
 import { fetchAppointments } from '../../features/appointment/appointmentSlice';
 import CountUp from 'react-countup';
 import API from '../../app/axios';
+import GenericModal from '../../components/common/GenericModal';
+import axios from 'axios';
 
 export default function AdminDashboard() {
   const dispatch = useDispatch();
@@ -252,6 +254,8 @@ export default function AdminDashboard() {
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
   const [workViewMode, setWorkViewMode] = useState('grid'); // 'grid' or 'list'
+  
+
   
   // WIDGET DROPDOWN STATE
   const [isWidgetDropdownOpen, setIsWidgetDropdownOpen] = useState(false);
@@ -1036,6 +1040,8 @@ const orderStatusData = useMemo(() => {
 
     return sorted;
   }, [filteredWorks, sortBy]);
+  
+
 
   // Safe formatting
   const safeFormat = (value) => {
@@ -1915,6 +1921,64 @@ const displayPerformers = (isAdmin || isStoreKeeper)
         {/* ===== DELIVERY PIPELINE ===== */}
         <DeliveryPipelineSection works={recentWorks} basePath={basePath} />
 
+        {/* ===== WORKER WORKLOAD SUMMARY (Requirement 5 & 6) ===== */}
+        <div className="mb-6 lg:mb-8">
+          <div className="bg-white rounded-[24px] p-5 lg:p-6 shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <Users size={20} className="text-indigo-600" />
+                <span>Worker Assignment Summary</span>
+              </h2>
+              <div className="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full font-bold uppercase tracking-wider">
+                Live Tracking
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {(tailorPerformance || []).map((worker, idx) => (
+                <div 
+                  key={worker._id || idx}
+                  className="bg-slate-50/50 hover:bg-white p-4 rounded-2xl border border-slate-100 hover:border-indigo-100 hover:shadow-md transition-all group cursor-pointer"
+                  onClick={() => handleViewTailor(worker._id)}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                        {worker.tailorName?.[0] || 'W'}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800">{worker.tailorName}</h3>
+                        <p className="text-[10px] text-slate-500 font-medium">Worker ID: {worker.tailorId || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-white p-2 rounded-lg border border-slate-100 flex flex-col items-center">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Assigned</span>
+                      <span className="text-sm font-black text-blue-600">{worker.totalAssigned || 0}</span>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-slate-100 flex flex-col items-center">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Done</span>
+                      <span className="text-sm font-black text-emerald-600">{worker.totalCompleted || 0}</span>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-slate-100 flex flex-col items-center">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Pending</span>
+                      <span className="text-sm font-black text-amber-600">{worker.totalPending || (worker.totalAssigned - worker.totalCompleted) || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {(tailorPerformance?.length === 0 || !tailorPerformance) && (
+                <div className="col-span-full py-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
+                  <p className="text-sm text-slate-500 font-medium whitespace-pre-wrap">No active worker assignments found.{"\n"}Assign workers to orders to start tracking.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* ===== READY TO DELIVER ORDERS ===== */}
         <ReadyToDeliverSection 
           orders={readyToDeliveryState.orders} 
@@ -2138,6 +2202,8 @@ const displayPerformers = (isAdmin || isStoreKeeper)
 
 
 
+
+
         {/* Loading Overlay */}
         {isLoading && (
           <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
@@ -2150,20 +2216,12 @@ const displayPerformers = (isAdmin || isStoreKeeper)
       </div>
 
       {/* Add animation styles */}
-      <style jsx>{`
+      <style>{`
         @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade-in-up {
-          animation: fadeInUp 0.2s ease-out;
-        }
+        .animate-fade-in-up { animation: fadeInUp 0.2s ease-out; }
       `}</style>
     </div>
   );
