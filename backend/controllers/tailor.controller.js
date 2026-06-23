@@ -1857,7 +1857,7 @@ export const getTailorById = async (req, res) => {
 
     // ✅ Stats derived purely from Work.assignments SSOT
     const stats = {
-      totalAssigned: allMyAssignments.filter(a => a.status !== 'completed').length,
+      totalAssigned: allMyAssignments.length,
       completed: allMyAssignments.filter(a => a.status === 'completed').length,
       inProgress: allMyAssignments.filter(a => a.status === 'active').length,
       pending: allMyAssignments.filter(a => a.status === 'pending').length
@@ -2295,10 +2295,12 @@ export const getTailorPerformance = async (req, res) => {
         }
 
         const entry = workerMap.get(wId);
+        entry.totalAssigned++;
         if (asgn.status === 'completed') {
           entry.totalCompleted++;
+        } else if (asgn.status === 'active') {
+          // active assignment - does not increment pending
         } else {
-          entry.totalAssigned++;
           entry.totalPending++;
         }
       });
@@ -2306,7 +2308,7 @@ export const getTailorPerformance = async (req, res) => {
 
     // Build performance array sorted by totalAssigned descending
     const performance = Array.from(workerMap.values())
-      .sort((a, b) => (b.totalAssigned + b.totalCompleted) - (a.totalAssigned + a.totalCompleted));
+      .sort((a, b) => b.totalAssigned - a.totalAssigned);
 
     // Summary statistics
     const totalCompleted = performance.reduce((s, p) => s + p.totalCompleted, 0);

@@ -8131,9 +8131,9 @@ export const recalculateTailorStats = async (req, res) => {
     }, []);
 
     const workStats = {
-      totalAssigned: myAssignments.filter(a => a.status !== 'completed').length,
+      totalAssigned: myAssignments.length,
       completed: myAssignments.filter(a => a.status === 'completed').length,
-      pending: myAssignments.filter(a => a.status !== 'completed').length,
+      pending: myAssignments.filter(a => a.status === 'pending').length,
       inProgress: myAssignments.filter(a => a.status === 'active').length
     };
 
@@ -8197,14 +8197,15 @@ export const recalculateAllTailorStats = async (req, res) => {
         if (!statsMap[tId]) {
           statsMap[tId] = { totalAssigned: 0, completed: 0, pending: 0, inProgress: 0 };
         }
+        statsMap[tId].totalAssigned++;
         if (asgn.status === 'completed') {
           statsMap[tId].completed++;
         } else if (asgn.status === 'active') {
           statsMap[tId].inProgress++;
-          statsMap[tId].totalAssigned++;
+        } else if (asgn.status === 'pending') {
+          statsMap[tId].pending++;
         } else {
           statsMap[tId].pending++;
-          statsMap[tId].totalAssigned++;
         }
       });
     });
