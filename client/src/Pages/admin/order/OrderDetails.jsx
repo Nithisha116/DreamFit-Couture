@@ -3090,6 +3090,38 @@ const handleSavePayment = async (paymentData) => {
               </div>
             </div>
 
+            {/* Tailor Assignments Information */}
+            {currentWorks?.length > 0 && currentWorks.some(w => w.assignments?.some(a => a.workerId)) && (
+              <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-6">
+                <h2 className="text-base sm:text-lg font-black text-slate-800 mb-3 sm:mb-4 flex items-center gap-2">
+                  <Scissors size={18} className="text-blue-600" />
+                  Worker Assignments
+                </h2>
+                <div className="space-y-4">
+                  {currentWorks.filter(w => w.assignments?.some(a => a.workerId)).map(work => (
+                    <div key={work._id} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-2">{work.garment?.name || 'Garment'} ({work.workId})</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {work.assignments?.filter(a => a.workerId)?.map((asgn, idx) => (
+                          <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <User size={16} className="text-indigo-600" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-slate-800 truncate">{asgn.workerName}</p>
+                              <p className="text-[10px] text-slate-500 font-medium">
+                                <span className="capitalize">{asgn.stage}</span> • {asgn.assignedAt ? new Date(asgn.assignedAt).toLocaleDateString() : 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Garments List */}
             <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">

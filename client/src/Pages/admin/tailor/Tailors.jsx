@@ -1484,19 +1484,19 @@ export default function Tailors() {
                       </div>
                     </div>
 
-                    {/* Work Stats */}
-                    <div className="grid grid-cols-3 gap-1 text-center mb-3 text-[10px]">
-                      <div>
-                        <div className="font-bold text-blue-600">{tailor.workStats?.totalAssigned || 0}</div>
-                        <div className="text-slate-500">Total</div>
+                    {/* Work Stats Bubbles */}
+                    <div className="flex items-center justify-between gap-1 mb-3">
+                      <div className="flex-1 flex flex-col items-center py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
+                        <span className="text-[10px] font-black">{tailor.workStats?.totalAssigned || 0}</span>
+                        <span className="text-[8px] font-bold uppercase tracking-tighter">Assigned</span>
                       </div>
-                      <div>
-                        <div className="font-bold text-green-600">{tailor.workStats?.completed || 0}</div>
-                        <div className="text-slate-500">Done</div>
+                      <div className="flex-1 flex flex-col items-center py-1 bg-green-50 text-green-700 rounded-lg border border-green-100">
+                        <span className="text-[10px] font-black">{tailor.workStats?.completed || 0}</span>
+                        <span className="text-[8px] font-bold uppercase tracking-tighter">Completed</span>
                       </div>
-                      <div>
-                        <div className="font-bold text-orange-600">{tailor.workStats?.inProgress || 0}</div>
-                        <div className="text-slate-500">Progress</div>
+                      <div className="flex-1 flex flex-col items-center py-1 bg-yellow-50 text-yellow-700 rounded-lg border border-yellow-100">
+                        <span className="text-[10px] font-black">{tailor.workStats?.pending || 0}</span>
+                        <span className="text-[8px] font-bold uppercase tracking-tighter">Pending</span>
                       </div>
                     </div>
 
@@ -1649,22 +1649,18 @@ export default function Tailors() {
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="text-slate-400">Total:</span>
-                              <span className="font-bold">{tailor.workStats?.totalAssigned || 0}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-col items-center px-2 py-1.5 bg-blue-50 text-blue-700 rounded-xl border border-blue-100 min-w-[50px]">
+                              <span className="text-xs font-black">{tailor.workStats?.totalAssigned || 0}</span>
+                              <span className="text-[8px] font-bold uppercase tracking-widest">Assigned</span>
                             </div>
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="text-green-600">✓ Completed:</span>
-                              <span className="font-bold">{tailor.workStats?.completed || 0}</span>
+                            <div className="flex flex-col items-center px-2 py-1.5 bg-green-50 text-green-700 rounded-xl border border-green-100 min-w-[50px]">
+                              <span className="text-xs font-black">{tailor.workStats?.completed || 0}</span>
+                              <span className="text-[8px] font-bold uppercase tracking-widest">Done</span>
                             </div>
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="text-orange-600">⚡ In Progress:</span>
-                              <span className="font-bold">{tailor.workStats?.inProgress || 0}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="text-yellow-600">⏳ Pending:</span>
-                              <span className="font-bold">{tailor.workStats?.pending || 0}</span>
+                            <div className="flex flex-col items-center px-2 py-1.5 bg-yellow-50 text-yellow-700 rounded-xl border border-yellow-100 min-w-[50px]">
+                              <span className="text-xs font-black">{tailor.workStats?.pending || 0}</span>
+                              <span className="text-[8px] font-bold uppercase tracking-widest">Queue</span>
                             </div>
                           </div>
                         </td>

@@ -63,6 +63,7 @@ export function buildPipelineViewModelFromJob(job) {
     isHighPriority: job.priority === "high",
     overdue,
     delayDays,
+    assignments: job.assignments || [],
   };
 }
 

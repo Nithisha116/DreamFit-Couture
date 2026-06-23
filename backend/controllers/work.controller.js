@@ -8116,49 +8116,45 @@ export const recalculateTailorStats = async (req, res) => {
     
     console.log('🔄 Recalculating stats for tailor:', tailorId);
     
-    // Get all works for this tailor
+    // ✅ Derive stats from Work.assignments SSOT (no DB writes to Tailor)
     const works = await Work.find({ 
-      tailor: tailorId,
+      "assignments.workerId": tailorId,
       isActive: true 
-    });
+    })
+      .select('assignments workId status')
+      .lean();
 
-    console.log('📋 Works found:', works.length);
-    
-    // Calculate correct stats based on actual work statuses using fully generic evaluation metrics
+    // Flatten all assignments for this tailor
+    const myAssignments = works.reduce((acc, w) => {
+      const mine = (w.assignments || []).filter(a => a.workerId?.toString() === tailorId);
+      return [...acc, ...mine];
+    }, []);
+
     const workStats = {
-      totalAssigned: works.length,
-      completed: works.filter(w => w.status === 'ready-to-deliver' || w.status === 'cancelled').length,
-      pending: works.filter(w => ['pending', 'accepted'].includes(w.status)).length,
-      inProgress: works.filter(w => 
-        !['pending', 'accepted', 'ready-to-deliver', 'cancelled'].includes(w.status)
-      ).length
+      totalAssigned: myAssignments.filter(a => a.status !== 'completed').length,
+      completed: myAssignments.filter(a => a.status === 'completed').length,
+      pending: myAssignments.filter(a => a.status !== 'completed').length,
+      inProgress: myAssignments.filter(a => a.status === 'active').length
     };
 
-    console.log('📊 Calculated stats:', workStats);
+    console.log('📊 Dynamically calculated stats (no DB write):', workStats);
 
-    // Update tailor in database
-    const updatedTailor = await Tailor.findByIdAndUpdate(
-      tailorId,
-      { $set: { workStats } },
-      { new: true }
-    );
-
-    if (!updatedTailor) {
+    // Get tailor name for response
+    const tailor = await Tailor.findById(tailorId).select('name tailorId').lean();
+    if (!tailor) {
       return res.status(404).json({
         success: false,
         message: 'Tailor not found'
       });
     }
 
-    console.log('✅ Tailor stats updated successfully');
-
     res.json({
       success: true,
-      message: 'Tailor stats recalculated successfully',
+      message: 'Stats computed dynamically from Work assignments (no DB update)',
       data: {
-        tailorId: updatedTailor._id,
-        name: updatedTailor.name,
-        workStats: updatedTailor.workStats,
+        tailorId: tailor._id,
+        name: tailor.name,
+        workStats,
         worksBreakdown: works.map(w => ({
           workId: w.workId,
           status: w.status
@@ -8181,44 +8177,52 @@ export const recalculateTailorStats = async (req, res) => {
 // @access  Private (Admin only)
 export const recalculateAllTailorStats = async (req, res) => {
   try {
-    const tailors = await Tailor.find({ isActive: true });
-    let updated = 0;
+    const tailors = await Tailor.find({ isActive: true }).select('name tailorId').lean();
     let results = [];
 
-    for (const tailor of tailors) {
-      const works = await Work.find({ 
-        tailor: tailor._id,
-        isActive: true 
+    // ✅ Derive all stats from Work.assignments SSOT (no DB writes)
+    const allWorks = await Work.find({ 
+      isActive: true,
+      "assignments.workerId": { $ne: null }
+    })
+      .select('assignments')
+      .lean();
+
+    // Build per-tailor stats from Work.assignments
+    const statsMap = {};
+    allWorks.forEach(work => {
+      (work.assignments || []).forEach(asgn => {
+        if (!asgn.workerId) return;
+        const tId = asgn.workerId.toString();
+        if (!statsMap[tId]) {
+          statsMap[tId] = { totalAssigned: 0, completed: 0, pending: 0, inProgress: 0 };
+        }
+        if (asgn.status === 'completed') {
+          statsMap[tId].completed++;
+        } else if (asgn.status === 'active') {
+          statsMap[tId].inProgress++;
+          statsMap[tId].totalAssigned++;
+        } else {
+          statsMap[tId].pending++;
+          statsMap[tId].totalAssigned++;
+        }
       });
+    });
 
-      const workStats = {
-        totalAssigned: works.length,
-        completed: works.filter(w => w.status === 'ready-to-deliver' || w.status === 'cancelled').length,
-        pending: works.filter(w => ['pending', 'accepted'].includes(w.status)).length,
-        inProgress: works.filter(w => 
-          !['pending', 'accepted', 'ready-to-deliver', 'cancelled'].includes(w.status)
-        ).length
-      };
-
-      // Only update if stats are different
-      if (JSON.stringify(tailor.workStats) !== JSON.stringify(workStats)) {
-        tailor.workStats = workStats;
-        await tailor.save();
-        updated++;
-        results.push({
-          name: tailor.name,
-          tailorId: tailor.tailorId,
-          oldStats: tailor.workStats,
-          newStats: workStats
-        });
-      }
+    for (const tailor of tailors) {
+      const workStats = statsMap[tailor._id.toString()] || { totalAssigned: 0, completed: 0, pending: 0, inProgress: 0 };
+      results.push({
+        name: tailor.name,
+        tailorId: tailor.tailorId,
+        dynamicStats: workStats
+      });
     }
 
     res.json({
       success: true,
-      message: `Recalculated stats for ${updated} tailors`,
+      message: `Computed dynamic stats for ${results.length} tailors (no DB writes)`,
       data: {
-        updated,
+        computed: results.length,
         details: results
       }
     });

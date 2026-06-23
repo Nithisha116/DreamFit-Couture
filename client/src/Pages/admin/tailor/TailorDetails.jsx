@@ -990,6 +990,7 @@ export default function TailorDetails() {
   const [selectedWorkStatus, setSelectedWorkStatus] = useState("all");
   const [workPage, setWorkPage] = useState(1);
   const worksPerPage = 5;
+  const [localLoading, setLocalLoading] = useState(true);
 
   const isAdmin = user?.role === "ADMIN";
   const isStoreKeeper = user?.role === "STORE_KEEPER";
@@ -1002,7 +1003,10 @@ export default function TailorDetails() {
 
   useEffect(() => {
     if (id) {
-      dispatch(fetchTailorById(id));
+      setLocalLoading(true);
+      dispatch(fetchTailorById(id)).finally(() => {
+        setLocalLoading(false);
+      });
     }
   }, [dispatch, id]);
 
@@ -1128,7 +1132,7 @@ export default function TailorDetails() {
 
   const totalPages = Math.ceil(filteredWorks.length / worksPerPage);
 
-  if (loading) {
+  if (localLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="text-center">
@@ -1571,7 +1575,23 @@ export default function TailorDetails() {
                   <>
                     <div className="space-y-2 sm:space-y-3">
                       {paginatedWorks.map((work) => {
-                        const statusBadge = getWorkStatusBadge(work.status);
+                        const myAssignment = work.assignments?.find(a => 
+                          (a.workerId?._id || a.workerId)?.toString() === (currentTailor?._id || id)?.toString()
+                        );
+                        
+                        const getAsgnStatusBadge = (status) => {
+                          switch(status) {
+                            case 'completed':
+                              return { label: "Completed", bg: "bg-green-100", text: "text-green-700" };
+                            case 'active':
+                              return { label: "Active", bg: "bg-amber-100", text: "text-amber-700" };
+                            case 'pending':
+                            default:
+                              return { label: "Pending", bg: "bg-slate-100", text: "text-slate-700" };
+                          }
+                        };
+                        const statusBadge = getAsgnStatusBadge(myAssignment?.status);
+                          
                         return (
                           <div
                             key={work._id}
@@ -1587,22 +1607,31 @@ export default function TailorDetails() {
                                   </span>
                                 </div>
                                 
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2 lg:gap-3 text-[10px] sm:text-xs lg:text-sm">
+                                <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5 sm:gap-2 lg:gap-3 text-[10px] sm:text-xs lg:text-sm">
                                   <div className="min-w-0">
-                                    <p className="text-[8px] sm:text-[10px] lg:text-xs text-slate-400 mb-0.5">Order</p>
-                                    <p className="font-medium text-slate-800 truncate">{work.order?.orderId || 'N/A'}</p>
+                                    <p className="text-[8px] sm:text-[10px] lg:text-xs text-slate-400 mb-0.5">Order/Customer</p>
+                                    <p className="font-bold text-slate-800 truncate">{work.order?.orderId || 'N/A'}</p>
+                                    <p className="text-[8px] sm:text-[10px] text-slate-500 truncate">{work.order?.customer?.name || 'Walk-in'}</p>
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-[8px] sm:text-[10px] lg:text-xs text-slate-400 mb-0.5">Garment</p>
                                     <p className="font-medium text-slate-800 truncate">{work.garment?.name || 'N/A'}</p>
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="text-[8px] sm:text-[10px] lg:text-xs text-slate-400 mb-0.5">Assigned</p>
-                                    <p className="text-slate-600 truncate">{formatDate(work.createdAt)}</p>
+                                    <p className="text-[8px] sm:text-[10px] lg:text-xs text-slate-400 mb-0.5">Stage</p>
+                                    <p className="font-semibold text-indigo-600 truncate capitalize">{myAssignment?.stage || 'N/A'}</p>
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="text-[8px] sm:text-[10px] lg:text-xs text-slate-400 mb-0.5">Delivery</p>
-                                    <p className="text-slate-600 truncate">{formatDate(work.estimatedDelivery)}</p>
+                                    <p className="text-[8px] sm:text-[10px] lg:text-xs text-slate-400 mb-0.5">Assigned</p>
+                                    <p className="text-slate-600 truncate">{myAssignment?.assignedAt ? formatDate(myAssignment.assignedAt) : formatDate(work.createdAt)}</p>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-[8px] sm:text-[10px] lg:text-xs text-slate-400 mb-0.5">Completed</p>
+                                    <p className="text-slate-600 truncate">{myAssignment?.completedAt ? formatDate(myAssignment.completedAt) : '---'}</p>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-[8px] sm:text-[10px] lg:text-xs text-slate-400 mb-0.5">Status</p>
+                                    <p className="font-medium text-slate-700 truncate capitalize">{myAssignment?.status || 'Pending'}</p>
                                   </div>
                                 </div>
 

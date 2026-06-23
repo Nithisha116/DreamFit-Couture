@@ -105,11 +105,29 @@ function PipelineRow({ model, basePath }) {
 
           <div>
             <h3 className="truncate text-sm font-bold text-slate-800 sm:text-base">{model.productName}</h3>
-            <p className="text-xs text-slate-500">
-              <span className="font-medium text-slate-600">{model.customerName}</span>
-              <span className="mx-1.5 text-slate-300">·</span>
-              <span>Due {deliveryLabel}</span>
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-500">
+                <span className="font-medium text-slate-600">{model.customerName}</span>
+                <span className="mx-1.5 text-slate-300">·</span>
+                <span>Due {deliveryLabel}</span>
+              </p>
+              
+              {/* Assigned Worker Info */}
+              {model.assignments && model.assignments.length > 0 && (
+                <div className="flex flex-col items-end">
+                  {model.assignments.filter(asgn => asgn.status !== 'completed').map((asgn, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                         👤 {asgn.workerName}
+                      </span>
+                      <span className="text-[9px] text-slate-400">
+                        {format(new Date(asgn.assignedAt), 'dd MMM')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-[10px] sm:text-xs">

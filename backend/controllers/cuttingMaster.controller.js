@@ -504,47 +504,58 @@ export const getTailorPerformance = async (req, res) => {
 
     console.log(`🔍 Found ${tailors.length} active tailors`);
 
-    // Get performance data for each tailor
-    const performanceData = await Promise.all(
-      tailors.map(async (tailor) => {
-        // Get all works assigned to this tailor
-        const works = await Work.find({ 
-          tailor: tailor._id,
-          isActive: true 
-        });
+    // ✅ Get ALL active works with assignments in a single query (efficient)
+    const allWorks = await Work.find({ 
+      isActive: true,
+      "assignments.workerId": { $ne: null }
+    })
+      .select('assignments')
+      .lean();
 
-        const assigned = works.length;
-        const completed = works.filter(w => w.status === 'sewing-completed' || w.status === 'ready-to-deliver').length;
-        const inProgress = works.filter(w => 
-          ['sewing-started', 'ironing'].includes(w.status)
-        ).length;
-        const pending = works.filter(w => 
-          ['pending', 'accepted', 'cutting-started', 'cutting-completed'].includes(w.status)
-        ).length;
+    // ✅ Build per-tailor stats from Work.assignments SSOT
+    const statsMap = {};
+    allWorks.forEach(work => {
+      (work.assignments || []).forEach(asgn => {
+        if (!asgn.workerId) return;
+        const tId = asgn.workerId.toString();
+        if (!statsMap[tId]) {
+          statsMap[tId] = { assigned: 0, completed: 0, inProgress: 0, pending: 0 };
+        }
+        statsMap[tId].assigned++;
+        if (asgn.status === 'completed') {
+          statsMap[tId].completed++;
+        } else if (asgn.status === 'active') {
+          statsMap[tId].inProgress++;
+        } else {
+          statsMap[tId].pending++;
+        }
+      });
+    });
 
-        // Calculate efficiency
-        const efficiency = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
+    // Build performance data for each tailor
+    const performanceData = tailors.map(tailor => {
+      const stats = statsMap[tailor._id.toString()] || { assigned: 0, completed: 0, inProgress: 0, pending: 0 };
+      const efficiency = stats.assigned > 0 ? Math.round((stats.completed / stats.assigned) * 100) : 0;
 
-        return {
-          _id: tailor._id,
-          name: tailor.name,
-          employeeId: tailor.employeeId,
-          phone: tailor.phone,
-          specialization: tailor.specialization || [],
-          assigned,
-          completed,
-          pending,
-          inProgress,
-          efficiency,
-          rating: efficiency >= 80 ? 5 : efficiency >= 60 ? 4 : efficiency >= 40 ? 3 : efficiency >= 20 ? 2 : 1
-        };
-      })
-    );
+      return {
+        _id: tailor._id,
+        name: tailor.name,
+        employeeId: tailor.employeeId,
+        phone: tailor.phone,
+        specialization: tailor.specialization || [],
+        assigned: stats.assigned,
+        completed: stats.completed,
+        pending: stats.pending,
+        inProgress: stats.inProgress,
+        efficiency,
+        rating: efficiency >= 80 ? 5 : efficiency >= 60 ? 4 : efficiency >= 40 ? 3 : efficiency >= 20 ? 2 : 1
+      };
+    });
 
     // Sort by completed work (highest first)
     performanceData.sort((a, b) => b.completed - a.completed);
 
-    console.log("✅ Tailor performance calculated");
+    console.log("✅ Tailor performance calculated (Work SSOT)");
 
     res.status(200).json({
       success: true,
@@ -2181,29 +2192,42 @@ export const getDashboardSummary = async (req, res) => {
         return breakdown.filter(item => item.value > 0);
       })(),
 
-      // Tailor Performance
+      // Tailor Performance (✅ Work SSOT)
       (async () => {
-        const tailors = await Tailor.find({ isActive: true }).lean();
+        const tailors = await Tailor.find({ isActive: true }).select('name employeeId').lean();
         
-        const performance = await Promise.all(
-          tailors.map(async (tailor) => {
-            const works = await Work.find({ tailor: tailor._id, isActive: true });
-            const assigned = works.length;
-            const completed = works.filter(w => w.status === 'sewing-completed' || w.status === 'ready-to-deliver').length;
-            const inProgress = works.filter(w => ['sewing-started', 'ironing'].includes(w.status)).length;
-            
-            return {
-              _id: tailor._id,
-              name: tailor.name,
-              employeeId: tailor.employeeId,
-              assigned,
-              completed,
-              inProgress,
-              pending: assigned - completed - inProgress,
-              efficiency: assigned > 0 ? Math.round((completed / assigned) * 100) : 0
-            };
-          })
-        );
+        // Single query for all works with assignments
+        const allWorks = await Work.find({ 
+          isActive: true, 
+          "assignments.workerId": { $ne: null } 
+        }).select('assignments').lean();
+        
+        // Build stats map from assignments
+        const statsMap = {};
+        allWorks.forEach(work => {
+          (work.assignments || []).forEach(asgn => {
+            if (!asgn.workerId) return;
+            const tId = asgn.workerId.toString();
+            if (!statsMap[tId]) statsMap[tId] = { assigned: 0, completed: 0, inProgress: 0 };
+            statsMap[tId].assigned++;
+            if (asgn.status === 'completed') statsMap[tId].completed++;
+            else if (asgn.status === 'active') statsMap[tId].inProgress++;
+          });
+        });
+        
+        const performance = tailors.map(tailor => {
+          const stats = statsMap[tailor._id.toString()] || { assigned: 0, completed: 0, inProgress: 0 };
+          return {
+            _id: tailor._id,
+            name: tailor.name,
+            employeeId: tailor.employeeId,
+            assigned: stats.assigned,
+            completed: stats.completed,
+            inProgress: stats.inProgress,
+            pending: stats.assigned - stats.completed - stats.inProgress,
+            efficiency: stats.assigned > 0 ? Math.round((stats.completed / stats.assigned) * 100) : 0
+          };
+        });
 
         return {
           tailors: performance.sort((a, b) => b.completed - a.completed),
