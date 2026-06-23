@@ -248,6 +248,7 @@ export const getWorkflowJobs = async (req, res) => {
         additionalInfo:      garment?.additionalInfo       || '',
         cuttingNotes:        work.cuttingNotes             || '',
         tailorNotes:         work.tailorNotes              || '',
+        assignments:         work.assignments              || [],
       };
     });
 

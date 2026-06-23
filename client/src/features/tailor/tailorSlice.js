@@ -1722,6 +1722,7 @@ const tailorSlice = createSlice({
         console.log('🟡 [Reducer] fetchTailorById pending');
         state.loading = true;
         state.error = null;
+        state.currentTailor = null;
       })
       .addCase(fetchTailorById.fulfilled, (state, action) => {
         console.log('🟢 [Reducer] fetchTailorById fulfilled:', action.payload);
