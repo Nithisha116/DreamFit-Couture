@@ -1,3 +1,5 @@
+import React, { useRef } from "react";
+import GarmentPDF from "../GarmentPDF";
 import { ArrowDown, ArrowUp, GitBranch, Plus, Trash2 } from "lucide-react";
 import {
   AVAILABLE_WORKFLOW_BLOCKS,
@@ -34,26 +36,30 @@ const PRESETS = [
     ],
   },
   {
-  id: "aari",
-  label: "Aari",
-  stages: [
-    "marking",
-    "purchase",
-    "aari_started",
-    "aari_completed",
-    "cutting",
-    "stitching",
-    "final_finishing",
-    "ironing_packing",
-    "trial",
-    "alteration",
-    "delivered"
-  ],
-},
+    id: "aari",
+    label: "Aari",
+    stages: [
+      "marking",
+      "purchase",
+      "aari_started",
+      "aari_completed",
+      "cutting",
+      "stitching",
+      "final_finishing",
+      "ironing_packing",
+      "trial",
+      "alteration",
+      "delivered"
+    ],
+  },
 ];
-export default function ProductionWorkflowBuilder({ stages, onChange }) {
+
+export default function ProductionWorkflowBuilder({ stages, onChange, garment, order, job }) {
   const selected = stages?.length ? stages : [...DEFAULT_WORKFLOW_STAGES];
   const available = AVAILABLE_WORKFLOW_BLOCKS.filter((b) => !selected.includes(b.key));
+  
+  // Dedicated document printing ref engine setup
+  const printEngineRef = useRef(null);
 
   const addStage = (key) => {
     if (selected.includes(key)) return;
@@ -181,6 +187,14 @@ export default function ProductionWorkflowBuilder({ stages, onChange }) {
           </p>
         </div>
       </div>
+
+      {/* Hidden 3-page print template tracking pipeline node mapping context definitions */}
+      <GarmentPDF 
+        ref={printEngineRef} 
+        garment={garment} 
+        order={order} 
+        job={job || { stages: selected }} 
+      />
     </div>
   );
 }

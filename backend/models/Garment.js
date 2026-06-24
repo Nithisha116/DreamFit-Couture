@@ -261,6 +261,22 @@ const garmentSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+
+  /** Per-garment production pipeline (new orders). Legacy orders use order.workflowStages. */
+  stageKeys: {
+    type: [String],
+    default: [],
+  },
+  workflowStages: {
+    type: [
+      {
+        key: String,
+        label: String,
+        order: Number,
+      },
+    ],
+    default: [],
+  },
 }, { 
   timestamps: true,
   validateBeforeSave: true 
