@@ -1,3 +1,5 @@
+import html2canvas from "html2canvas-pro";
+import { jsPDF } from "jspdf";
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -52,8 +54,178 @@ const InvoiceDetails = () => {
     }
   }, [invoice]);
 
+  // Recursively copies computed styles from source to clone,
+  // converting oklch() values to rgb() so html2canvas can parse them.
+  const applyComputedStylesToClone = (source, clone) => {
+    const computed = window.getComputedStyle(source);
+    const oklchRe = /oklch\([^)]+\)/gi;
+
+    // Properties html2canvas actually uses for rendering
+    const relevantProps = [
+      "display","visibility","opacity","position","top","left","right","bottom",
+      "width","height","minWidth","minHeight","maxWidth","maxHeight",
+      "margin","marginTop","marginRight","marginBottom","marginLeft",
+      "padding","paddingTop","paddingRight","paddingBottom","paddingLeft",
+      "border","borderTop","borderRight","borderBottom","borderLeft",
+      "borderRadius","borderTopLeftRadius","borderTopRightRadius","borderBottomLeftRadius","borderBottomRightRadius",
+      "background","backgroundColor","backgroundImage",
+      "color","font","fontSize","fontWeight","fontFamily","fontStyle",
+      "lineHeight","letterSpacing","textAlign","textDecoration","textTransform","whiteSpace",
+      "flexDirection","flexWrap","justifyContent","alignItems","alignSelf",
+      "gap","rowGap","columnGap","gridTemplateColumns","gridTemplateRows",
+      "boxShadow","overflow","overflowX","overflowY","zIndex","transform",
+      "listStyleType","listStylePosition","verticalAlign","tableLayout","borderCollapse","borderSpacing"
+    ];
+
+    relevantProps.forEach(prop => {
+      try {
+        let val = computed.getPropertyValue(
+          prop.replace(/([A-Z])/g, m => `-${m.toLowerCase()}`)
+        );
+        if (val && oklchRe.test(val)) {
+          // Re-test because RegExp is stateful
+          val = val.replace(/oklch\([^)]+\)/gi, (match) => {
+            // Create a temporary element to let browser convert the color
+            const tmp = document.createElement("div");
+            tmp.style.color = match;
+            document.body.appendChild(tmp);
+            const rgb = window.getComputedStyle(tmp).color;
+            document.body.removeChild(tmp);
+            return rgb || "rgb(0,0,0)";
+          });
+        }
+        if (val) clone.style[prop] = val;
+      } catch (_) {}
+    });
+
+    const sourceChildren = source.children;
+    const cloneChildren = clone.children;
+    for (let i = 0; i < sourceChildren.length; i++) {
+      if (cloneChildren[i]) {
+        applyComputedStylesToClone(sourceChildren[i], cloneChildren[i]);
+      }
+    }
+  };
+
   const handlePrint = () => {
-    window.print();
+    const element = document.getElementById("a4-invoice-sheet");
+    if (!element) return showToast.error("Invoice element not found.");
+
+    const clone = element.cloneNode(true);
+    applyComputedStylesToClone(element, clone);
+
+    const printWin = window.open("", "_blank", "width=900,height=700");
+    printWin.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Invoice ${invoice.invoiceNumber || ""}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: white; padding: 24px; font-family: sans-serif; }
+    @media print {
+      body { padding: 0; }
+      @page { margin: 0.5in; }
+    }
+  </style>
+</head>
+<body>${clone.outerHTML}</body>
+</html>`);
+    printWin.document.close();
+    printWin.onload = () => {
+      printWin.focus();
+      printWin.print();
+      printWin.close();
+    };
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!invoice) return showToast.error("Invoice data is still loading. Please wait.");
+
+    const element = document.getElementById("a4-invoice-sheet");
+    if (!element) return showToast.error("Target invoice sheet element not found.");
+
+    // A4 dimensions in points (same constants as JobCardPDFExport.js)
+    const A4_W_PT   = 595.28;
+    const A4_H_PT   = 841.89;
+    const MARGIN    = 20;
+    const CONTENT_W = A4_W_PT - MARGIN * 2;
+    const CONTENT_H = A4_H_PT - MARGIN * 2;
+
+    try {
+      // Small settle delay for layout reflow (same as JobCardPDFExport.js)
+      await new Promise((r) => setTimeout(r, 300));
+
+      // Use html2canvas-pro directly — it natively supports oklch, no parsing errors
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: "#ffffff",
+        windowWidth: element.scrollWidth,
+        scrollX: 0,
+        scrollY: 0,
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const imgW    = CONTENT_W;
+      const imgH    = (canvas.height * imgW) / canvas.width;
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+
+      if (imgH <= CONTENT_H) {
+        // Single page — fits cleanly
+        pdf.addImage(imgData, "PNG", MARGIN, MARGIN, imgW, imgH);
+      } else {
+        // Multi-page slicing — same logic as JobCardPDFExport.js
+        let remaining = imgH;
+        let srcY      = 0;
+        let firstPage = true;
+
+        while (remaining > 0) {
+          if (!firstPage) {
+            pdf.addPage();
+          }
+          firstPage = false;
+
+          const sliceH        = Math.min(remaining, CONTENT_H);
+          const sliceCanvasH  = (sliceH * canvas.width) / imgW;
+
+          const slice = document.createElement("canvas");
+          slice.width  = canvas.width;
+          slice.height = Math.ceil(sliceCanvasH);
+          slice.getContext("2d").drawImage(
+            canvas,
+            0, srcY, canvas.width, Math.ceil(sliceCanvasH),
+            0, 0,   canvas.width, Math.ceil(sliceCanvasH)
+          );
+
+          pdf.addImage(slice.toDataURL("image/png"), "PNG", MARGIN, MARGIN, imgW, sliceH);
+
+          srcY      += Math.ceil(sliceCanvasH);
+          remaining -= sliceH;
+        }
+      }
+
+      // Page number footer on every page
+      const pageCount = pdf.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setTextColor(150);
+        pdf.text(
+          `${invoice.invoiceNumber}  |  Page ${i} of ${pageCount}`,
+          MARGIN,
+          A4_H_PT - 10
+        );
+      }
+
+      pdf.save(`Invoice_${invoice.invoiceNumber || "Details"}.pdf`);
+
+    } catch (err) {
+      console.error("PDF FAILED", err);
+      showToast.error("Failed to generate PDF.");
+    }
   };
 
   const handlePaymentSubmit = (e) => {
@@ -153,12 +325,20 @@ const InvoiceDetails = () => {
               </button>
             </>
           )}
-          <button 
+          <button
             onClick={handlePrint}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-900 font-bold text-xs shadow-sm active:scale-95 transition-all"
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-semibold text-xs"
+          >
+            <Printer className="h-4.5 w-4.5" />
+            <span>Print Invoice</span>
+          </button>
+
+          <button
+            onClick={handleDownloadPdf}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-semibold text-xs"
           >
             <Download className="h-4.5 w-4.5" />
-            <span>Download Invoice</span>
+            <span>Download PDF</span>
           </button>
         </div>
       </div>
@@ -260,14 +440,14 @@ const InvoiceDetails = () => {
               <h3 className="font-bold text-gray-700 uppercase tracking-wider text-xs">Terms & Conditions</h3>
               <ul className="list-decimal list-inside text-xs text-gray-600 space-y-1">
                 <li>50% of the amount must be paid as Advance</li>
-<li>Balance 50% of the amount must be paid at the time of Delivery</li>
-<li>Lining and Materials Cost will be charged additionally</li>
-<li>Fitting alterations for the delivered order will be charged additionally after 7 working days from the date of delivery</li>
-<li>If you want you change the final outcome once the garment is completely finished, additional charges will be applicable</li>
-<li>Order Delivery timings: 5pm to 8pm only (Monday to Saturday)</li>
-<li>Order processed, cannot be cancelled</li>
-<li>A flat ₹200 cancellation fee will be applied to orders cancelled before processing</li>
-<li>Amount paid will not be refunded under any circumstances</li>
+                <li>Balance 50% of the amount must be paid at the time of Delivery</li>
+                <li>Lining and Materials Cost will be charged additionally</li>
+                <li>Fitting alterations for the delivered order will be charged additionally after 7 working days from the date of delivery</li>
+                <li>If you want you change the final outcome once the garment is completely finished, additional charges will be applicable</li>
+                <li>Order Delivery timings: 5pm to 8pm only (Monday to Saturday)</li>
+                <li>Order processed, cannot be cancelled</li>
+                <li>A flat ₹200 cancellation fee will be applied to orders cancelled before processing</li>
+                <li>Amount paid will not be refunded under any circumstances</li>
               </ul>
             </div>
           </div>
@@ -343,25 +523,7 @@ const InvoiceDetails = () => {
 
       </div>
 
-      {/* Styles for print output */}
-      <style>{`
-        @media print {
-          body {
-            background: white !important;
-            color: black !important;
-          }
-          .print\\:hidden {
-            display: none !important;
-          }
-          #a4-invoice-sheet {
-            border: none !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            width: 100% !important;
-          }
-        }
-      `}</style>
+      {/* Print styles no longer needed - handled by dedicated print window */}
 
       {/* Collect Payment Modal Popup */}
       {showPaymentModal && (
