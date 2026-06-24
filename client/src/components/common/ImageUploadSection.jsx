@@ -227,7 +227,8 @@ const ImageUploadSection = ({
                 alt={`${type} ${index + 1}`}
                 className="w-full h-full object-cover rounded-lg border border-slate-200"
               />
-              <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Action buttons: always visible on mobile (sm:opacity-0 sm:group-hover:opacity-100 for desktop) */}
+              <div className="absolute top-1 right-1 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button
                   type="button"
                   onClick={() => handleRemove(index, img)}
@@ -259,7 +260,8 @@ const ImageUploadSection = ({
                   <Camera size={12} />
                 </button>
               </div>
-              {img.file?.source === 'webcam' && (
+              {/* Webcam badge - shown for newly captured or previously webcam-sourced images */}
+              {(img.file?.source === 'webcam' || img.source === 'webcam') && (
                  <div className="absolute bottom-1 left-1 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] text-white flex items-center gap-1">
                    <Camera size={8} /> Captured
                  </div>

@@ -434,30 +434,13 @@ export default function GarmentForm({
 
   // ==================== IMAGE HANDLERS ====================
   const handleImagesChange = (newImages, type) => {
+    // Update previewImages — this is the single source of truth for images.
+    // The submit code (lines 1076-1113) reads directly from previewImages,
+    // so we do NOT need to sync into formData here. Doing so caused cascading
+    // re-renders that could interfere with the preview state update.
     setPreviewImages((prev) => ({
       ...prev,
       [type]: newImages,
-    }));
-
-    let imageField;
-    switch (type) {
-      case "studio":
-        imageField = "studioImages";
-        break;
-      case "customerProvided":
-        imageField = "customerProvidedImages";
-        break;
-      case "customerCloth":
-        imageField = "customerClothImages";
-        break;
-      default:
-        return;
-    }
-
-    const files = newImages.map(img => img.file).filter(Boolean);
-    setFormData((prev) => ({
-      ...prev,
-      [imageField]: files,
     }));
   };
 
