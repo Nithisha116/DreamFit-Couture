@@ -2144,8 +2144,14 @@ import r2Service from "../services/r2.service.js";
 import mongoose from "mongoose";
 import { createNotification } from './notification.controller.js';
 import { updateOrderPaymentSummary } from "./order.controller.js";
+import { parseWorkflowStagesInput } from "../utils/workflowStages.util.js";
 
-// ===== CREATE GARMENT =====
+function filterImagesByKeepList(images, keepList) {
+  const list = Array.isArray(images) ? images : [];
+  if (!Array.isArray(keepList) || keepList.length === 0) return [];
+  const keepSet = new Set(keepList);
+  return list.filter((img) => keepSet.has(img.key) || keepSet.has(img.url));
+}
 export const createGarment = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -2482,7 +2488,9 @@ export const updateGarment = async (req, res) => {
       fabricPrice,
       fabricMeters,
       fabricNotes,
-      fabricSufficiency
+      fabricSufficiency,
+      workflowStages: workflowStagesRaw,
+      stageKeys: stageKeysRaw,
     } = req.body || {};
 
     // ==========================================
@@ -2533,6 +2541,29 @@ export const updateGarment = async (req, res) => {
       }
     }
 
+    const workflowUpdateRequested =
+      workflowStagesRaw !== undefined || stageKeysRaw !== undefined;
+    let parsedWorkflow = null;
+    if (workflowUpdateRequested) {
+      let stagesInput = workflowStagesRaw;
+      let keysInput = stageKeysRaw;
+      if (typeof stagesInput === "string") {
+        try { stagesInput = JSON.parse(stagesInput); } catch { /* keep string */ }
+      }
+      if (typeof keysInput === "string") {
+        try { keysInput = JSON.parse(keysInput); } catch { /* keep string */ }
+      }
+      parsedWorkflow = parseWorkflowStagesInput(
+        Array.isArray(keysInput) && keysInput.length ? keysInput : stagesInput,
+      );
+      if (parsedWorkflow.stageKeys.length) {
+        garment.stageKeys = parsedWorkflow.stageKeys;
+        garment.workflowStages = parsedWorkflow.workflowStages;
+        garment.markModified("workflowStages");
+        garment.markModified("stageKeys");
+      }
+    }
+
     // Update basic fields
     if (name) garment.name = name;
     if (category) garment.category = category;
@@ -2562,7 +2593,19 @@ export const updateGarment = async (req, res) => {
     if (fabricNotes !== undefined) garment.fabricNotes = fabricNotes;
     if (fabricSufficiency !== undefined) garment.fabricSufficiency = fabricSufficiency;
 
-    // Cloth keys were already handled in the new block
+    // Apply image retention — replace arrays when client sends existing*Images
+    if (hasRefUpdate) {
+      garment.referenceImages = filterImagesByKeepList(garment.referenceImages, keepReferenceKeys);
+    }
+    if (hasCustUpdate) {
+      garment.customerImages = filterImagesByKeepList(garment.customerImages, keepCustomerKeys);
+    }
+    if (hasClothUpdate) {
+      garment.customerClothImages = filterImagesByKeepList(
+        garment.customerClothImages,
+        keepClothKeys,
+      );
+    }
 
     // ✅ Concurrent Upload to R2
     const [refResults, custResults, clothResults] = await Promise.all([
@@ -2588,6 +2631,19 @@ export const updateGarment = async (req, res) => {
     }
 
     await garment.save();
+
+    if (workflowUpdateRequested && parsedWorkflow?.stageKeys?.length && garment.workId) {
+      const work = await Work.findById(garment.workId);
+      if (work) {
+        work.stageKeys = parsedWorkflow.stageKeys;
+        work.workflowStages = parsedWorkflow.workflowStages;
+        if (!parsedWorkflow.stageKeys.includes(work.currentStage)) {
+          work.currentStage = parsedWorkflow.stageKeys[0];
+        }
+        await work.save();
+      }
+    }
+
     console.log("✅ Garment updated successfully");
     console.log("📸 Images after update:", {
       reference: garment.referenceImages.length,
