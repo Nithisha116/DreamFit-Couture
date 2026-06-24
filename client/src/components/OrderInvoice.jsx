@@ -777,6 +777,33 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                       <div style={{ fontSize: "12px", color: "#64748b" }}>
                         {g.fabric || g.category?.name || "—"}
                       </div>
+                      {g.fabricSource === "shop" && (Number(g.fabricPrice) > 0 || g.selectedFabric) && (
+                        <div style={{
+                          marginTop: "8px",
+                          padding: "8px 10px",
+                          backgroundColor: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "6px",
+                          fontSize: "11px",
+                          color: "#475569",
+                          lineHeight: "1.4",
+                          textAlign: "left"
+                        }}>
+                          <div style={{ fontWeight: "700", color: "#be185d", marginBottom: "3px", fontSize: "11px" }}>Fabric Details</div>
+                          {g.selectedFabric?.name && (
+                            <div><strong>Fabric Name:</strong> {g.selectedFabric.name}</div>
+                          )}
+                          {g.selectedFabric?.color && (
+                            <div><strong>Fabric Type:</strong> {g.selectedFabric.color}</div>
+                          )}
+                          {g.fabricMeters && (
+                            <div><strong>Fabric Quantity:</strong> {g.fabricMeters} m</div>
+                          )}
+                          {Number(g.fabricPrice) > 0 && (
+                            <div><strong>Fabric Cost:</strong> ₹{Number(g.fabricPrice).toLocaleString('en-IN')}</div>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td
                       style={{

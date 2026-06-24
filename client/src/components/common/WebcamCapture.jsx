@@ -20,10 +20,17 @@ const WebcamCapture = ({ isOpen, onClose, onCapture, captureType = 'image' }) =>
   const [capturedBase64, setCapturedBase64] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [quality, setQuality] = useState('Medium');
+  const [webcamKey, setWebcamKey] = useState(0); // forces true Webcam remount
 
   useEffect(() => {
     if (isOpen) {
       startCamera();
+      setCapturedBase64(null);
+      // Increment key so the <Webcam> component truly remounts every time the dialog opens,
+      // ensuring the camera stream is restarted from scratch.
+      setWebcamKey(prev => prev + 1);
+    } else {
+      // Clear captured image when modal closes so stale frames don't appear on next open
       setCapturedBase64(null);
     }
   }, [isOpen, startCamera]);
@@ -37,6 +44,9 @@ const WebcamCapture = ({ isOpen, onClose, onCapture, captureType = 'image' }) =>
 
   const retake = () => {
     setCapturedBase64(null);
+    // Reset camera status and force Webcam to remount so the live feed restarts cleanly
+    startCamera();
+    setWebcamKey(prev => prev + 1);
   };
 
   const handleSave = async () => {
@@ -134,6 +144,7 @@ const WebcamCapture = ({ isOpen, onClose, onCapture, captureType = 'image' }) =>
         
         {!capturedBase64 ? (
           <Webcam
+            key={webcamKey}
             audio={false}
             ref={webcamRef}
             screenshotFormat="image/jpeg"

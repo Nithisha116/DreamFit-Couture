@@ -7,7 +7,17 @@ export const findById = async (id, session = null) => {
   return Invoice.findOne({ _id: id, isDeleted: false })
     .populate({
       path: "order",
-      populate: { path: "customer" }
+      populate: [
+        { path: "customer" },
+        {
+          path: "garments",
+          populate: [
+            { path: "category", select: "name" },
+            { path: "item", select: "name" },
+            { path: "selectedFabric" }
+          ]
+        }
+      ]
     })
     .populate("customer")
     .populate("generatedBy", "name email role")

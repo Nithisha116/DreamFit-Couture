@@ -787,6 +787,39 @@ export default function GarmentDetails() {
               )}
             </div>
 
+            {/* Fabric Details */}
+            {currentGarment.fabricSource === "shop" && (Number(currentGarment.fabricPrice) > 0 || currentGarment.selectedFabric) && (
+              <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5 lg:p-6">
+                <h2 className="text-base sm:text-lg font-black text-slate-800 mb-3 sm:mb-4">Fabric Details</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  {currentGarment.selectedFabric?.name && (
+                    <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
+                      <p className="text-[10px] sm:text-xs text-slate-400 mb-1">Fabric Name</p>
+                      <p className="font-bold text-slate-800 text-sm sm:text-base break-words">{currentGarment.selectedFabric.name}</p>
+                    </div>
+                  )}
+                  {currentGarment.selectedFabric?.color && (
+                    <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
+                      <p className="text-[10px] sm:text-xs text-slate-400 mb-1">Fabric Type / Color</p>
+                      <p className="font-bold text-slate-800 text-sm sm:text-base break-words">{currentGarment.selectedFabric.color}</p>
+                    </div>
+                  )}
+                  {currentGarment.fabricMeters && (
+                    <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
+                      <p className="text-[10px] sm:text-xs text-slate-400 mb-1">Fabric Quantity</p>
+                      <p className="font-bold text-slate-800 text-sm sm:text-base">{currentGarment.fabricMeters} m</p>
+                    </div>
+                  )}
+                  {Number(currentGarment.fabricPrice) > 0 && (
+                    <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
+                      <p className="text-[10px] sm:text-xs text-slate-400 mb-1">Fabric Cost</p>
+                      <p className="font-bold text-pink-600 text-sm sm:text-base">₹{Number(currentGarment.fabricPrice).toLocaleString('en-IN')}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Measurements Section */}
             {currentGarment.measurements?.length > 0 && (
               <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5 lg:p-6">

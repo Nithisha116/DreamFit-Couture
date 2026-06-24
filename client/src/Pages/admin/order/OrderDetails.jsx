@@ -2070,8 +2070,26 @@ export default function OrderDetails() {
 
   // Calculate estimated range and finalized billing amount from garments
   const estimatedRange = useMemo(() => {
-    const min = garments.reduce((sum, g) => sum + (Number(g.priceRange?.min) || 0), 0);
-    const max = garments.reduce((sum, g) => sum + (Number(g.priceRange?.max) || 0), 0);
+    const min = garments.reduce((sum, g) => {
+      if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
+        return sum + Number(g.finalGarmentMinAmount);
+      }
+      const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+      const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
+      const fabric = Number(g.fabricPrice || 0);
+      const additional = Number(g.additionalCharges || 0);
+      return sum + tailoringMin + fabric + additional;
+    }, 0);
+    const max = garments.reduce((sum, g) => {
+      if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
+        return sum + Number(g.finalGarmentMaxAmount);
+      }
+      const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+      const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
+      const fabric = Number(g.fabricPrice || 0);
+      const additional = Number(g.additionalCharges || 0);
+      return sum + tailoringMax + fabric + additional;
+    }, 0);
     return { min, max };
   }, [garments]);
 
@@ -3199,6 +3217,38 @@ const handleSavePayment = async (paymentData) => {
                                 </p>
                               </div>
                             </div>
+
+                            {garment.fabricSource === "shop" && (Number(garment.fabricPrice) > 0 || garment.selectedFabric) && (
+                              <div className="mt-2 p-2 bg-pink-50/50 border border-pink-100 rounded-lg text-xs text-slate-600 space-y-1">
+                                <p className="font-extrabold text-[10px] text-pink-700 tracking-wider uppercase mb-0.5">Fabric Information</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  {garment.selectedFabric?.name && (
+                                    <div>
+                                      <span className="text-[10px] text-slate-400 block">Name</span>
+                                      <span className="font-semibold text-slate-700">{garment.selectedFabric.name}</span>
+                                    </div>
+                                  )}
+                                  {garment.selectedFabric?.color && (
+                                    <div>
+                                      <span className="text-[10px] text-slate-400 block">Type</span>
+                                      <span className="font-semibold text-slate-700">{garment.selectedFabric.color}</span>
+                                    </div>
+                                  )}
+                                  {garment.fabricMeters && (
+                                    <div>
+                                      <span className="text-[10px] text-slate-400 block">Quantity</span>
+                                      <span className="font-semibold text-slate-700">{garment.fabricMeters} m</span>
+                                    </div>
+                                  )}
+                                  {Number(garment.fabricPrice) > 0 && (
+                                    <div>
+                                      <span className="text-[10px] text-slate-400 block">Cost</span>
+                                      <span className="font-semibold text-pink-700">₹{Number(garment.fabricPrice).toLocaleString('en-IN')}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
 
                             {totalImages > 0 && (
                               <div className="flex flex-wrap items-center gap-2 mt-2">

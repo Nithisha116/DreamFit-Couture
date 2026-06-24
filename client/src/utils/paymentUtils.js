@@ -26,8 +26,26 @@ export function calculatePaymentSummary(order, garments = [], payments = []) {
   
   if (Array.isArray(garments) && garments.length > 0) {
     const activeGarments = garments.filter(g => g && g.isActive !== false);
-    totalAmountMin = activeGarments.reduce((sum, g) => sum + (Number(g.minPrice || g.priceRange?.min) || 0), 0);
-    totalAmountMax = activeGarments.reduce((sum, g) => sum + (Number(g.maxPrice || g.priceRange?.max) || 0), 0);
+    totalAmountMin = activeGarments.reduce((sum, g) => {
+      if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
+        return sum + Number(g.finalGarmentMinAmount);
+      }
+      const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+      const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
+      const fabric = Number(g.fabricPrice || 0);
+      const additional = Number(g.additionalCharges || 0);
+      return sum + tailoringMin + fabric + additional;
+    }, 0);
+    totalAmountMax = activeGarments.reduce((sum, g) => {
+      if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
+        return sum + Number(g.finalGarmentMaxAmount);
+      }
+      const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+      const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
+      const fabric = Number(g.fabricPrice || 0);
+      const additional = Number(g.additionalCharges || 0);
+      return sum + tailoringMax + fabric + additional;
+    }, 0);
   } else if (order.minPrice !== undefined && order.minPrice !== null && order.minPrice !== 0) {
     totalAmountMin = Number(order.minPrice) || 0;
     totalAmountMax = Number(order.maxPrice) || 0;

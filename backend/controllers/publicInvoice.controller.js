@@ -21,6 +21,7 @@ export const getPublicInvoiceByOrderId = async (req, res) => {
         populate: [
           { path: 'category', select: 'name categoryName' },
           { path: 'item', select: 'name itemName' },
+          { path: 'selectedFabric' },
         ],
       });
 
@@ -39,7 +40,8 @@ export const getPublicInvoiceByOrderId = async (req, res) => {
     if (!garments.length) {
       garments = await Garment.find({ order: order._id, isActive: { $ne: false } })
         .populate('category', 'name categoryName')
-        .populate('item', 'name itemName');
+        .populate('item', 'name itemName')
+        .populate('selectedFabric');
     }
 
     const payments = await Payment.find({ order: order._id, isDeleted: false })

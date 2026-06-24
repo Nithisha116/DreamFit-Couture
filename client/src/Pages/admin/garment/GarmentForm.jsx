@@ -30,6 +30,7 @@ import {
   fetchAllDeliveryDates, // 🔥 CHANGED
   selectAllDeliveryDates, // 🔥 CHANGED
   selectCalendarLoading, // 🔥 CHANGED
+  deleteGarmentImage
 } from "../../../features/garment/garmentSlice";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -433,31 +434,85 @@ export default function GarmentForm({
 
   // ==================== IMAGE HANDLERS ====================
   const handleImagesChange = (newImages, type) => {
+    // Update previewImages — this is the single source of truth for images.
+    // The submit code (lines 1076-1113) reads directly from previewImages,
+    // so we do NOT need to sync into formData here. Doing so caused cascading
+    // re-renders that could interfere with the preview state update.
     setPreviewImages((prev) => ({
       ...prev,
       [type]: newImages,
     }));
+  };
 
-    let imageField;
-    switch (type) {
-      case "studio":
-        imageField = "studioImages";
-        break;
-      case "customerProvided":
-        imageField = "customerProvidedImages";
-        break;
-      case "customerCloth":
-        imageField = "customerClothImages";
-        break;
-      default:
+  const handleRemoveExisting = async (index, img, type, isReplacement = false) => {
+    // If it's a saved garment, we should delete it from the server immediately
+    if (editingGarment && editingGarment._id && img.key) {
+      const toastId = showToast.loading("Deleting image from storage...");
+      try {
+        let imageType;
+        if (type === "studio") imageType = "reference";
+        else if (type === "customerProvided") imageType = "customer";
+        else if (type === "customerCloth") imageType = "customerCloth";
+
+        await dispatch(deleteGarmentImage({ 
+          id: editingGarment._id, 
+          imageKey: img.key, 
+          imageType 
+        })).unwrap();
+        
+        showToast.dismiss(toastId);
+        showToast.success("Image deleted successfully");
+      } catch (err) {
+        showToast.dismiss(toastId);
+        showToast.error(err || "Failed to delete image");
         return;
+      }
     }
 
-    const files = newImages.map(img => img.file).filter(Boolean);
-    setFormData((prev) => ({
-      ...prev,
-      [imageField]: files,
-    }));
+    if (img.preview && img.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(img.preview);
+    }
+
+    if (!isReplacement) {
+      setPreviewImages((prev) => {
+        const newImages = [...prev[type]];
+        newImages.splice(index, 1);
+        return {
+          ...prev,
+          [type]: newImages,
+        };
+      });
+
+      let imageField;
+      switch (type) {
+        case "studio":
+          imageField = "studioImages";
+          break;
+        case "customerProvided":
+          imageField = "customerProvidedImages";
+          break;
+        case "customerCloth":
+          imageField = "customerClothImages";
+          break;
+        default:
+          return;
+      }
+
+      setFormData((prev) => {
+        const currentList = prev[imageField] || [];
+        const updatedList = currentList.filter((item) => {
+          if (img.file) {
+            return item !== img.file;
+          } else {
+            return (item.key !== img.key && item.url !== img.url && item !== img.url);
+          }
+        });
+        return {
+          ...prev,
+          [imageField]: updatedList,
+        };
+      });
+    }
   };
 
   // ==================== MEASUREMENT HANDLERS ====================
@@ -2063,6 +2118,7 @@ const renderDayContents = useCallback(
                 type="studio"
                 images={previewImages.studio}
                 onImagesChange={(newImages) => handleImagesChange(newImages, 'studio')}
+                onRemoveExisting={(index, img, isReplacement = false) => handleRemoveExisting(index, img, 'studio', isReplacement)}
               />
 
               <ImageUploadSection
@@ -2073,6 +2129,7 @@ const renderDayContents = useCallback(
                 type="customerProvided"
                 images={previewImages.customerProvided}
                 onImagesChange={(newImages) => handleImagesChange(newImages, 'customerProvided')}
+                onRemoveExisting={(index, img, isReplacement = false) => handleRemoveExisting(index, img, 'customerProvided', isReplacement)}
               />
 
               <ImageUploadSection
@@ -2083,6 +2140,7 @@ const renderDayContents = useCallback(
                 type="customerCloth"
                 images={previewImages.customerCloth}
                 onImagesChange={(newImages) => handleImagesChange(newImages, 'customerCloth')}
+                onRemoveExisting={(index, img, isReplacement = false) => handleRemoveExisting(index, img, 'customerCloth', isReplacement)}
               />
             </div>
 
