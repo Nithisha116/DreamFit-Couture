@@ -1159,6 +1159,51 @@ const GarmentPDF = forwardRef(({ garment, order }, ref) => {
               </p>
             </div>
           </div>
+          {garment?.fabricSource === "shop" && (Number(garment?.fabricPrice) > 0 || garment?.selectedFabric) && (
+            <div
+              style={{
+                backgroundColor: "#fdf2f8",
+                padding: "15px",
+                borderRadius: "10px",
+                border: "1px solid #fbcfe8",
+                marginBottom: "30px",
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: "14px",
+                  color: "#be185d",
+                  margin: "0 0 10px 0",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                }}
+              >
+                Fabric Details
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                {garment?.selectedFabric?.name && (
+                  <p style={{ margin: "5px 0", fontSize: "14px" }}>
+                    <b>Fabric Name:</b> {garment.selectedFabric.name}
+                  </p>
+                )}
+                {garment?.selectedFabric?.color && (
+                  <p style={{ margin: "5px 0", fontSize: "14px" }}>
+                    <b>Fabric Type / Color:</b> {garment.selectedFabric.color}
+                  </p>
+                )}
+                {garment?.fabricMeters && (
+                  <p style={{ margin: "5px 0", fontSize: "14px" }}>
+                    <b>Fabric Quantity:</b> {garment.fabricMeters} m
+                  </p>
+                )}
+                {Number(garment?.fabricPrice) > 0 && (
+                  <p style={{ margin: "5px 0", fontSize: "14px" }}>
+                    <b>Fabric Cost:</b> ₹{Number(garment.fabricPrice).toLocaleString('en-IN')}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Measurements Section */}

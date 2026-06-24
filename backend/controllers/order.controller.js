@@ -519,8 +519,25 @@ export const createOrder = async (req, res) => {
     
     if (garments && garments.length > 0) {
       garments.forEach((g) => {
-        totalMin += Number(g.minPrice || g.priceRange?.min) || 0;
-        totalMax += Number(g.maxPrice || g.priceRange?.max) || 0;
+        if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
+          totalMin += Number(g.finalGarmentMinAmount);
+        } else {
+          const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+          const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
+          const fabric = Number(g.fabricPrice || 0);
+          const additional = Number(g.additionalCharges || 0);
+          totalMin += tailoringMin + fabric + additional;
+        }
+
+        if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
+          totalMax += Number(g.finalGarmentMaxAmount);
+        } else {
+          const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+          const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
+          const fabric = Number(g.fabricPrice || 0);
+          const additional = Number(g.additionalCharges || 0);
+          totalMax += tailoringMax + fabric + additional;
+        }
       });
     } else if (priceSummary) {
       totalMin = Number(priceSummary.totalMin) || 0;
@@ -649,6 +666,7 @@ export const createOrder = async (req, res) => {
             fabricMeters: g.fabricMeters || '',
             fabricNotes: g.fabricNotes || '',
             fabricSufficiency: g.fabricSufficiency || 'To Be Verified',
+            selectedFabric: g.selectedFabric && g.selectedFabric !== '' ? g.selectedFabric : null,
             referenceImages: uploadedImages.referenceImages,
             customerImages: uploadedImages.customerImages,
             customerClothImages: uploadedImages.customerClothImages,
@@ -794,7 +812,8 @@ export const getOrderById = async (req, res) => {
         populate: [
           { path: "category", select: "name" },
           { path: "item", select: "name" },
-          { path: "workId" }
+          { path: "workId" },
+          { path: "selectedFabric" }
         ]
       })
       .populate("createdBy", "name");
@@ -1013,8 +1032,7 @@ export const addPaymentToOrder = async (req, res) => {
     const newTotalPaid = totalPaidBefore + Number(paymentData.amount);
     
     const garments = await Garment.find({ order: order._id, isActive: true });
-    const totalMin = garments.reduce((sum, g) => sum + (Number(g.minPrice || g.priceRange?.min) || 0), 0);
-    const totalMax = garments.reduce((sum, g) => sum + (Number(g.maxPrice || g.priceRange?.max) || 0), 0);
+    const { totalMin, totalMax } = calculateRangeTotals(garments, newTotalPaid);
     
     const balanceMinAfterPayment = newTotalPaid >= totalMin ? 0 : Math.max(0, totalMin - newTotalPaid);
     const balanceMaxAfterPayment = newTotalPaid >= totalMin ? 0 : Math.max(0, totalMax - newTotalPaid);

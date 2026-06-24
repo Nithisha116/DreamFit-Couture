@@ -7092,6 +7092,9 @@ export const getWorkById = async (req, res) => {
           {
             path: 'item',            // ✅ Populate item
             select: 'name itemName priceRange'
+          },
+          {
+            path: 'selectedFabric'   // ✅ Populate fabric
           }
         ]
       })

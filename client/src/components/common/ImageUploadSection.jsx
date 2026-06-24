@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Camera, Trash2 } from 'lucide-react';
+import { Upload, Camera, Trash2, RefreshCw } from 'lucide-react';
 import WebcamCapture from './WebcamCapture';
 import showToast from '../../utils/toast';
 
@@ -15,6 +15,7 @@ const ImageUploadSection = ({
   maxSizeMB = 5
 }) => {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [replacingIndex, setReplacingIndex] = useState(null);
   const fileInputRef = useRef(null);
 
   const themeClasses = {
@@ -69,7 +70,23 @@ const ImageUploadSection = ({
     });
 
     if (validFiles.length > 0) {
-      onImagesChange([...images, ...validFiles]);
+      if (replacingIndex !== null) {
+        const imgToReplace = images[replacingIndex];
+        if (imgToReplace.isExisting && onRemoveExisting) {
+          onRemoveExisting(replacingIndex, imgToReplace, true);
+        } else {
+          if (imgToReplace.preview && imgToReplace.preview.startsWith('blob:')) {
+            URL.revokeObjectURL(imgToReplace.preview);
+          }
+        }
+        const newImages = [...images];
+        newImages[replacingIndex] = validFiles[0];
+        onImagesChange(newImages);
+        setReplacingIndex(null);
+        showToast.success("Image replaced successfully!");
+      } else {
+        onImagesChange([...images, ...validFiles]);
+      }
     }
   };
 
@@ -90,14 +107,31 @@ const ImageUploadSection = ({
         preview: URL.createObjectURL(file),
         isExisting: false
       };
-      onImagesChange([...images, newImage]);
-      showToast.success("Photo captured successfully!");
+      
+      if (replacingIndex !== null) {
+        const imgToReplace = images[replacingIndex];
+        if (imgToReplace.isExisting && onRemoveExisting) {
+          onRemoveExisting(replacingIndex, imgToReplace, true);
+        } else {
+          if (imgToReplace.preview && imgToReplace.preview.startsWith('blob:')) {
+            URL.revokeObjectURL(imgToReplace.preview);
+          }
+        }
+        const newImages = [...images];
+        newImages[replacingIndex] = newImage;
+        onImagesChange(newImages);
+        setReplacingIndex(null);
+        showToast.success("Image replaced successfully!");
+      } else {
+        onImagesChange([...images, newImage]);
+        showToast.success("Photo captured successfully!");
+      }
     }
   };
 
   const handleRemove = (index, img) => {
     if (img.isExisting && onRemoveExisting) {
-      onRemoveExisting(index, img);
+      onRemoveExisting(index, img, false);
     } else {
       // Revoke object URL to free memory
       if (img.preview && img.preview.startsWith('blob:')) {
@@ -153,7 +187,10 @@ const ImageUploadSection = ({
           <div className="col-span-2 grid grid-cols-2 gap-2 mb-2 sm:col-span-full sm:mb-4">
              <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => {
+                  setReplacingIndex(null);
+                  fileInputRef.current?.click();
+                }}
                 className={`flex flex-col items-center justify-center py-4 rounded-xl border-2 border-slate-200 border-dashed hover:border-slate-300 bg-slate-50 transition-colors`}
               >
                 <Upload size={20} className="text-slate-400 mb-2" />
@@ -162,7 +199,10 @@ const ImageUploadSection = ({
 
              <button
                 type="button"
-                onClick={() => setIsCameraOpen(true)}
+                onClick={() => {
+                  setReplacingIndex(null);
+                  setIsCameraOpen(true);
+                }}
                 className={`flex flex-col items-center justify-center py-4 rounded-xl border-2 border-dashed ${currentTheme.border} ${currentTheme.bg} ${currentTheme.hover} transition-colors`}
               >
                 <Camera size={20} className={`${currentTheme.text} mb-2`} />
@@ -187,13 +227,38 @@ const ImageUploadSection = ({
                 alt={`${type} ${index + 1}`}
                 className="w-full h-full object-cover rounded-lg border border-slate-200"
               />
-              <button
-                type="button"
-                onClick={() => handleRemove(index, img)}
-                className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-lg hover:bg-red-600"
-              >
-                <Trash2 size={12} />
-              </button>
+              <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  type="button"
+                  onClick={() => handleRemove(index, img)}
+                  className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors"
+                  title="Delete Image"
+                >
+                  <Trash2 size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplacingIndex(index);
+                    fileInputRef.current?.click();
+                  }}
+                  className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 transition-colors"
+                  title="Replace with File"
+                >
+                  <Upload size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplacingIndex(index);
+                    setIsCameraOpen(true);
+                  }}
+                  className="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-green-600 transition-colors"
+                  title="Replace with Photo"
+                >
+                  <Camera size={12} />
+                </button>
+              </div>
               {img.file?.source === 'webcam' && (
                  <div className="absolute bottom-1 left-1 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded text-[8px] text-white flex items-center gap-1">
                    <Camera size={8} /> Captured
@@ -215,7 +280,10 @@ const ImageUploadSection = ({
 
       <WebcamCapture 
         isOpen={isCameraOpen}
-        onClose={() => setIsCameraOpen(false)}
+        onClose={() => {
+          setIsCameraOpen(false);
+          setReplacingIndex(null);
+        }}
         onCapture={handleWebcamCapture}
         captureType={type}
       />

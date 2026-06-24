@@ -4293,8 +4293,26 @@ export default function NewOrder() {
 
   // Calculate estimated range reference
   const estimatedRange = useMemo(() => {
-    const min = garments.reduce((sum, g) => sum + (Number(g.priceRange?.min) || 0), 0);
-    const max = garments.reduce((sum, g) => sum + (Number(g.priceRange?.max) || 0), 0);
+    const min = garments.reduce((sum, g) => {
+      if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
+        return sum + Number(g.finalGarmentMinAmount);
+      }
+      const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+      const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
+      const fabric = Number(g.fabricPrice || 0);
+      const additional = Number(g.additionalCharges || 0);
+      return sum + tailoringMin + fabric + additional;
+    }, 0);
+    const max = garments.reduce((sum, g) => {
+      if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
+        return sum + Number(g.finalGarmentMaxAmount);
+      }
+      const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+      const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
+      const fabric = Number(g.fabricPrice || 0);
+      const additional = Number(g.additionalCharges || 0);
+      return sum + tailoringMax + fabric + additional;
+    }, 0);
     return { min, max };
   }, [garments]);
 

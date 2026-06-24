@@ -2169,6 +2169,12 @@ export const createGarment = async (req, res) => {
       priceRange,
       finalizedPrice,
       createdBy,
+      fabricSource,
+      fabricPrice,
+      fabricMeters,
+      fabricNotes,
+      fabricSufficiency,
+      selectedFabric
     } = req.body;
 
     console.log("📝 Creating garment with data:", {
@@ -2278,6 +2284,12 @@ export const createGarment = async (req, res) => {
       priority: priority || "normal",
       priceRange: parsedPriceRange || { min: 0, max: 0 },
       finalizedPrice: finalizedPrice !== undefined && finalizedPrice !== null && finalizedPrice !== "" ? Number(finalizedPrice) : 0,
+      fabricSource: fabricSource || "customer",
+      fabricPrice: Number(fabricPrice) || 0,
+      fabricMeters: fabricMeters || "",
+      fabricNotes: fabricNotes || "",
+      fabricSufficiency: fabricSufficiency || "To Be Verified",
+      selectedFabric: selectedFabric && selectedFabric !== "" ? selectedFabric : null,
     });
 
     console.log("💾 Saving garment with images:", {
@@ -2394,6 +2406,7 @@ export const getGarmentsByOrder = async (req, res) => {
       .populate("item", "name")
       .populate("measurementTemplate", "name")
       .populate("workId")
+      .populate("selectedFabric")
       .sort({ createdAt: -1 });
 
     console.log(`📦 Found ${garments.length} garments for order ${orderId}`);
@@ -2420,6 +2433,7 @@ export const getGarmentById = async (req, res) => {
       .populate("item", "name")
       .populate("measurementTemplate", "name")
       .populate("workId")
+      .populate("selectedFabric")
       .populate({
         path: "order",
         select: "orderId customer",
@@ -2482,7 +2496,8 @@ export const updateGarment = async (req, res) => {
       fabricPrice,
       fabricMeters,
       fabricNotes,
-      fabricSufficiency
+      fabricSufficiency,
+      selectedFabric
     } = req.body || {};
 
     // ==========================================
@@ -2561,8 +2576,65 @@ export const updateGarment = async (req, res) => {
     if (fabricMeters !== undefined) garment.fabricMeters = fabricMeters;
     if (fabricNotes !== undefined) garment.fabricNotes = fabricNotes;
     if (fabricSufficiency !== undefined) garment.fabricSufficiency = fabricSufficiency;
+    if (selectedFabric !== undefined) garment.selectedFabric = (selectedFabric === "" || selectedFabric === null || selectedFabric === "null") ? null : selectedFabric;
 
-    // Cloth keys were already handled in the new block
+    // Filter out and delete removed files from storage/database
+    if (hasRefUpdate) {
+      const deletedImages = garment.referenceImages.filter(img => 
+        !keepReferenceKeys.includes(img.key) && !keepReferenceKeys.includes(img.url)
+      );
+      for (const img of deletedImages) {
+        if (img.key) {
+          try {
+            await r2Service.deleteFile(img.key);
+            console.log("🗑️ Deleted reference image from R2:", img.key);
+          } catch (err) {
+            console.error("Failed to delete reference file from R2:", img.key, err);
+          }
+        }
+      }
+      garment.referenceImages = garment.referenceImages.filter(img => 
+        keepReferenceKeys.includes(img.key) || keepReferenceKeys.includes(img.url)
+      );
+    }
+
+    if (hasCustUpdate) {
+      const deletedImages = garment.customerImages.filter(img => 
+        !keepCustomerKeys.includes(img.key) && !keepCustomerKeys.includes(img.url)
+      );
+      for (const img of deletedImages) {
+        if (img.key) {
+          try {
+            await r2Service.deleteFile(img.key);
+            console.log("🗑️ Deleted customer image from R2:", img.key);
+          } catch (err) {
+            console.error("Failed to delete customer file from R2:", img.key, err);
+          }
+        }
+      }
+      garment.customerImages = garment.customerImages.filter(img => 
+        keepCustomerKeys.includes(img.key) || keepCustomerKeys.includes(img.url)
+      );
+    }
+
+    if (hasClothUpdate) {
+      const deletedImages = (garment.customerClothImages || []).filter(img => 
+        !keepClothKeys.includes(img.key) && !keepClothKeys.includes(img.url)
+      );
+      for (const img of deletedImages) {
+        if (img.key) {
+          try {
+            await r2Service.deleteFile(img.key);
+            console.log("🗑️ Deleted cloth image from R2:", img.key);
+          } catch (err) {
+            console.error("Failed to delete cloth file from R2:", img.key, err);
+          }
+        }
+      }
+      garment.customerClothImages = (garment.customerClothImages || []).filter(img => 
+        keepClothKeys.includes(img.key) || keepClothKeys.includes(img.url)
+      );
+    }
 
     // ✅ Concurrent Upload to R2
     const [refResults, custResults, clothResults] = await Promise.all([
