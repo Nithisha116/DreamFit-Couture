@@ -23,9 +23,31 @@ export default function TasksPage() {
 
   const { jobs, refresh } = useWorkflowJobs();
 
-  const [view, setView] = useState(location.state?.view || "unassigned");
-  const [search, setSearch] = useState("");
+  const [view, setView] = useState(
+    sessionStorage.getItem("tasksView") ||
+    location.state?.view ||
+    "unassigned"
+  );
+
+  const [searches, setSearches] = useState({
+    unassigned: sessionStorage.getItem("tasksSearch_unassigned") || "",
+    assigned:   sessionStorage.getItem("tasksSearch_assigned")   || "",
+  });
+
+  const search = searches[view] || "";
   const [assignJob, setAssignJob] = useState(null);
+
+  // ─── Persist view tab across navigation ───────────────────────────────────
+  useEffect(() => {
+    sessionStorage.setItem("tasksView", view);
+  }, [view]);
+
+  // ─── Persist per-tab search values across navigation ──────────────────────
+  useEffect(() => {
+    sessionStorage.setItem("tasksSearch_unassigned", searches.unassigned);
+    sessionStorage.setItem("tasksSearch_assigned",   searches.assigned);
+  }, [searches]);
+  // ──────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (location.state?.view) setView(location.state.view);
@@ -69,7 +91,12 @@ export default function TasksPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) =>
+                setSearches((prev) => ({
+                  ...prev,
+                  [view]: e.target.value,
+                }))
+              }
               placeholder={
                 view === "unassigned"
                   ? "Search unassigned tasks…"
