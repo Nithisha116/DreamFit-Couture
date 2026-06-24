@@ -893,23 +893,43 @@ export default function EditGarment() {
     }));
   };
 
-  const handleRemoveExisting = (index, img, type) => {
-    setDeletedImages(prev => ({
-      ...prev,
-      [type]: [...prev[type], img.key]
-    }));
-    
-    setExistingImages(prev => ({
-      ...prev,
-      [type]: prev[type].filter(existingImg => existingImg.key !== img.key)
-    }));
-    
-    setPreviewImages(prev => ({
-      ...prev,
-      [type]: prev[type].filter((_, i) => i !== index)
-    }));
-    
-    console.log("🗑️ Marked for deletion:", img.key);
+  const handleRemoveExisting = async (index, img, type, isReplacement = false) => {
+    if (img.key) {
+      const toastId = showToast.loading("Deleting image from storage...");
+      try {
+        let imageType = type;
+        if (type === 'cloth') imageType = 'customerCloth'; // EditGarment.jsx uses 'cloth', deleteGarmentImage expects 'customerCloth'
+        
+        await dispatch(deleteGarmentImage({ 
+          id, 
+          imageKey: img.key, 
+          imageType 
+        })).unwrap();
+        
+        showToast.dismiss(toastId);
+        showToast.success("Image deleted successfully");
+      } catch (err) {
+        showToast.dismiss(toastId);
+        showToast.error(err || "Failed to delete image");
+        return;
+      }
+    }
+
+    if (img.preview && img.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(img.preview);
+    }
+
+    if (!isReplacement) {
+      setExistingImages(prev => ({
+        ...prev,
+        [type]: prev[type].filter(existingImg => existingImg.key !== img.key)
+      }));
+      
+      setPreviewImages(prev => ({
+        ...prev,
+        [type]: prev[type].filter((_, i) => i !== index)
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -1278,7 +1298,7 @@ export default function EditGarment() {
                 type="reference"
                 images={previewImages.reference}
                 onImagesChange={(newImages) => handleImagesChange(newImages, 'reference')}
-                onRemoveExisting={(index, img) => handleRemoveExisting(index, img, 'reference')}
+                onRemoveExisting={(index, img, isReplacement = false) => handleRemoveExisting(index, img, 'reference', isReplacement)}
               />
 
               <ImageUploadSection
@@ -1289,7 +1309,7 @@ export default function EditGarment() {
                 type="customer"
                 images={previewImages.customer}
                 onImagesChange={(newImages) => handleImagesChange(newImages, 'customer')}
-                onRemoveExisting={(index, img) => handleRemoveExisting(index, img, 'customer')}
+                onRemoveExisting={(index, img, isReplacement = false) => handleRemoveExisting(index, img, 'customer', isReplacement)}
               />
 
               <ImageUploadSection
@@ -1300,7 +1320,7 @@ export default function EditGarment() {
                 type="cloth"
                 images={previewImages.cloth}
                 onImagesChange={(newImages) => handleImagesChange(newImages, 'cloth')}
-                onRemoveExisting={(index, img) => handleRemoveExisting(index, img, 'cloth')}
+                onRemoveExisting={(index, img, isReplacement = false) => handleRemoveExisting(index, img, 'cloth', isReplacement)}
               />
             </div>
 

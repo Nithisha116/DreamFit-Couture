@@ -151,13 +151,37 @@ async function updateOrderPaymentSummary(orderId) {
     let totalFinalized = 0;
     if (garments && garments.length > 0) {
       for (const g of garments) {
-        const minVal = g.minPrice !== undefined && g.minPrice !== null ? g.minPrice : (g.priceRange?.min || 0);
-        const maxVal = g.maxPrice !== undefined && g.maxPrice !== null ? g.maxPrice : (g.priceRange?.max || 0);
-        const finalVal = g.finalizedAmount !== undefined && g.finalizedAmount !== null
-          ? g.finalizedAmount
-          : (g.finalizedPrice !== undefined && g.finalizedPrice !== null
-            ? g.finalizedPrice
-            : 0); // DO NOT DEFAULT TO maxVal!
+        const fabric = Number(g.fabricPrice || 0);
+        const additional = Number(g.additionalCharges || 0);
+        
+        let minVal, maxVal, finalVal;
+
+        if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
+          minVal = Number(g.finalGarmentMinAmount);
+        } else {
+          const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+          const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
+          minVal = tailoringMin + fabric + additional;
+        }
+
+        if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
+          maxVal = Number(g.finalGarmentMaxAmount);
+        } else {
+          const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+          const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
+          maxVal = tailoringMax + fabric + additional;
+        }
+
+        if (g.finalGarmentAmount !== undefined && g.finalGarmentAmount !== null) {
+          finalVal = Number(g.finalGarmentAmount);
+        } else {
+          const rawFinalized = g.finalizedAmount !== undefined && g.finalizedAmount !== null
+            ? g.finalizedAmount
+            : (g.finalizedPrice !== undefined && g.finalizedPrice !== null
+              ? g.finalizedPrice
+              : 0);
+          finalVal = rawFinalized > 0 ? rawFinalized + fabric + additional : 0;
+        }
 
         totalMin += minVal;
         totalMax += maxVal;

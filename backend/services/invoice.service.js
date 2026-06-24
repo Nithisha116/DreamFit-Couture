@@ -394,8 +394,26 @@ export const syncOrderInvoice = async (orderId, session = null) => {
 
     const invoiceItems = [];
     garments.forEach(g => {
-      const minVal = Number(g.minPrice || g.priceRange?.min) || 0;
-      const maxVal = Number(g.maxPrice || g.priceRange?.max) || 0;
+      const fabric = Number(g.fabricPrice || 0);
+      const additional = Number(g.additionalCharges || 0);
+      
+      let minVal, maxVal;
+
+      if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
+        minVal = Number(g.finalGarmentMinAmount);
+      } else {
+        const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+        const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
+        minVal = tailoringMin + fabric + additional;
+      }
+
+      if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
+        maxVal = Number(g.finalGarmentMaxAmount);
+      } else {
+        const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+        const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
+        maxVal = tailoringMax + fabric + additional;
+      }
       
       // Primary garment item
       invoiceItems.push({
@@ -411,8 +429,27 @@ export const syncOrderInvoice = async (orderId, session = null) => {
       // Sub-garments
       if (g.subGarments && Array.isArray(g.subGarments)) {
         g.subGarments.forEach(sub => {
-          const sMin = Number(sub.minPrice || sub.priceRange?.min) || 0;
-          const sMax = Number(sub.maxPrice || sub.priceRange?.max) || 0;
+          const subFabric = Number(sub.fabricPrice || 0);
+          const subAdditional = Number(sub.additionalCharges || 0);
+          
+          let sMin, sMax;
+
+          if (sub.finalGarmentMinAmount !== undefined && sub.finalGarmentMinAmount !== null) {
+            sMin = Number(sub.finalGarmentMinAmount);
+          } else {
+            const finalized = Number(sub.finalizedAmount !== undefined && sub.finalizedAmount !== null ? sub.finalizedAmount : sub.finalizedPrice);
+            const tailoringMin = finalized > 0 ? finalized : Number(sub.minPrice || sub.priceRange?.min || 0);
+            sMin = tailoringMin + subFabric + subAdditional;
+          }
+
+          if (sub.finalGarmentMaxAmount !== undefined && sub.finalGarmentMaxAmount !== null) {
+            sMax = Number(sub.finalGarmentMaxAmount);
+          } else {
+            const finalized = Number(sub.finalizedAmount !== undefined && sub.finalizedAmount !== null ? sub.finalizedAmount : sub.finalizedPrice);
+            const tailoringMax = finalized > 0 ? finalized : Number(sub.maxPrice || sub.priceRange?.max || 0);
+            sMax = tailoringMax + subFabric + subAdditional;
+          }
+
           invoiceItems.push({
             name: sub.itemName || sub.name || "Sub-Garment",
             category: sub.categoryName || "Stitching",
@@ -450,13 +487,53 @@ export const syncOrderInvoice = async (orderId, session = null) => {
     
     if (garments && garments.length > 0) {
       garments.forEach(g => {
-        totalMin += Number(g.minPrice || g.priceRange?.min) || 0;
-        totalMax += Number(g.maxPrice || g.priceRange?.max) || 0;
+        const fabric = Number(g.fabricPrice || 0);
+        const additional = Number(g.additionalCharges || 0);
+
+        let minVal, maxVal;
+        if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
+          minVal = Number(g.finalGarmentMinAmount);
+        } else {
+          const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+          const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
+          minVal = tailoringMin + fabric + additional;
+        }
+
+        if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
+          maxVal = Number(g.finalGarmentMaxAmount);
+        } else {
+          const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+          const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
+          maxVal = tailoringMax + fabric + additional;
+        }
+
+        totalMin += minVal;
+        totalMax += maxVal;
 
         if (g.subGarments && Array.isArray(g.subGarments)) {
           g.subGarments.forEach(sub => {
-            totalMin += Number(sub.minPrice || sub.priceRange?.min) || 0;
-            totalMax += Number(sub.maxPrice || sub.priceRange?.max) || 0;
+            const subFabric = Number(sub.fabricPrice || 0);
+            const subAdditional = Number(sub.additionalCharges || 0);
+
+            let sMin, sMax;
+            if (sub.finalGarmentMinAmount !== undefined && sub.finalGarmentMinAmount !== null) {
+              sMin = Number(sub.finalGarmentMinAmount);
+            } else {
+              const finalized = Number(sub.finalizedAmount !== undefined && sub.finalizedAmount !== null ? sub.finalizedAmount : sub.finalizedPrice);
+              const tailoringMin = finalized > 0 ? finalized : Number(sub.minPrice || sub.priceRange?.min || 0);
+              sMin = tailoringMin + subFabric + subAdditional;
+            }
+
+            if (sub.finalGarmentMaxAmount !== undefined && sub.finalGarmentMaxAmount !== null) {
+              sMax = Number(sub.finalGarmentMaxAmount);
+            } else {
+              const finalized = Number(sub.finalizedAmount !== undefined && sub.finalizedAmount !== null ? sub.finalizedAmount : sub.finalizedPrice);
+              const tailoringMax = finalized > 0 ? finalized : Number(sub.maxPrice || sub.priceRange?.max || 0);
+              sMax = tailoringMax + subFabric + subAdditional;
+            }
+
+            totalMin += sMin;
+            totalMax += sMax;
           });
         }
       });

@@ -248,6 +248,11 @@ const garmentSchema = new mongoose.Schema({
     default: "pending",
     index: true
   },
+  selectedFabric: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Fabric",
+    default: null
+  },
   workId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Work",
