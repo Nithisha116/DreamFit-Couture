@@ -499,6 +499,7 @@ export const updatePayment = async (req, res) => {
       const order = await Order.findById(payment.order);
       
       const totalMax = order?.maxPrice || order?.priceSummary?.totalMax || order?.totalAmount || 0;
+      const totalMin = order?.minPrice || order?.priceSummary?.totalMin || 0;
       let finalizedAmount = order?.finalizedAmount || 0;
       
       // SELF-HEALING before calculating remaining
