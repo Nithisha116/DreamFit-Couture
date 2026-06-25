@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Camera, Trash2, RefreshCw } from 'lucide-react';
 import WebcamCapture from './WebcamCapture';
 import showToast from '../../utils/toast';
@@ -17,6 +17,11 @@ const ImageUploadSection = ({
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [replacingIndex, setReplacingIndex] = useState(null);
   const fileInputRef = useRef(null);
+  const imagesRef = useRef(images);
+
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
 
   const themeClasses = {
     indigo: {
@@ -107,9 +112,11 @@ const ImageUploadSection = ({
         preview: URL.createObjectURL(file),
         isExisting: false
       };
+
+      const currentImages = imagesRef.current;
       
       if (replacingIndex !== null) {
-        const imgToReplace = images[replacingIndex];
+        const imgToReplace = currentImages[replacingIndex];
         if (imgToReplace.isExisting && onRemoveExisting) {
           onRemoveExisting(replacingIndex, imgToReplace, true);
         } else {
@@ -117,13 +124,13 @@ const ImageUploadSection = ({
             URL.revokeObjectURL(imgToReplace.preview);
           }
         }
-        const newImages = [...images];
+        const newImages = [...currentImages];
         newImages[replacingIndex] = newImage;
         onImagesChange(newImages);
         setReplacingIndex(null);
         showToast.success("Image replaced successfully!");
       } else {
-        onImagesChange([...images, newImage]);
+        onImagesChange([...currentImages, newImage]);
         showToast.success("Photo captured successfully!");
       }
     }

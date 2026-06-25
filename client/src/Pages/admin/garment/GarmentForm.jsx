@@ -43,6 +43,10 @@ import {
   normalizeWorkflowStages,
 } from "../../../workflow/workflowStageUtils";
 
+const isUploadableFile = (value) =>
+  value instanceof File ||
+  (value instanceof Blob && typeof value.size === "number" && value.size > 0);
+
 export default function GarmentForm({
   onClose,
   onSave,
@@ -430,14 +434,10 @@ export default function GarmentForm({
         setManualMeasurements(manual);
       }
     }
-  }, [editingGarment]);
+  }, [editingGarment?._id, editingGarment?.tempId]);
 
   // ==================== IMAGE HANDLERS ====================
   const handleImagesChange = (newImages, type) => {
-    // Update previewImages — this is the single source of truth for images.
-    // The submit code (lines 1076-1113) reads directly from previewImages,
-    // so we do NOT need to sync into formData here. Doing so caused cascading
-    // re-renders that could interfere with the preview state update.
     setPreviewImages((prev) => ({
       ...prev,
       [type]: newImages,
@@ -1056,7 +1056,7 @@ const renderDayContents = useCallback(
       const existingClothKeys = [];
 
       for (const imgObj of previewImages.studio || []) {
-        if (imgObj?.file instanceof File) {
+        if (isUploadableFile(imgObj?.file)) {
           formDataToSend.append("referenceImages", imgObj.file);
         } else if (imgObj?.isExisting) {
           if (imgObj.key) existingRefKeys.push(imgObj.key);
@@ -1065,7 +1065,7 @@ const renderDayContents = useCallback(
       }
 
       for (const imgObj of previewImages.customerProvided || []) {
-        if (imgObj?.file instanceof File) {
+        if (isUploadableFile(imgObj?.file)) {
           formDataToSend.append("customerImages", imgObj.file);
         } else if (imgObj?.isExisting) {
           if (imgObj.key) existingCustKeys.push(imgObj.key);
@@ -1074,7 +1074,7 @@ const renderDayContents = useCallback(
       }
 
       for (const imgObj of previewImages.customerCloth || []) {
-        if (imgObj?.file instanceof File) {
+        if (isUploadableFile(imgObj?.file)) {
           formDataToSend.append("customerClothImages", imgObj.file);
         } else if (imgObj?.isExisting) {
           if (imgObj.key) existingClothKeys.push(imgObj.key);
