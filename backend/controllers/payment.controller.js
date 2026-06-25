@@ -350,33 +350,28 @@ export const createPayment = async (req, res) => {
     }
 
     // ── Resolve payment amount and type ─────────────────────────────────────
-    let paymentAmount;
+    // IMPORTANT: Always honour the user's entered amount. Never silently replace
+    // it with a calculated value (remainingMin etc.) — that caused ₹1000 to save
+    // as ₹996.  We validate against the max boundary and reject if it is
+    // exceeded, but we never substitute a different amount.
+    const paymentAmount = Number(amount);
     let resolvedType = type || 'advance';
 
-    if (resolvedType === 'full') {
-      if (alreadyPaid > 0) {
-        // Advance already exists → settle what remains to hit the minimum
-        paymentAmount = remainingMin;
-        resolvedType = 'final-settlement';
-      } else {
-        // No prior payments → direct full payment (settle everything at minimum)
-        paymentAmount = remainingMin > 0 ? remainingMin : Number(amount);
-      }
-    } else {
-      // advance / final-settlement entered manually
-      paymentAmount = Number(amount);
+    if (!paymentAmount || paymentAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid amount is required' });
+    }
 
-      if (!paymentAmount || paymentAmount <= 0) {
-        return res.status(400).json({ success: false, message: 'Valid amount is required' });
-      }
+    // When prior advances exist and user selects "full", treat it as a final-settlement
+    if (resolvedType === 'full' && alreadyPaid > 0) {
+      resolvedType = 'final-settlement';
+    }
 
-      // Clamp to absolute remaining balance (max boundary) — never allow overpayment past the highest possible price
-      if (paymentAmount > remainingMax && remainingMax > 0) {
-        return res.status(400).json({
-          success: false,
-          message: `Amount exceeds maximum possible remaining balance of ₹${remainingMax}. Please enter ₹${remainingMax} or less.`,
-        });
-      }
+    // Clamp to absolute remaining balance (max boundary) — never allow overpayment
+    if (paymentAmount > remainingMax && remainingMax > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Amount exceeds maximum possible remaining balance of ₹${remainingMax}. Please enter ₹${remainingMax} or less.`,
+      });
     }
 
     const userId = req.user?.id || req.user?._id;

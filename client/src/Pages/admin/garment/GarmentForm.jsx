@@ -121,6 +121,11 @@ export default function GarmentForm({
   const [showCalendar, setShowCalendar] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const calendarRef = useRef(null);
+  // Guard: tracks whether the user has actively changed fabricMeters or selectedFabric
+  // (vs. the initial async load of editingGarment data). The fabric price auto-calculation
+  // must NOT fire on initial load — it would silently overwrite the stored fabricPrice
+  // with the fabric's CURRENT pricePerMeter, causing a data mismatch (10m → 9.8m).
+  const fabricUserChanged = useRef(false);
 
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -228,11 +233,20 @@ export default function GarmentForm({
   }, [formData.item, items]);
 
   useEffect(() => {
+    // Only auto-recalculate fabricPrice when the user has ACTIVELY changed the
+    // fabric selection or meters — NOT on the initial async load of fabrics data.
+    // Without this guard the stored fabricPrice gets silently overwritten with
+    // pricePerMeter × storedMeters using the fabric's CURRENT price, which causes
+    // a data mismatch (e.g., saved 10m at ₹343/m → reloaded fabric now ₹350/m
+    // → effect fires → fabricPrice becomes ₹3500 even though user changed nothing).
     if (
       formData.fabricSource === "shop" &&
       formData.selectedFabric &&
       formData.fabricMeters
     ) {
+      // Skip recalculation unless the user intentionally changed an input
+      if (!fabricUserChanged.current) return;
+
       const selectedFabric = fabrics?.find(
         (f) => f._id === formData.selectedFabric,
       );
@@ -341,6 +355,9 @@ export default function GarmentForm({
 
   useEffect(() => {
     if (editingGarment) {
+      // Reset the fabric-change guard so the price auto-calculation useEffect does
+      // NOT fire on the initial async load of fabrics — preserving the stored values.
+      fabricUserChanged.current = false;
       setFormData({
         name: editingGarment.name || "",
         category: editingGarment.category?._id || editingGarment.category || "",
@@ -1398,12 +1415,13 @@ const renderDayContents = useCallback(
                     </label>
                     <select
                       value={formData.selectedFabric}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        fabricUserChanged.current = true;
                         setFormData({
                           ...formData,
                           selectedFabric: e.target.value,
-                        })
-                      }
+                        });
+                      }}
                       className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     >
                       <option value="">Choose Fabric</option>
@@ -1423,12 +1441,13 @@ const renderDayContents = useCallback(
                     <input
                       type="number"
                       value={formData.fabricMeters}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        fabricUserChanged.current = true;
                         setFormData({
                           ...formData,
                           fabricMeters: e.target.value,
-                        })
-                      }
+                        });
+                      }}
                       placeholder="e.g., 2.5"
                       step="0.1"
                       min="0"
@@ -1461,12 +1480,13 @@ const renderDayContents = useCallback(
                       <input
                         type="text"
                         value={formData.fabricMeters}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          fabricUserChanged.current = true;
                           setFormData({
                             ...formData,
                             fabricMeters: e.target.value,
-                          })
-                        }
+                          });
+                        }}
                         placeholder="e.g., 2.5"
                         className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       />
