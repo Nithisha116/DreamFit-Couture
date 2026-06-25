@@ -49,7 +49,9 @@ const WebcamCapture = ({ isOpen, onClose, onCapture, captureType = 'image' }) =>
     setWebcamKey(prev => prev + 1);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
     if (!capturedBase64) return;
     
     setIsProcessing(true);
@@ -85,6 +87,7 @@ const WebcamCapture = ({ isOpen, onClose, onCapture, captureType = 'image' }) =>
           <h3 className="text-xl font-bold text-white mb-2">Camera Access Denied</h3>
           <p className="text-slate-400 mb-6">Please enable camera access in your browser settings to take photos.</p>
           <button 
+            type="button"
             onClick={() => {
               // Resetting state forces webcam remount/retry in some browsers
               setCameraState({ status: 'loading', errorMsg: '' });
@@ -115,7 +118,7 @@ const WebcamCapture = ({ isOpen, onClose, onCapture, captureType = 'image' }) =>
     <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col animate-in fade-in duration-300">
       {/* Header */}
       <div className="bg-slate-900 p-4 flex items-center justify-between z-20">
-        <button onClick={onClose} className="p-2 text-white hover:bg-slate-800 rounded-full transition-colors">
+        <button type="button" onClick={onClose} className="p-2 text-white hover:bg-slate-800 rounded-full transition-colors">
           <X size={24} />
         </button>
         
@@ -165,6 +168,7 @@ const WebcamCapture = ({ isOpen, onClose, onCapture, captureType = 'image' }) =>
         {!capturedBase64 ? (
           <div className="flex justify-center items-center h-24">
             <button 
+              type="button"
               onClick={capture}
               disabled={cameraState.status !== 'ready'}
               className="w-20 h-20 bg-white rounded-full flex items-center justify-center p-1 cursor-pointer active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
@@ -177,6 +181,7 @@ const WebcamCapture = ({ isOpen, onClose, onCapture, captureType = 'image' }) =>
         ) : (
           <div className="flex items-center gap-4 h-24">
             <button 
+              type="button"
               onClick={retake}
               disabled={isProcessing}
               className="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-bold flex items-center justify-center gap-2 active:bg-slate-700 transition-colors disabled:opacity-50"
@@ -185,6 +190,7 @@ const WebcamCapture = ({ isOpen, onClose, onCapture, captureType = 'image' }) =>
               Retake
             </button>
             <button 
+              type="button"
               onClick={handleSave}
               disabled={isProcessing}
               className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 active:bg-blue-700 transition-colors disabled:opacity-50"

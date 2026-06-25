@@ -43,6 +43,10 @@ import {
   normalizeWorkflowStages,
 } from "../../../workflow/workflowStageUtils";
 
+const isUploadableFile = (value) =>
+  value instanceof File ||
+  (value instanceof Blob && typeof value.size === "number" && value.size > 0);
+
 export default function GarmentForm({
   onClose,
   onSave,
@@ -430,14 +434,10 @@ export default function GarmentForm({
         setManualMeasurements(manual);
       }
     }
-  }, [editingGarment]);
+  }, [editingGarment?._id, editingGarment?.tempId]);
 
   // ==================== IMAGE HANDLERS ====================
   const handleImagesChange = (newImages, type) => {
-    // Update previewImages — this is the single source of truth for images.
-    // The submit code (lines 1076-1113) reads directly from previewImages,
-    // so we do NOT need to sync into formData here. Doing so caused cascading
-    // re-renders that could interfere with the preview state update.
     setPreviewImages((prev) => ({
       ...prev,
       [type]: newImages,
@@ -1050,52 +1050,39 @@ const renderDayContents = useCallback(
         formDataToSend.append("fabricPrice", "0");
       }
 
-      // Prepare existing keys arrays
+      // Prepare existing keys arrays and upload new files
       const existingRefKeys = [];
       const existingCustKeys = [];
       const existingClothKeys = [];
 
-      // Add images
-      if (previewImages.studio && previewImages.studio.length > 0) {
-        for (const imgObj of previewImages.studio) {
-          if (imgObj && imgObj.file instanceof File) {
-            formDataToSend.append("referenceImages", imgObj.file);
-          } else if (imgObj && imgObj.isExisting) {
-            if (imgObj.key) existingRefKeys.push(imgObj.key);
-            else if (imgObj.url) existingRefKeys.push(imgObj.url);
-          }
+      for (const imgObj of previewImages.studio || []) {
+        if (isUploadableFile(imgObj?.file)) {
+          formDataToSend.append("referenceImages", imgObj.file);
+        } else if (imgObj?.isExisting) {
+          if (imgObj.key) existingRefKeys.push(imgObj.key);
+          else if (imgObj.url) existingRefKeys.push(imgObj.url);
         }
       }
 
-      if (
-        previewImages.customerProvided &&
-        previewImages.customerProvided.length > 0
-      ) {
-        for (const imgObj of previewImages.customerProvided) {
-          if (imgObj && imgObj.file instanceof File) {
-            formDataToSend.append("customerImages", imgObj.file);
-          } else if (imgObj && imgObj.isExisting) {
-            if (imgObj.key) existingCustKeys.push(imgObj.key);
-            else if (imgObj.url) existingCustKeys.push(imgObj.url);
-          }
+      for (const imgObj of previewImages.customerProvided || []) {
+        if (isUploadableFile(imgObj?.file)) {
+          formDataToSend.append("customerImages", imgObj.file);
+        } else if (imgObj?.isExisting) {
+          if (imgObj.key) existingCustKeys.push(imgObj.key);
+          else if (imgObj.url) existingCustKeys.push(imgObj.url);
         }
       }
 
-      if (
-        previewImages.customerCloth &&
-        previewImages.customerCloth.length > 0
-      ) {
-        for (const imgObj of previewImages.customerCloth) {
-          if (imgObj && imgObj.file instanceof File) {
-            formDataToSend.append("customerClothImages", imgObj.file);
-          } else if (imgObj && imgObj.isExisting) {
-            if (imgObj.key) existingClothKeys.push(imgObj.key);
-            else if (imgObj.url) existingClothKeys.push(imgObj.url);
-          }
+      for (const imgObj of previewImages.customerCloth || []) {
+        if (isUploadableFile(imgObj?.file)) {
+          formDataToSend.append("customerClothImages", imgObj.file);
+        } else if (imgObj?.isExisting) {
+          if (imgObj.key) existingClothKeys.push(imgObj.key);
+          else if (imgObj.url) existingClothKeys.push(imgObj.url);
         }
       }
 
-      // Append existing keys as JSON strings so backend doesn't delete them
+      // Always send retention lists (even empty) so backend can apply deletions
       formDataToSend.append("existingReferenceImages", JSON.stringify(existingRefKeys));
       formDataToSend.append("existingCustomerImages", JSON.stringify(existingCustKeys));
       formDataToSend.append("existingClothImages", JSON.stringify(existingClothKeys));

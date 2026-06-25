@@ -51,7 +51,7 @@ export function useWebcamCapture() {
       const options = {
         maxSizeMB,
         maxWidthOrHeight,
-        useWebWorker: true,
+        useWebWorker: false,
         fileType: 'image/jpeg',
       };
 
