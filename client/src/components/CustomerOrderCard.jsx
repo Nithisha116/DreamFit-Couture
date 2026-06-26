@@ -62,9 +62,6 @@ export default function CustomerOrderCard({ payload }) {
   if (!payload?.order) return null;
 
   const { order, customer, garments = [], materialsReceived = [], worksToDo = [] } = payload;
-  const allImages = garments.flatMap(collectImages);
-  const uniqueImages = [...new Set(allImages)];
-
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: PRINT_STYLES }} />
@@ -249,23 +246,68 @@ export default function CustomerOrderCard({ payload }) {
         )}
 
         {/* Reference images */}
-        {uniqueImages.length > 0 && (
+        {garments.some(g => collectImages(g).length > 0) && (
           <div className="coc-section mb-6">
             <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-4 border-b border-slate-100 pb-2">
               Reference Images
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {uniqueImages.map((src, i) => (
-                <div key={i} className="aspect-square rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
-                  <ImageWithFallback
-                    src={src}
-                    alt={`Reference ${i + 1}`}
-                    className="w-full h-full object-cover"
-                    useProxy
-                  />
+            <div className="space-y-6">
+
+    {garments.map((garment) => {
+
+        const images = [...new Set(collectImages(garment))];
+
+        if (!images.length) return null;
+
+        return (
+
+            <div key={garment.garmentId || garment.name}>
+
+                <p className="text-sm font-bold text-slate-800 mb-3">
+
+                    {garment.name}
+
+                    {garment.categoryName && (
+
+                        <span className="text-slate-400 font-normal">
+
+                            {" "}· {garment.categoryName}
+
+                        </span>
+
+                    )}
+
+                </p>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+
+                    {images.map((src, i) => (
+
+                        <div
+                            key={i}
+                            className="aspect-square rounded-xl border border-slate-200 overflow-hidden bg-slate-50"
+                        >
+
+                            <ImageWithFallback
+                                src={src}
+                                alt={`${garment.name} ${i + 1}`}
+                                className="w-full h-full object-cover"
+                                useProxy
+                            />
+
+                        </div>
+
+                    ))}
+
                 </div>
-              ))}
+
             </div>
+
+        );
+
+    })}
+
+</div>
           </div>
         )}
 
