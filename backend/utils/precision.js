@@ -12,3 +12,6 @@ export const toRupees = (paise) => {
   if (paise === null || paise === undefined || isNaN(paise)) return 0;
   return Math.round(paise) / 100;
 };
+
+/** Round rupees to 2 decimal places using Paise integer math */
+export const roundCurrency = (rupees) => toRupees(toPaise(rupees));

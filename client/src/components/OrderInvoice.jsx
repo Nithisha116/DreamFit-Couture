@@ -360,6 +360,7 @@ import html2canvas from "html2canvas-pro";
 import pdfBg from "../assets/Pdfbg.png";
 import logo from "../assets/logo.png";
 import { calculatePaymentSummary } from "../utils/paymentUtils";
+import { getGarmentBreakdown } from "../utils/pricingEngine";
 
 const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) => {
   const invoiceRef = useRef();
@@ -409,12 +410,10 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
   };
 
   const calculateGarmentTotal = (garment) => {
-    const qty = getQuantity(garment);
-    const min = Number(garment.priceRange?.min ?? garment.minPrice) || 0;
-    const max = Number(garment.priceRange?.max ?? garment.maxPrice) || 0;
+    const breakdown = getGarmentBreakdown(garment);
     return {
-      min: min * qty,
-      max: max * qty
+      min: breakdown.garmentTotalMin,
+      max: breakdown.garmentTotalMax
     };
   };
 
@@ -858,7 +857,9 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                     fontWeight: "600",
                   }}
                 >
-                  {summary.finalizedAmount > 0 ? "Final Bill Amount" : "Estimated Subtotal Range"}
+                  {summary.totalAmountMin === summary.totalAmountMax
+                    ? "Subtotal"
+                    : "Estimated Subtotal Range"}
                 </td>
                 <td
                   style={{
@@ -869,9 +870,7 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                     color: "#be185d",
                   }}
                 >
-                  {summary.finalizedAmount > 0 ? (
-                    <>₹{summary.finalizedAmount.toLocaleString('en-IN')}</>
-                  ) : summary.totalAmountMin === summary.totalAmountMax ? (
+                  {summary.totalAmountMin === summary.totalAmountMax ? (
                     <>₹{summary.totalAmountMin.toLocaleString('en-IN')}</>
                   ) : (
                     <>₹{summary.totalAmountMin.toLocaleString('en-IN')} – ₹{summary.totalAmountMax.toLocaleString('en-IN')}</>
@@ -965,7 +964,7 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                 }}
               >
                 <span style={{ fontWeight: "600", color: summary.isFullyPaid ? "#059669" : "#be185d" }}>
-                  {summary.finalizedAmount > 0 || summary.balanceDueMin === summary.balanceDueMax ? "Balance Due" : "Balance Due Range"}
+                  {summary.totalAmountMin === summary.totalAmountMax ? "Balance Due" : "Balance Due Range"}
                 </span>
                 <span
                   style={{
@@ -976,7 +975,7 @@ const OrderInvoice = forwardRef(({ order, garments = [], payments = [] }, ref) =
                 >
                   {summary.isFullyPaid ? (
                     "Paid"
-                  ) : summary.finalizedAmount > 0 || summary.balanceDueMin === summary.balanceDueMax ? (
+                  ) : summary.totalAmountMin === summary.totalAmountMax ? (
                     `₹${summary.balanceDueMax.toLocaleString('en-IN')}`
                   ) : (
                     `₹${summary.balanceDueMin.toLocaleString('en-IN')} – ₹${summary.balanceDueMax.toLocaleString('en-IN')}`

@@ -2145,6 +2145,9 @@ import mongoose from "mongoose";
 import { createNotification } from './notification.controller.js';
 import { updateOrderPaymentSummary } from "./order.controller.js";
 import { parseWorkflowStagesInput } from "../utils/workflowStages.util.js";
+import { assertOrderNotLocked } from "../utils/orderLock.js";
+import { getGarmentBreakdown } from "../utils/pricingEngine.js";
+import AuditLog from "../models/AuditLog.js";
 
 function filterImagesByKeepList(images, keepList) {
   const list = Array.isArray(images) ? images : [];
@@ -2161,6 +2164,9 @@ export const createGarment = async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
+
+    // 🔒 Lock Guard
+    await assertOrderNotLocked(orderId);
 
     const {
       name,
@@ -2180,7 +2186,11 @@ export const createGarment = async (req, res) => {
       fabricMeters,
       fabricNotes,
       fabricSufficiency,
-      selectedFabric
+      selectedFabric,
+      additionalCharges,
+      discount,
+      discountType,
+      quantity
     } = req.body;
 
     console.log("📝 Creating garment with data:", {
@@ -2296,7 +2306,14 @@ export const createGarment = async (req, res) => {
       fabricNotes: fabricNotes || "",
       fabricSufficiency: fabricSufficiency || "To Be Verified",
       selectedFabric: selectedFabric && selectedFabric !== "" ? selectedFabric : null,
+      additionalCharges: additionalCharges ? Number(additionalCharges) : 0,
+      discount: discount ? Number(discount) : 0,
+      discountType: discountType || "none",
+      quantity: quantity ? Math.max(1, Number(quantity)) : 1,
     });
+
+    // Write the immutable price breakdown snapshot based on the engine
+    garment.priceBreakdown = getGarmentBreakdown(garment);
 
     console.log("💾 Saving garment with images:", {
       referenceImages: referenceImages.length,
@@ -2471,6 +2488,9 @@ export const updateGarment = async (req, res) => {
       return res.status(404).json({ message: "Garment not found" });
     }
 
+    // 🔒 Lock Guard
+    await assertOrderNotLocked(garment.order);
+
     if (!req.body) {
       return res.status(400).json({
         success: false,
@@ -2505,7 +2525,11 @@ export const updateGarment = async (req, res) => {
       fabricSufficiency,
       workflowStages: workflowStagesRaw,
       stageKeys: stageKeysRaw,
-      selectedFabric
+      selectedFabric,
+      additionalCharges,
+      discount,
+      discountType,
+      quantity
     } = req.body || {};
     // ==========================================
     // 📸 IMAGE RETENTION LOGIC
@@ -2607,6 +2631,13 @@ export const updateGarment = async (req, res) => {
     if (fabricNotes !== undefined) garment.fabricNotes = fabricNotes;
     if (fabricSufficiency !== undefined) garment.fabricSufficiency = fabricSufficiency;
     if (selectedFabric !== undefined) garment.selectedFabric = (selectedFabric === "" || selectedFabric === null || selectedFabric === "null") ? null : selectedFabric;
+    if (additionalCharges !== undefined) garment.additionalCharges = Number(additionalCharges) || 0;
+    if (discount !== undefined) garment.discount = Number(discount) || 0;
+    if (discountType !== undefined) garment.discountType = discountType;
+    if (quantity !== undefined) garment.quantity = Math.max(1, Number(quantity));
+
+    // Capture previous breakdown before updating to log it
+    const previousBreakdown = garment.priceBreakdown;
 
     // Apply image retention — replace arrays when client sends existing*Images
     if (hasRefUpdate) {
@@ -2702,7 +2733,21 @@ if (hasCustUpdate) {
       if (res.url && res.key) garment.customerClothImages.push({ url: res.url, key: res.key, uploadedAt: new Date() });
     }
 
+    // Write the immutable price breakdown snapshot based on the engine
+    garment.priceBreakdown = getGarmentBreakdown(garment);
+
     await garment.save();
+
+    // Log the price edit
+    await AuditLog.create([{
+      action: "GARMENT_PRICE_EDITED",
+      user: req.user?.id || req.body?.createdBy,
+      entityType: "Garment",
+      entityId: garment._id,
+      description: `Garment ${garment.name} price updated`,
+      oldData: { priceBreakdown: previousBreakdown },
+      newData: { priceBreakdown: garment.priceBreakdown }
+    }]);
 
     if (workflowUpdateRequested && parsedWorkflow?.stageKeys?.length && garment.workId) {
       const work = await Work.findById(garment.workId);
@@ -2745,6 +2790,9 @@ export const deleteGarment = async (req, res) => {
     if (!garment) {
       return res.status(404).json({ message: "Garment not found" });
     }
+
+    // 🔒 Lock Guard
+    await assertOrderNotLocked(garment.order);
 
     // Delete images from R2
     console.log("🗑️ Deleting images from R2...");

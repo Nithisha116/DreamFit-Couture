@@ -242,6 +242,37 @@ const garmentSchema = new mongoose.Schema({
     type: Number,
     default: null,
   },
+  additionalCharges: {
+    type: Number,
+    default: 0,
+  },
+  quantity: {
+    type: Number,
+    default: 1,
+    min: 1,
+  },
+  discount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  discountType: {
+    type: String,
+    enum: ["flat", "percentage", "none"],
+    default: "none",
+  },
+  priceBreakdown: {
+    tailoringPriceMin: { type: Number, default: 0 },
+    tailoringPriceMax: { type: Number, default: 0 },
+    fabricPrice: { type: Number, default: 0 },
+    additionalCharges: { type: Number, default: 0 },
+    discount: { type: Number, default: 0 },
+    discountType: { type: String, default: "none" },
+    quantity: { type: Number, default: 1 },
+    garmentTotalMin: { type: Number, default: 0 },
+    garmentTotalMax: { type: Number, default: 0 },
+    calculatedAt: { type: Date },
+  },
   status: {
     type: String,
     enum: ["pending", "accepted", "cutting", "stitching", "ironing", "ready_to_deliver"],
@@ -284,30 +315,19 @@ const garmentSchema = new mongoose.Schema({
 
 // ✅ Sync legacy and new price fields before validation with strict checks
 garmentSchema.pre('validate', function(next) {
-  // Backward compatibility self-healing fallback migration
-  if ((!this.priceRange?.min || this.priceRange.min === 0) && (this.finalizedPrice || this.finalizedAmount)) {
-    const fallback = Number(this.finalizedPrice || this.finalizedAmount || 0);
-    this.priceRange = { min: fallback, max: fallback };
-    this.minPrice = fallback;
-    this.maxPrice = fallback;
-  }
-
-  if (this.priceRange && this.priceRange.min !== undefined) {
-    this.minPrice = Number(this.priceRange.min);
-  } else if (this.minPrice !== undefined && this.minPrice !== null && this.minPrice !== 0) {
-    if (!this.priceRange) this.priceRange = {};
-    this.priceRange.min = this.minPrice;
-  }
-
-  if (this.priceRange && this.priceRange.max !== undefined) {
-    this.maxPrice = Number(this.priceRange.max);
-  } else if (this.maxPrice !== undefined && this.maxPrice !== null && this.maxPrice !== 0) {
-    if (!this.priceRange) this.priceRange = {};
-    this.priceRange.max = this.maxPrice;
+  // Sync priceRange with minPrice/maxPrice in a clean way
+  if (this.priceRange) {
+    if (this.priceRange.min !== undefined) this.minPrice = Number(this.priceRange.min);
+    if (this.priceRange.max !== undefined) this.maxPrice = Number(this.priceRange.max);
+  } else if (this.minPrice !== undefined || this.maxPrice !== undefined) {
+    this.priceRange = {
+      min: this.minPrice || 0,
+      max: this.maxPrice || 0
+    };
   }
 
   // Strict range-based validation
-  if (this.priceRange && Number(this.priceRange.min) > Number(this.priceRange.max)) {
+  if (this.minPrice > this.maxPrice) {
     const err = new Error("Invalid price range: Minimum price cannot exceed maximum price.");
     if (typeof next === 'function') return next(err);
     throw err;

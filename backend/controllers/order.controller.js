@@ -12,7 +12,8 @@ import { createNotification } from "./notification.controller.js";
 import r2Service from "../services/r2.service.js";
 import crypto from "crypto";
 import multer from "multer";
-import { calculateRangeTotals } from "../utils/rangeUtils.js";
+import { buildOrderPricingSummary } from "../utils/pricingEngine.js";
+import { assertOrderNotLocked } from "../utils/orderLock.js";
 import {
   parseWorkflowStagesInput,
   resolveWorkflowForGarment,
@@ -127,47 +128,43 @@ export const updateOrderPaymentSummary = async (orderId) => {
       type: { $in: ['advance', 'full', 'final-settlement'] }
     });
 
-    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+    const garments = await Garment.find({ order: orderId, isActive: true });
+    
+    const summary = buildOrderPricingSummary(garments, payments);
+    
+    order.minPrice = summary.totalMin;
+    order.maxPrice = summary.totalMax;
+    order.priceSummary = { totalMin: summary.totalMin, totalMax: summary.totalMax };
+    
+    order.balanceMin = summary.balanceDueMin;
+    order.balanceMax = summary.balanceDueMax;
+    // Legacy support
+    order.balanceAmount = summary.balanceDueMax;
+    order.dueAmount = summary.balanceDueMax;
+
+    // Auto-finalize
+    if (summary.totalMin > 0 && summary.totalPaid >= summary.totalMin) {
+      order.finalizedAmount = summary.totalPaid;
+    } else {
+      order.finalizedAmount = 0;
+    }
+
     const lastPayment = payments.sort((a, b) => 
       new Date(b.paymentDate) - new Date(a.paymentDate)
     )[0];
 
-    // Dynamically calculate and self-heal the priceSummary from the actual garments in database
-    const garments = await Garment.find({ order: orderId, isActive: true });
-    
-    const { totalMin, totalMax, balanceMin, balanceMax } = calculateRangeTotals(garments, totalPaid);
-    
-    order.minPrice = totalMin;
-    order.maxPrice = totalMax;
-    order.priceSummary = { totalMin, totalMax };
-    
-    order.balanceMin = balanceMin;
-    order.balanceMax = balanceMax;
-    // Legacy support
-    order.balanceAmount = balanceMax;
-    order.dueAmount = balanceMax;
-
-    let paymentStatus = 'pending';
-    if (totalPaid >= totalMin) {
-      paymentStatus = 'paid';
-      order.finalizedAmount = totalPaid; // AUTO-FINALIZE
-    } else {
-      if (totalPaid > 0) paymentStatus = 'partial';
-      order.finalizedAmount = 0; // RANGE-BASED
-    }
-
     order.paymentSummary = {
-      totalPaid,
+      totalPaid: summary.totalPaid,
       lastPaymentDate: lastPayment?.paymentDate,
       lastPaymentAmount: lastPayment?.amount,
       paymentCount: payments.length,
-      paymentStatus
+      paymentStatus: summary.paymentStatus
     };
     
     await order.save();
-    console.log(`✅ Payment summary updated: Paid: ₹${totalPaid}, Status: ${paymentStatus}`);
+    console.log(`✅ Payment summary updated: Paid: ₹${summary.totalPaid}, Status: ${summary.paymentStatus}`);
     
-    return { success: true, totalPaid, paymentStatus };
+    return { success: true, totalPaid: summary.totalPaid, paymentStatus: summary.paymentStatus };
   } catch (error) {
     console.error("❌ Error updating payment summary:", error);
     return { success: false, error: error.message };
@@ -855,10 +852,23 @@ export const getOrderById = async (req, res) => {
 export const updateOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const { deliveryDate, specialNotes, advancePayment, priceSummary, status, newGarments, currentStage, workflowStages } = req.body;
+    const { deliveryDate, specialNotes, advancePayment, priceSummary, status, newGarments, currentStage, workflowStages, pricingVersion } = req.body;
+
+    // 🔒 Lock Guard
+    await assertOrderNotLocked(id);
 
     const order = await Order.findById(id);
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    // 🔄 Optimistic Concurrency Check
+    if (pricingVersion !== undefined && order.pricingVersion !== undefined && order.pricingVersion !== pricingVersion) {
+      return res.status(409).json({
+        success: false,
+        error: "CONFLICT",
+        message: "This order has been modified by another session. Please reload before editing.",
+        serverVersion: order.pricingVersion
+      });
+    }
 
     if (deliveryDate) order.deliveryDate = deliveryDate;
     if (specialNotes !== undefined) order.specialNotes = specialNotes;
@@ -904,6 +914,9 @@ export const updateOrder = async (req, res) => {
       await createWorksFromGarments(order._id, newGarments, creatorId);
     }
 
+    // Increment version on update
+    order.pricingVersion = (order.pricingVersion || 0) + 1;
+
     await order.save();
     await updateOrderPaymentSummary(order._id);
 
@@ -923,9 +936,12 @@ export const updateOrder = async (req, res) => {
 // ============================================
 export const updateOrderStatus = async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, pricingVersion } = req.body;
     const { id } = req.params;
     
+    // 🔒 Lock Guard
+    await assertOrderNotLocked(id);
+
     const validStatuses = ["draft", "confirmed", "in-progress", "cutting", "stitching", "trial", "finishing", "ready-to-delivery", "delivered", "cancelled"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: `Invalid status.` });
@@ -933,6 +949,16 @@ export const updateOrderStatus = async (req, res) => {
     
     const order = await Order.findById(id).populate('customer').populate('garments');
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    // 🔄 Optimistic Concurrency Check
+    if (pricingVersion !== undefined && order.pricingVersion !== undefined && order.pricingVersion !== pricingVersion) {
+      return res.status(409).json({
+        success: false,
+        error: "CONFLICT",
+        message: "This order has been modified by another session. Please reload before editing.",
+        serverVersion: order.pricingVersion
+      });
+    }
     
     const balance = Number(order.balanceAmount) || 0;
     if (status === 'delivered' && balance > 0 && req.body.bypassDeliveryLock !== true) {
@@ -949,6 +975,7 @@ export const updateOrderStatus = async (req, res) => {
       order.currentStage = order.stageKeys?.[order.stageKeys.length - 2] || 'packing';
     }
     
+    order.pricingVersion = (order.pricingVersion || 0) + 1;
     await order.save();
 
     if (status === 'ready-to-deliver' && oldStatus !== 'ready-to-deliver') {

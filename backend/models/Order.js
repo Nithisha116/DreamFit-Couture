@@ -87,6 +87,11 @@ stageKeys: {
   maxPrice: { type: Number, default: 0 },
   finalizedAmount: { type: Number, default: 0 },
   dueAmount: { type: Number, default: 0 },
+  pricingLocked: { type: Boolean, default: false },
+  lockedAt: { type: Date },
+  lockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  lockReason: { type: String },
+  pricingVersion: { type: Number, default: 0 },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
