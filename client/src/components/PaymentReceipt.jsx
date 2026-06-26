@@ -93,20 +93,20 @@ const PaymentReceipt = forwardRef(({
 
   // Running totals after this payment
   const totalPaidAfterThis = previousTotal + currentAmount;
-  const isFinalized = summary.finalizedAmount > 0;
+  // For range-based orders (min !== max), never use finalizedAmount for checks
+  const isRangeOrder = summary.totalAmountMin !== summary.totalAmountMax;
 
-  const isReceiptFullyPaid = isFinalized 
-    ? totalPaidAfterThis >= summary.finalizedAmount
-    : summary.totalAmountMin > 0 && totalPaidAfterThis >= summary.totalAmountMin;
+  const isReceiptFullyPaid = summary.totalAmountMin > 0 && totalPaidAfterThis >= summary.totalAmountMin;
 
-  const balanceMin = isReceiptFullyPaid ? 0 : Math.max(0, (isFinalized ? summary.finalizedAmount : summary.totalAmountMin) - totalPaidAfterThis);
-  const balanceMax = isReceiptFullyPaid ? 0 : Math.max(0, (isFinalized ? summary.finalizedAmount : summary.totalAmountMax) - totalPaidAfterThis);
+  const balanceMin = isReceiptFullyPaid ? 0 : Math.max(0, summary.totalAmountMin - totalPaidAfterThis);
+  const balanceMax = isReceiptFullyPaid ? 0 : Math.max(0, summary.totalAmountMax - totalPaidAfterThis);
 
   // Payment status
   const getPaymentStatus = () => {
     if (isReceiptFullyPaid) return "FULLY PAID";
     if (currentPayment.type === 'advance') return "ADVANCE PAYMENT";
     if (currentPayment.type === 'full') return "FULL PAYMENT";
+    if (currentPayment.type === 'final-settlement') return "FINAL SETTLEMENT";
     if (currentPayment.type === 'partial') return "PARTIAL PAYMENT";
     if (currentPayment.type === 'extra') return "EXTRA PAYMENT";
     return "PAYMENT RECEIVED";
@@ -274,15 +274,13 @@ const PaymentReceipt = forwardRef(({
             <tbody>
               <tr style={{ borderBottom: "1px solid #fbcfe8" }}>
                 <td style={{ padding: "12px 14px" }}>
-                  {isFinalized ? "Final Bill Amount" : "Order Price Range"}
+                  {isRangeOrder ? "Order Price Range" : "Order Price"}
                 </td>
                 <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: "600" }}>
-                  {isFinalized ? (
-                    formatCurrency(summary.finalizedAmount)
-                  ) : summary.totalAmountMin === summary.totalAmountMax ? (
-                    formatCurrency(summary.totalAmountMax)
-                  ) : (
+                  {isRangeOrder ? (
                     `${formatCurrency(summary.totalAmountMin)} – ${formatCurrency(summary.totalAmountMax)}`
+                  ) : (
+                    formatCurrency(summary.totalAmountMax)
                   )}
                 </td>
               </tr>
@@ -348,12 +346,16 @@ const PaymentReceipt = forwardRef(({
           
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <p style={{ fontSize: "13px", color: isReceiptFullyPaid ? "#065f46" : "#9a3412", margin: "0 0 5px 0" }}>Remaining Balance</p>
+              <p style={{ fontSize: "13px", color: isReceiptFullyPaid ? "#065f46" : "#9a3412", margin: "0 0 5px 0" }}>
+                {isRangeOrder ? "Remaining Balance Range" : "Remaining Balance"}
+              </p>
               <p style={{ fontSize: "28px", fontWeight: "800", color: isReceiptFullyPaid ? "#065f46" : "#be185d", margin: 0 }}>
-                {balanceMin === balanceMax ? (
-                  formatCurrency(balanceMax)
+                {isReceiptFullyPaid ? (
+                  formatCurrency(0)
+                ) : isRangeOrder ? (
+                  `${formatCurrency(balanceMin)} \u2013 ${formatCurrency(balanceMax)}`
                 ) : (
-                  `${formatCurrency(balanceMin)} – ${formatCurrency(balanceMax)}`
+                  formatCurrency(balanceMax)
                 )}
               </p>
             </div>

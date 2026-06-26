@@ -5,11 +5,14 @@ import Payment from "../models/Payment.js";
 import Order from "../models/Order.js";
 import Transaction from "../models/Transaction.js";
 import Customer from "../models/Customer.js";
+import Garment from "../models/Garment.js";
+import AuditLog from "../models/AuditLog.js";
 import * as invoiceRepository from "../repositories/invoice.repository.js";
 import billingEmitter from "./billingEmitter.js";
 import { calculateInvoiceTotals, calculateProfit } from "../utils/billingCalculator.js";
 import { toPaise, toRupees } from "../utils/precision.js";
 import { canTransitionInvoiceStatus } from "../utils/statusMachine.js";
+import { getGarmentBreakdown, buildOrderPricingSummary } from "../utils/pricingEngine.js";
 
 /**
  * Generates an atomic sequential invoice number: INV-YYYY-XXXX
@@ -78,6 +81,25 @@ export const createInvoiceService = async (orderId, invoiceData, userId) => {
       materialCost: invoiceData.materialCost || 0
     });
 
+    // Fetch garments and payments for the immutable financial snapshot
+    const garments = await Garment.find({ order: orderId, isActive: true }).session(session);
+    const payments = await Payment.find({ order: orderId, isDeleted: false }).session(session);
+    const orderPricingSummary = buildOrderPricingSummary(garments, payments);
+
+    const snapshot = {
+      garments: garments.map(g => ({ ...getGarmentBreakdown(g), name: g.name, garmentId: g.garmentId })),
+      payments: payments.map(p => ({ amount: p.amount, method: p.method, paymentDate: p.paymentDate })),
+      orderTotals: { totalMin: orderPricingSummary.totalMin, totalMax: orderPricingSummary.totalMax },
+      invoiceTotals: {
+        subtotal: totals.subtotal,
+        discount: totals.discountAmount,
+        tax: totals.taxAmount,
+        grandTotalMin: totals.grandTotalMin,
+        grandTotalMax: totals.grandTotalMax
+      },
+      snapshotAt: new Date()
+    };
+
     // 7. Create Invoice
     const invoice = new Invoice({
       invoiceNumber,
@@ -100,7 +122,9 @@ export const createInvoiceService = async (orderId, invoiceData, userId) => {
       status: "issued",
       paymentStatus: isFullyPaid ? "paid" : paidPaise > 0 ? "partial" : "pending",
       dueDate: invoiceData.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default 7 days
-      generatedBy: userId
+      generatedBy: userId,
+      financialSnapshot: snapshot,
+      orderFinalizedAt: new Date()
     });
 
     await invoiceRepository.save(invoice, session);
@@ -115,7 +139,25 @@ export const createInvoiceService = async (orderId, invoiceData, userId) => {
     order.maxPrice = totals.grandTotalMax;
     order.priceSummary.totalMin = totals.grandTotalMin;
     order.priceSummary.totalMax = totals.grandTotalMax;
+
+    // Lock Order
+    order.pricingLocked = true;
+    order.lockedAt = new Date();
+    order.lockedBy = userId;
+    order.lockReason = "FINAL_BILL_GENERATED";
+    order.pricingVersion = (order.pricingVersion || 0) + 1;
+
     await order.save({ session });
+
+    // Write audit log inside the transaction
+    await AuditLog.create([{
+      action: "FINAL_BILL_GENERATED",
+      user: userId,
+      entityType: "Invoice",
+      entityId: invoice._id,
+      description: `Final bill ${invoice.invoiceNumber} generated. Order locked.`,
+      newData: { invoiceNumber: invoice.invoiceNumber, grandTotal: totals.grandTotalMax }
+    }], { session });
 
     await session.commitTransaction();
     session.endSession();
@@ -295,12 +337,28 @@ export const cancelInvoiceService = async (invoiceId, userId) => {
     invoice.summary.dueAmount = 0; // Cancel outstanding dues
     await invoiceRepository.save(invoice, session);
 
-    // 2. Unlink financials on Order
+    // 2. Unlink financials on Order and unlock
     const order = await Order.findById(invoice.order).session(session);
     if (order) {
       order.balanceAmount = 0;
       order.paymentSummary.paymentStatus = "pending";
+
+      order.pricingLocked = false;
+      order.lockedAt = null;
+      order.lockedBy = null;
+      order.lockReason = null;
+      order.pricingVersion = (order.pricingVersion || 0) + 1;
+
       await order.save({ session });
+
+      // Write AuditLog inside transaction
+      await AuditLog.create([{
+        action: "ORDER_UNLOCKED",
+        user: userId,
+        entityType: "Order",
+        entityId: order._id,
+        description: `Order ${order.orderId || order._id} unlocked after invoice ${invoice.invoiceNumber} cancellation.`
+      }], { session });
     }
 
     await session.commitTransaction();

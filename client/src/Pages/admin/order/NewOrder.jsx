@@ -3955,6 +3955,7 @@ import ImagePreviewModal from "../../../components/ImagePreviewModal";
 import showToast from "../../../utils/toast";
 import { fetchWorks, fetchWorkflowJobs } from "../../../features/work/workSlice";
 import RangeBadge from "../../../components/RangeBadge";
+import { buildOrderPricingSummary } from "../../../utils/pricingEngine";
 import {
   isValidWorkflowStages,
   normalizeWorkflowStages,
@@ -4286,61 +4287,17 @@ export default function NewOrder() {
     return total;
   }, [payments]);
 
-  // Calculate estimated range reference
-  const estimatedRange = useMemo(() => {
-    const min = garments.reduce((sum, g) => {
-      if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
-        return sum + Number(g.finalGarmentMinAmount);
-      }
-      const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
-      const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
-      const fabric = Number(g.fabricPrice || 0);
-      const additional = Number(g.additionalCharges || 0);
-      return sum + tailoringMin + fabric + additional;
-    }, 0);
-    const max = garments.reduce((sum, g) => {
-      if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
-        return sum + Number(g.finalGarmentMaxAmount);
-      }
-      const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
-      const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
-      const fabric = Number(g.fabricPrice || 0);
-      const additional = Number(g.additionalCharges || 0);
-      return sum + tailoringMax + fabric + additional;
-    }, 0);
-    return { min, max };
-  }, [garments]);
+  // Calculate complete pricing summary via central engine
+  const pricingSummary = useMemo(() => {
+    return buildOrderPricingSummary(garments, payments);
+  }, [garments, payments]);
 
-  // Calculate finalized amount (negotiated sum - legacy support maps to max)
-  const finalizedAmount = estimatedRange.max;
-
-  // Unified driving totalAmount
-  const totalAmount = estimatedRange.max;
-
-  // Calculate priceSummary object
-  const priceSummary = useMemo(() => {
-    return { totalMin: estimatedRange.min, totalMax: estimatedRange.max };
-  }, [estimatedRange.min, estimatedRange.max]);
-
-  // Calculate balance - with NaN protection and DEBUG
-  const balanceAmount = useMemo(() => {
-    console.log("%c⚖️⚖️⚖️ CALCULATING BALANCE ⚖️⚖️⚖️", "background: orange; color: white; font-size: 12px");
-    
-    const paid = isNaN(totalPayments) ? 0 : Number(totalPayments);
-    const remainingMin = Math.max(0, estimatedRange.min - paid);
-    const remainingMax = Math.max(0, estimatedRange.max - paid);
-    
-    console.log("  Estimated Min Amount:", estimatedRange.min);
-    console.log("  Estimated Max Amount:", estimatedRange.max);
-    console.log("  Total Paid:", paid);
-    console.log("  Remaining Min Balance:", remainingMin);
-    console.log("  Remaining Max Balance:", remainingMax);
-    
-    return {
-      min: remainingMin,
-      max: remainingMax,
-    };
-  }, [estimatedRange.min, estimatedRange.max, totalPayments]);
+  // Keep legacy references working
+  const estimatedRange = { min: pricingSummary.totalMin, max: pricingSummary.totalMax };
+  const finalizedAmount = pricingSummary.totalMax;
+  const totalAmount = pricingSummary.totalMax;
+  const priceSummary = { totalMin: pricingSummary.totalMin, totalMax: pricingSummary.totalMax };
+  const balanceAmount = { min: pricingSummary.balanceDueMin, max: pricingSummary.balanceDueMax };
 
   // 🔍🔍🔍 CUSTOMER HANDLERS 🔍🔍🔍
   

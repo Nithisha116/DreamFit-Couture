@@ -155,6 +155,14 @@ const invoiceSchema = new mongoose.Schema({
     required: true,
     index: true 
   },
+  financialSnapshot: {
+    garments: { type: mongoose.Schema.Types.Mixed },
+    payments: { type: mongoose.Schema.Types.Mixed },
+    orderTotals: { type: mongoose.Schema.Types.Mixed },
+    invoiceTotals: { type: mongoose.Schema.Types.Mixed },
+    snapshotAt: { type: Date, default: Date.now }
+  },
+  orderFinalizedAt: { type: Date },
   
   // Soft Delete Fields
   isDeleted: { 

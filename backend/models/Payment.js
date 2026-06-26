@@ -27,6 +27,18 @@ const paymentSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  orderTotalMinAtPayment: {
+    type: Number,
+    default: 0
+  },
+  orderTotalMaxAtPayment: {
+    type: Number,
+    default: 0
+  },
+  totalPaidAfterThis: {
+    type: Number,
+    default: 0
+  },
 
   // Payment type: advance = partial upfront, full = direct full payment, final-settlement = remaining after advance
   type: {

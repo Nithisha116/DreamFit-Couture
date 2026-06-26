@@ -5,6 +5,8 @@ import Customer from '../models/Customer.js';
 import Transaction from '../models/Transaction.js';
 import Order from '../models/Order.js';
 import Garment from '../models/Garment.js';
+import { buildOrderPricingSummary } from '../utils/pricingEngine.js';
+import { assertOrderNotLocked } from '../utils/orderLock.js';
 
 // ============================================
 // 🔧 HELPER — Map payment type to income category
@@ -21,12 +23,12 @@ const mapPaymentTypeToCategory = (type) => {
 // ============================================
 // 🔧 HELPER — Create income transaction from payment
 // ============================================
-const createIncomeFromPayment = async (payment, order, userId) => {
+const createIncomeFromPayment = async (payment, order, userId, session = null) => {
   try {
     const accountType = payment.method === 'cash' ? 'hand-cash' : 'bank';
     const category = mapPaymentTypeToCategory(payment.type);
 
-    const customer = await Customer.findById(payment.customer);
+    const customer = await Customer.findById(payment.customer).session(session);
     const customerDetails = customer
       ? {
         name:
@@ -39,7 +41,7 @@ const createIncomeFromPayment = async (payment, order, userId) => {
       : null;
 
     // Guard: skip if transaction already recorded for this payment
-    const existing = await Transaction.findOne({ 'metadata.paymentId': payment._id });
+    const existing = await Transaction.findOne({ 'metadata.paymentId': payment._id }).session(session);
     if (existing) return existing;
 
     // Secondary duplicate guard (same order + category + amount + method)
@@ -51,11 +53,11 @@ const createIncomeFromPayment = async (payment, order, userId) => {
         amount: payment.amount,
         paymentMethod: payment.method,
         status: 'completed',
-      });
+      }).session(session);
       if (dup) return dup;
     }
 
-    const transaction = await Transaction.create({
+    const transaction = await Transaction.create([{
       type: 'income',
       category,
       amount: payment.amount,
@@ -74,9 +76,9 @@ const createIncomeFromPayment = async (payment, order, userId) => {
         paymentType: payment.type,
         paymentMethod: payment.method,
       },
-    });
+    }], { session });
 
-    return transaction;
+    return transaction[0];
   } catch (error) {
     console.error('❌ Failed to create income transaction:', error.message);
     return null;
@@ -86,7 +88,7 @@ const createIncomeFromPayment = async (payment, order, userId) => {
 // ============================================
 // 🔧 HELPER — Update income transaction from payment
 // ============================================
-const updateIncomeFromPayment = async (payment, userId) => {
+const updateIncomeFromPayment = async (payment, userId, session = null) => {
   try {
     const accountType = payment.method === 'cash' ? 'hand-cash' : 'bank';
     const category = mapPaymentTypeToCategory(payment.type);
@@ -105,12 +107,12 @@ const updateIncomeFromPayment = async (payment, userId) => {
         'metadata.paymentType': payment.type,
         'metadata.paymentMethod': payment.method,
       },
-      { new: true }
+      { new: true, session }
     );
 
     if (!transaction) {
-      const order = await Order.findById(payment.order);
-      await createIncomeFromPayment(payment, order, userId);
+      const order = await Order.findById(payment.order).session(session);
+      await createIncomeFromPayment(payment, order, userId, session);
     }
 
     return transaction;
@@ -123,12 +125,12 @@ const updateIncomeFromPayment = async (payment, userId) => {
 // ============================================
 // 🔧 HELPER — Soft-delete income transaction
 // ============================================
-const deleteIncomeFromPayment = async (paymentId) => {
+const deleteIncomeFromPayment = async (paymentId, session = null) => {
   try {
     return await Transaction.findOneAndUpdate(
       { 'metadata.paymentId': paymentId },
       { status: 'cancelled', isDeleted: true },
-      { new: true }
+      { new: true, session }
     );
   } catch (error) {
     console.error('❌ Failed to delete income transaction:', error.message);
@@ -139,128 +141,69 @@ const deleteIncomeFromPayment = async (paymentId) => {
 // ============================================
 // 🔄 HELPER — Recalculate and persist order payment summary
 // ============================================
-async function updateOrderPaymentSummary(orderId) {
+async function updateOrderPaymentSummary(orderId, session = null) {
   try {
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId).session(session);
     if (!order) return;
 
     // Dynamically calculate and self-heal the priceSummary from the actual garments in database
-    const garments = await Garment.find({ order: orderId, isActive: true });
-    let totalMin = 0;
-    let totalMax = 0;
-    let totalFinalized = 0;
-    if (garments && garments.length > 0) {
-      for (const g of garments) {
-        const fabric = Number(g.fabricPrice || 0);
-        const additional = Number(g.additionalCharges || 0);
-        
-        let minVal, maxVal, finalVal;
-
-        if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
-          minVal = Number(g.finalGarmentMinAmount);
-        } else {
-          const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
-          const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
-          minVal = tailoringMin + fabric + additional;
-        }
-
-        if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
-          maxVal = Number(g.finalGarmentMaxAmount);
-        } else {
-          const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
-          const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
-          maxVal = tailoringMax + fabric + additional;
-        }
-
-        if (g.finalGarmentAmount !== undefined && g.finalGarmentAmount !== null) {
-          finalVal = Number(g.finalGarmentAmount);
-        } else {
-          const rawFinalized = g.finalizedAmount !== undefined && g.finalizedAmount !== null
-            ? g.finalizedAmount
-            : (g.finalizedPrice !== undefined && g.finalizedPrice !== null
-              ? g.finalizedPrice
-              : 0);
-          finalVal = rawFinalized > 0 ? rawFinalized + fabric + additional : 0;
-        }
-
-        totalMin += minVal;
-        totalMax += maxVal;
-        totalFinalized += finalVal;
-      }
-      order.minPrice = totalMin;
-      order.maxPrice = totalMax;
-      order.finalizedAmount = totalFinalized;
-      order.priceSummary = { totalMin, totalMax };
-    }
-
+    const garments = await Garment.find({ order: orderId, isActive: true }).session(session);
     const payments = await Payment.find({
       order: orderId,
       isDeleted: false,
       type: { $in: ['advance', 'full', 'final-settlement'] },
-    });
+    }).session(session);
 
-    const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const summary = buildOrderPricingSummary(garments, payments);
+
+    order.minPrice = summary.totalMin;
+    order.maxPrice = summary.totalMax;
+    order.priceSummary = { totalMin: summary.totalMin, totalMax: summary.totalMax };
+
+    // Auto-finalize: Only lock to a single "Final Bill Amount" when this is a
+    // fixed-price order (min === max). For range-based orders, we intentionally
+    // keep finalizedAmount = 0 so the UI stays in "range view" even after full
+    // payment. The payment status (paid/partial/pending) is carried by
+    // summary.paymentStatus instead.
+    const isRangeBased = summary.totalMin !== summary.totalMax;
+    let finalizedAmount = 0;
+    if (!isRangeBased && summary.totalMin > 0 && summary.totalPaid >= summary.totalMin) {
+      finalizedAmount = summary.totalPaid;
+    }
+
+    order.finalizedAmount = finalizedAmount;
+    order.balanceMin = summary.balanceDueMin;
+    order.balanceMax = summary.balanceDueMax;
+    order.balanceAmount = summary.balanceDueMax;
+    order.dueAmount = summary.balanceDueMax;
+
     const sorted = [...payments].sort(
       (a, b) => new Date(b.paymentDate || 0) - new Date(a.paymentDate || 0)
     );
     const lastPayment = sorted[0];
 
-    // ============================================
-    // NEW BUSINESS LOGIC: DYNAMIC FINALIZATION
-    // ============================================
-    let finalizedAmount = order.finalizedAmount || 0;
-    
-    // Auto-finalize if paid amount reaches or exceeds minimum
-    if (totalMin > 0 && totalPaid >= totalMin) {
-      finalizedAmount = totalPaid;
-    } else if (totalPaid < totalMin) {
-      // Forcefully un-finalize if it drops below the minimum bound (e.g. adding new garments)
-      finalizedAmount = 0;
-    }
-
-    let balanceMin = 0;
-    let balanceMax = 0;
-    let balanceAmount = 0; // Legacy fallback
-
-    if (finalizedAmount > 0) {
-      // ORDER IS FINALIZED
-      balanceAmount = Math.max(0, finalizedAmount - totalPaid);
-      balanceMin = balanceAmount;
-      balanceMax = balanceAmount;
-    } else {
-      // ORDER IS NOT FINALIZED -> REMAINS A RANGE
-      balanceMin = Math.max(0, totalMin - totalPaid);
-      balanceMax = Math.max(0, totalMax - totalPaid);
-      balanceAmount = balanceMax; // For backward compatibility if needed elsewhere
-    }
-
-    let paymentStatus = 'pending';
-    if (finalizedAmount > 0 && balanceAmount === 0 && totalPaid > 0) {
-      paymentStatus = 'paid';
-    } else if (totalPaid > 0) {
-      paymentStatus = 'partial';
-    }
+    const paymentSummary = {
+      totalPaid: summary.totalPaid,
+      lastPaymentDate: lastPayment?.paymentDate,
+      lastPaymentAmount: lastPayment?.amount,
+      paymentCount: payments.length,
+      paymentStatus: summary.paymentStatus
+    };
 
     await Order.findByIdAndUpdate(orderId, {
       minPrice: order.minPrice,
       maxPrice: order.maxPrice,
       finalizedAmount,
-      dueAmount: balanceAmount,
+      dueAmount: order.dueAmount,
       priceSummary: order.priceSummary,
-      paymentSummary: {
-        totalPaid,
-        lastPaymentDate: lastPayment?.paymentDate,
-        lastPaymentAmount: lastPayment?.amount,
-        paymentCount: payments.length,
-        paymentStatus,
-      },
-      balanceAmount,
-      balanceMin,
-      balanceMax
-    });
+      paymentSummary,
+      balanceAmount: order.balanceAmount,
+      balanceMin: order.balanceMin,
+      balanceMax: order.balanceMax
+    }, { session });
 
     console.log(
-      `✅ Order payment summary updated — paid: ₹${totalPaid}, balance: ₹${balanceAmount}, status: ${paymentStatus}`
+      `✅ Order payment summary updated — paid: ₹${summary.totalPaid}, balance: ₹${order.dueAmount}, status: ${summary.paymentStatus}`
     );
 
     try {
@@ -289,7 +232,14 @@ export const createPayment = async (req, res) => {
       paymentDate,
       paymentTime,
       notes,
+      pricingVersion
     } = req.body;
+
+    // 🔒 Lock Guard
+    await assertOrderNotLocked(orderId);
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
     // ── Validate required fields ─────────────────────────────────────────────
     if (!orderId) {
@@ -300,9 +250,23 @@ export const createPayment = async (req, res) => {
     }
 
     // ── Fetch order ──────────────────────────────────────────────────────────
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId).session(session);
     if (!order) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // 🔄 Optimistic Concurrency Check
+    if (pricingVersion !== undefined && order.pricingVersion !== undefined && order.pricingVersion !== pricingVersion) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(409).json({
+        success: false,
+        error: "CONFLICT",
+        message: "This order has been modified by another session. Please reload before editing.",
+        serverVersion: order.pricingVersion
+      });
     }
 
     // ── Calculate totals ─────────────────────────────────────────────────────
@@ -310,7 +274,7 @@ export const createPayment = async (req, res) => {
       order: orderId,
       isDeleted: false,
       type: { $in: ['advance', 'full', 'final-settlement'] },
-    });
+    }).session(session);
 
     const alreadyPaid = existingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
     
@@ -343,6 +307,8 @@ export const createPayment = async (req, res) => {
 
     // ── Block if already fully paid ──────────────────────────────────────────
     if (remainingMax <= 0 || (totalMin > 0 && alreadyPaid >= totalMin)) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Payment already completed. This order is finalized and has no outstanding balance.',
@@ -358,7 +324,16 @@ export const createPayment = async (req, res) => {
     let resolvedType = type || 'advance';
 
     if (!paymentAmount || paymentAmount <= 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ success: false, message: 'Valid amount is required' });
+    }
+
+    // Dynamic Type Resolution (Trust backend calculated constraints, not just frontend payload)
+    if (paymentAmount >= remainingMin && paymentAmount <= remainingMax && paymentAmount > 0) {
+      resolvedType = 'full';
+    } else if (paymentAmount < remainingMin) {
+      resolvedType = 'advance';
     }
 
     // When prior advances exist and user selects "full", treat it as a final-settlement
@@ -368,6 +343,8 @@ export const createPayment = async (req, res) => {
 
     // Clamp to absolute remaining balance (max boundary) — never allow overpayment
     if (paymentAmount > remainingMax && remainingMax > 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: `Amount exceeds maximum possible remaining balance of ₹${remainingMax}. Please enter ₹${remainingMax} or less.`,
@@ -377,7 +354,7 @@ export const createPayment = async (req, res) => {
     const userId = req.user?.id || req.user?._id;
 
     // ── Create the payment ───────────────────────────────────────────────────
-    const payment = await Payment.create({
+    const paymentArr = await Payment.create([{
       order: orderId,
       customer: order.customer,
       amount: paymentAmount,
@@ -390,15 +367,25 @@ export const createPayment = async (req, res) => {
         new Date().toLocaleTimeString('en-US', { hour12: false }),
       notes: notes || '',
       receivedBy: userId,
-    });
+    }], { session });
+
+    const payment = paymentArr[0];
 
     console.log(
       `✅ Payment created: ${payment._id} | type: ${resolvedType} | amount: ₹${paymentAmount}`
     );
 
     // ── Side effects ─────────────────────────────────────────────────────────
-    await createIncomeFromPayment(payment, order, userId);
-    await updateOrderPaymentSummary(orderId);
+    await createIncomeFromPayment(payment, order, userId, session);
+    
+    // Increment version
+    order.pricingVersion = (order.pricingVersion || 0) + 1;
+    await order.save({ session });
+    
+    await updateOrderPaymentSummary(orderId, session);
+
+    await session.commitTransaction();
+    session.endSession();
 
     return res.status(201).json({
       success: true,
@@ -407,6 +394,10 @@ export const createPayment = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error creating payment:', error.message);
+    if (mongoose.connection.readyState === 1 && typeof session !== "undefined") {
+      await session.abortTransaction();
+      session.endSession();
+    }
     return res.status(400).json({ success: false, error: error.message });
   }
 };

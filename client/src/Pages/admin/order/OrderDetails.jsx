@@ -2070,30 +2070,14 @@ export default function OrderDetails() {
 
   // Calculate estimated range and finalized billing amount from garments
   const estimatedRange = useMemo(() => {
-    const min = garments.reduce((sum, g) => {
-      if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
-        return sum + Number(g.finalGarmentMinAmount);
-      }
-      const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
-      const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
-      const fabric = Number(g.fabricPrice || 0);
-      const additional = Number(g.additionalCharges || 0);
-      return sum + tailoringMin + fabric + additional;
-    }, 0);
-    const max = garments.reduce((sum, g) => {
-      if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
-        return sum + Number(g.finalGarmentMaxAmount);
-      }
-      const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
-      const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
-      const fabric = Number(g.fabricPrice || 0);
-      const additional = Number(g.additionalCharges || 0);
-      return sum + tailoringMax + fabric + additional;
-    }, 0);
-    return { min, max };
-  }, [garments]);
+    return { min: summary.totalAmountMin, max: summary.totalAmountMax };
+  }, [summary.totalAmountMin, summary.totalAmountMax]);
 
-  const isFinalized = summary.finalizedAmount > 0;
+  // isFinalized = true only when order has a single locked price (min === max OR
+  // a manual finalizedAmount was set). Range-based orders ALWAYS show the range
+  // even after full payment — the payment status badge handles "paid" indication.
+  const isRangeOrder = summary.totalAmountMin !== summary.totalAmountMax;
+  const isFinalized = !isRangeOrder && summary.finalizedAmount > 0;
   
   const finalizedAmount = {
     min: summary.totalAmountMin,
@@ -2341,8 +2325,9 @@ const handleSavePayment = async (paymentData) => {
       method: paymentData.method || 'cash',
       referenceNumber: paymentData.referenceNumber?.trim() || '',
       paymentDate: paymentDateObj.toISOString(), // ✅ Send full ISO string with time
-      paymentTime: formattedTime, // HH:MM AM/PM for display
-      notes: paymentData.notes?.trim() || ''
+      paymentTime: paymentData.paymentTime || formattedTime,
+      notes: paymentData.notes?.trim() || '',
+      pricingVersion: currentOrder?.pricingVersion
     };
 
     console.log("📤 Prepared payment data with full timestamp:", preparedPaymentData);
@@ -2872,6 +2857,7 @@ const handleSavePayment = async (paymentData) => {
           orderId={id}
           customerId={currentOrder?.customer?._id}
           initialData={editingPayment}
+          pricingVersion={currentOrder?.pricingVersion}
           title={editingPayment ? "Edit Payment" : "Add Payment to Order"}
         />
 
@@ -3564,15 +3550,15 @@ const handleSavePayment = async (paymentData) => {
 
                 <div className="bg-orange-50 p-3 sm:p-4 rounded-lg sm:rounded-xl">
                   <p className="text-[10px] sm:text-xs text-orange-600 font-black uppercase mb-1">
-                    {isFinalized || balanceAmount.min === balanceAmount.max ? "Balance Amount" : "Remaining Balance Range"}
+                    {summary.isFullyPaid ? "Balance Amount" : isRangeOrder ? "Remaining Balance Range" : "Balance Amount"}
                   </p>
                   <p className="text-base sm:text-lg lg:text-xl font-black text-orange-700 break-words">
                     {summary.isFullyPaid ? (
                       formatCurrency(0)
-                    ) : isFinalized || balanceAmount.min === balanceAmount.max ? (
-                      formatCurrency(balanceAmount.max)
-                    ) : (
+                    ) : isRangeOrder ? (
                       `${formatCurrency(balanceAmount.min)} - ${formatCurrency(balanceAmount.max)}`
+                    ) : (
+                      formatCurrency(balanceAmount.max)
                     )}
                   </p>
                   {summary.isFullyPaid ? (
