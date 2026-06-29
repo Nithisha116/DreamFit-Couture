@@ -820,7 +820,7 @@ export const getAllOrders = async (req, res) => {
 export const getOrderById = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate('customer', 'name phone customerId email address addressLine1 addressLine2 city state pincode')
+      .populate('customer', 'name phone whatsappNumber customerId email address addressLine1 addressLine2 city state pincode')
       .populate({
         path: "garments",
         populate: [
