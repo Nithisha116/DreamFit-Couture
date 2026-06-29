@@ -8,11 +8,12 @@ export function resolveCustomerPhone(customer) {
   if (!customer || typeof customer !== "object") return null;
 
   const raw =
-    customer.phone ||
-    customer.mobile ||
-    customer.phoneNumber ||
-    customer.contactNumber ||
-    "";
+  customer.whatsappNumber ||
+  customer.phone ||
+  customer.mobile ||
+  customer.phoneNumber ||
+  customer.contactNumber ||
+  "";
 
   const digits = String(raw).replace(/\D/g, "");
   if (!digits) return null;
@@ -96,7 +97,11 @@ export function buildOrderWhatsAppMessage({
   const orderId = order?.orderId || "N/A";
   const customerName = customer?.name || "Customer";
   const displayPhone =
-    customer?.phone || customer?.mobile || customer?.phoneNumber || "N/A";
+  customer?.whatsappNumber ||
+  customer?.phone ||
+  customer?.mobile ||
+  customer?.phoneNumber ||
+  "N/A";
 
   const lines = [
     "DreamFit Couture",

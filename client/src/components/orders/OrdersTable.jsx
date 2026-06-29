@@ -112,8 +112,15 @@ function ActionMenu({ order, canEdit, isAdmin, onView, onEdit, onDelete, onMarkD
             <Item icon={Truck} label="Mark Delivered" onClick={() => onMarkDelivered(order._id, order.orderId)} />
           )}
           {order.customer?.phone && (
-            <Item icon={MessageCircle} label="WhatsApp" onClick={() => window.open(`https://wa.me/91${order.customer.phone}`, '_blank')} />
-          )}
+  <Item 
+    icon={MessageCircle} 
+    label="WhatsApp" 
+    onClick={() => {
+      const number = order.customer.whatsappNumber || order.customer.phone;
+      window.open(`https://wa.me/91${number}`, '_blank');
+    }} 
+  />
+)}
           {isAdmin && <div style={{ borderTop: '1px solid #f3f4f6', margin: '4px 0' }} />}
           {isAdmin && <Item icon={Trash2} label="Delete" onClick={() => onDelete(order._id, order.orderId)} danger />}
         </div>
