@@ -1972,7 +1972,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Package,
   Plus,
@@ -2020,10 +2020,16 @@ import {
 import API from "../../../app/axios";
 import showToast from "../../../utils/toast";
 
+const PRODUCT_TABS = ["fabric", "category", "item", "inventory"];
+
 export default function Products() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("fabric");
+  const [searchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(() =>
+    PRODUCT_TABS.includes(tabFromUrl) ? tabFromUrl : "fabric",
+  );
 
   // Mobile state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -2127,6 +2133,13 @@ export default function Products() {
     navigate(`${basePath}/tailors`);
     setMobileMenuOpen(false);
   };
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && PRODUCT_TABS.includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Load data
   useEffect(() => {
@@ -2358,9 +2371,10 @@ export default function Products() {
 
   // Handle View Details - with basePath
   const handleViewDetails = (id) => {
-    if (activeTab === "fabric") navigate(`${basePath}/fabrics/${id}`);
-    else if (activeTab === "category") navigate(`${basePath}/categories/${id}`);
-    else navigate(`${basePath}/items/${id}`);
+    const navState = { state: { returnTab: activeTab } };
+    if (activeTab === "fabric") navigate(`${basePath}/fabrics/${id}`, navState);
+    else if (activeTab === "category") navigate(`${basePath}/categories/${id}`, navState);
+    else navigate(`${basePath}/items/${id}`, navState);
   };
 
   const handleImageChange = (e) => {

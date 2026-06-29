@@ -69,7 +69,7 @@
 //       try {
 //         await dispatch(deleteItem(id)).unwrap();
 //         showToast.success("Item deleted");
-//         navigate(`${basePath}/products?tab=item`);
+//         navigate(`${basePath}/products?tab=${productsReturnTab}`);
 //       } catch (error) {
 //         showToast.error("Delete failed");
 //       }
@@ -360,7 +360,7 @@
 //             <h3 className="font-bold text-slate-800 mb-3">Quick Actions</h3>
 //             <div className="flex gap-3">
 //               <button
-//                 onClick={() => navigate(`${basePath}/products?tab=item`)}
+//                 onClick={backToProducts}
 //                 className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition-all"
 //               >
 //                 View All Items
@@ -368,7 +368,7 @@
 //               {canEdit && (
 //                 <button
 //                   onClick={() => {
-//                     navigate(`${basePath}/products?tab=item`);
+//                     navigate(`${basePath}/products?tab=${productsReturnTab}`);
 //                     setTimeout(() => {
 //                       document.querySelector('[data-add-button]')?.click();
 //                     }, 100);
@@ -398,7 +398,7 @@
 
 
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { 
   ArrowLeft, Edit, Trash2, Package, Calendar, 
@@ -411,6 +411,7 @@ import showToast from "../../../utils/toast";
 export default function ItemDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
   
   const { items } = useSelector((state) => state.item);
@@ -432,6 +433,10 @@ export default function ItemDetail() {
   const basePath = user?.role === "ADMIN" ? "/admin" : 
                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
                    "/cuttingmaster";
+
+  const productsReturnTab = location.state?.returnTab || "item";
+  const backToProducts = () =>
+    navigate(`${basePath}/products?tab=${productsReturnTab}`);
 
   const isAdmin = user?.role === "ADMIN";
   const isStoreKeeper = user?.role === "STORE_KEEPER";
@@ -470,7 +475,7 @@ export default function ItemDetail() {
       try {
         await dispatch(deleteItem(id)).unwrap();
         showToast.success("Item deleted");
-        navigate(`${basePath}/products?tab=item`);
+        navigate(`${basePath}/products?tab=${productsReturnTab}`);
       } catch (error) {
         showToast.error("Delete failed");
       }
@@ -531,7 +536,7 @@ export default function ItemDetail() {
           <Package size={48} className="mx-auto text-slate-300 mb-4" />
           <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">Item Not Found</h2>
           <button 
-            onClick={() => navigate(`${basePath}/products?tab=item`)}
+            onClick={backToProducts}
             className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-sm sm:text-base"
           >
             Back to Items
@@ -547,7 +552,7 @@ export default function ItemDetail() {
       <div className="lg:hidden bg-white border-b border-slate-200 sticky top-0 z-30">
         <div className="flex items-center justify-between px-4 py-3">
           <button
-            onClick={() => navigate(`${basePath}/products?tab=item`)}
+            onClick={backToProducts}
             className="flex items-center gap-1 text-slate-600"
           >
             <ArrowLeft size={18} />
@@ -601,7 +606,7 @@ export default function ItemDetail() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8">
         {/* Desktop Back Button - Hidden on Mobile */}
         <button 
-          onClick={() => navigate(`${basePath}/products?tab=item`)} 
+          onClick={backToProducts}
           className="hidden lg:flex items-center gap-2 text-slate-600 hover:text-blue-600 mb-6 group"
         >
           <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
@@ -828,7 +833,7 @@ export default function ItemDetail() {
               <h3 className="font-bold text-slate-800 text-sm sm:text-base mb-2 sm:mb-3">Quick Actions</h3>
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
-                  onClick={() => navigate(`${basePath}/products?tab=item`)}
+                  onClick={backToProducts}
                   className="w-full sm:w-auto bg-slate-100 text-slate-700 px-4 py-2.5 sm:py-2 rounded-lg hover:bg-slate-200 transition-all text-sm flex items-center justify-center"
                 >
                   View All Items
@@ -836,7 +841,7 @@ export default function ItemDetail() {
                 {canEdit && (
                   <button
                     onClick={() => {
-                      navigate(`${basePath}/products?tab=item`);
+                      navigate(`${basePath}/products?tab=${productsReturnTab}`);
                       setTimeout(() => {
                         document.querySelector('[data-add-button]')?.click();
                       }, 100);
