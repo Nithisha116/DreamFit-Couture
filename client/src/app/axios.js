@@ -59,6 +59,12 @@ API.interceptors.response.use(
         window.location.href = "/";
       }
     }
+    
+    if (error.response?.status === 409) {
+      console.log("❌ Version Conflict detected! Triggering global modal.");
+      const event = new CustomEvent("versionConflict");
+      window.dispatchEvent(event);
+    }
 
     return Promise.reject(error);
   }

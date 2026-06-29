@@ -16,6 +16,7 @@ export default function AddPaymentModal({
   orderId,
   customerId,
   initialData = null,
+  pricingVersion,
   title = "Add Payment"
 }) {
   const [formData, setFormData] = useState({
@@ -83,7 +84,7 @@ export default function AddPaymentModal({
     }
   }, [isOpen]);
 
-  const totalPaid = (existingPayments || []).reduce(
+  const totalPaid = alreadyPaid > 0 ? alreadyPaid : (existingPayments || []).reduce(
     (sum, p) => sum + (Number(p?.amount) || 0),
     0,
   );
@@ -148,10 +149,9 @@ export default function AddPaymentModal({
     }
 
     // Validate against remaining balance maximum ceiling
-    if (formData.type === 'advance' && remainingMax > 0) {
-      if (Number(formData.amount) > remainingMax) {
-        newErrors.amount = `Amount cannot exceed maximum possible balance of ₹${remainingMax}`;
-      }
+    const parsedAmount = Number(formData.amount) || 0;
+    if (parsedAmount > remainingMax && remainingMax > 0) {
+      newErrors.amount = `Amount cannot exceed maximum possible balance of ₹${remainingMax}`;
     }
 
     if (!formData.paymentDate) {
@@ -203,6 +203,12 @@ export default function AddPaymentModal({
     }
   };
 
+  const amountNum = Number(formData.amount) || 0;
+  let derivedType = "advance";
+  if (amountNum >= remainingMin && amountNum <= remainingMax && amountNum > 0) {
+    derivedType = "full";
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -220,12 +226,13 @@ export default function AddPaymentModal({
       order: orderId,
       customer: customerId,
       amount: parsedAmount,
-      type: formData.type,
+      type: derivedType,
       method: formData.method,
       referenceNumber: formData.referenceNumber?.trim() || '',
       paymentDate: formData.paymentDate,
       paymentTime: formData.paymentTime,
-      notes: formData.notes?.trim() || ''
+      notes: formData.notes?.trim() || '',
+      pricingVersion
     };
 
 
@@ -323,60 +330,19 @@ export default function AddPaymentModal({
             )}
           </div>
 
-          {/* Payment Type */}
+          {/* Payment Type Display */}
           <div>
             <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-              Payment Type <span className="text-red-500">*</span>
+              Payment Type (Auto-detected)
             </label>
             {allowedTypes.length === 0 ? (
               <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 text-emerald-800 font-bold text-sm">
                 Paid Completely ✅
               </div>
             ) : (
-              <>
-                <div
-                  className={`grid gap-2 ${
-                    allowedTypes.length === 1 ? "grid-cols-1" : "grid-cols-2"
-                  }`}
-                >
-                  {allowedTypes.includes("advance") && (
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, type: "advance", amount: "" })}
-                      className={`py-3 rounded-xl font-bold transition-all ${
-                        formData.type === "advance"
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      Advance
-                    </button>
-                  )}
-                  {allowedTypes.includes("full") && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Auto-fill amount with minimum remaining balance to finalize
-                        const currentRemaining = remainingMin > 0 ? remainingMin : 0;
-                        const autoAmount = currentRemaining > 0 ? String(currentRemaining) : "";
-                        setFormData({ ...formData, type: "full", amount: autoAmount });
-                      }}
-                      className={`py-3 rounded-xl font-bold transition-all ${
-                        formData.type === "full"
-                          ? "bg-green-600 text-white shadow-lg shadow-green-500/30"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      {shouldShowFinalOnly ? "Final" : "Full / Settle"}
-                    </button>
-                  )}
-                </div>
-                {formData.type === 'full' && remainingMin > 0 && (
-                  <p className="text-xs text-green-600 mt-2 font-bold">
-                    ✅ Will settle minimum to finalize: ₹{remainingMin.toLocaleString('en-IN')}
-                  </p>
-                )}
-              </>
+              <div className={`p-3 rounded-xl border ${derivedType === 'full' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-blue-50 border-blue-200 text-blue-700'} font-bold`}>
+                {derivedType === 'full' ? 'Full Payment / Final Settlement' : 'Advance / Partial Payment'}
+              </div>
             )}
           </div>
 

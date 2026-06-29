@@ -42,6 +42,7 @@ import {
   isValidWorkflowStages,
   normalizeWorkflowStages,
 } from "../../../workflow/workflowStageUtils";
+import { getGarmentBreakdown } from "../../../utils/pricingEngine";
 
 const isUploadableFile = (value) =>
   value instanceof File ||
@@ -102,6 +103,10 @@ export default function GarmentForm({
     fabricPrice: 0,
     fabricNotes: "",
     fabricSufficiency: "To Be Verified",
+    quantity: 1,
+    additionalCharges: 0,
+    discount: 0,
+    discountType: "none",
 
     categoryName: "",
     itemName: "",
@@ -673,20 +678,11 @@ export default function GarmentForm({
 
   // ==================== PRICE CALCULATION ====================
   const getTotalPrices = () => {
-    const fabricPrice = formData.fabricPrice || 0;
-    if (formData.finalizedPrice !== "" && formData.finalizedPrice !== undefined && formData.finalizedPrice !== null) {
-      const finalPrice = parseFloat(formData.finalizedPrice) || 0;
-      return {
-        totalMin: finalPrice + fabricPrice,
-        totalMax: finalPrice + fabricPrice,
-      };
-    }
-    const itemMin = parseFloat(formData.priceRange.min) || 0;
-    const itemMax = parseFloat(formData.priceRange.max) || 0;
-
+    const breakdown = getGarmentBreakdown(formData);
     return {
-      totalMin: itemMin + fabricPrice,
-      totalMax: itemMax + fabricPrice,
+      totalMin: breakdown.garmentTotalMin,
+      totalMax: breakdown.garmentTotalMax,
+      ...breakdown
     };
   };
 
@@ -1051,6 +1047,10 @@ const renderDayContents = useCallback(
       if (formData.finalizedPrice !== undefined && formData.finalizedPrice !== null && formData.finalizedPrice !== "") {
         formDataToSend.append("finalizedPrice", String(formData.finalizedPrice));
       }
+      formDataToSend.append("quantity", String(formData.quantity || 1));
+      formDataToSend.append("additionalCharges", String(formData.additionalCharges || 0));
+      formDataToSend.append("discount", String(formData.discount || 0));
+      formDataToSend.append("discountType", formData.discountType || "none");
 
       // Add fabric data
       formDataToSend.append("fabricSource", formData.fabricSource);
@@ -1623,6 +1623,62 @@ const renderDayContents = useCallback(
                 <p className="text-[9px] text-slate-400 mt-2">
                   This customized estimated price range will be used for order billing, invoicing, and balance calculations.
                 </p>
+              </div>
+
+              {/* Quantity and Extra Pricing */}
+              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                  <div>
+                    <label className="block text-[8px] sm:text-xs font-bold text-slate-400 mb-1">
+                      Quantity
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={formData.quantity || 1}
+                      onChange={(e) => setFormData(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[8px] sm:text-xs font-bold text-slate-400 mb-1">
+                      Additional Charges (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.additionalCharges || 0}
+                      onChange={(e) => setFormData(prev => ({ ...prev, additionalCharges: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[8px] sm:text-xs font-bold text-slate-400 mb-1">
+                      Discount Value
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.discount || 0}
+                      onChange={(e) => setFormData(prev => ({ ...prev, discount: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[8px] sm:text-xs font-bold text-slate-400 mb-1">
+                      Discount Type
+                    </label>
+                    <select
+                      value={formData.discountType || 'none'}
+                      onChange={(e) => setFormData(prev => ({ ...prev, discountType: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-xs font-bold text-slate-800"
+                    >
+                      <option value="none">None</option>
+                      <option value="flat">Flat (₹)</option>
+                      <option value="percentage">Percentage (%)</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {formData.fabricSource === "shop" && formData.fabricPrice > 0 && (

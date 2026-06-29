@@ -1,37 +1,41 @@
 import { useState, useEffect } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { X, Plus, Trash2, Save } from "lucide-react";
 import { createCustomerProfile, updateCustomerProfile } from "../../features/customerSize/customerSizeSlice";
+import { fetchAllTemplates } from "../../features/sizeTemplate/sizeTemplateSlice";
+import { fetchAllSizeFields } from "../../features/sizeField/sizeFieldSlice";
 import showToast from "../../utils/toast";
-
-const GARMENT_TYPES = [
-  { id: "shirt", label: "Shirt", defaults: ["Chest", "Shoulder", "Sleeve Length", "Shirt Length", "Neck"] },
-  { id: "trouser", label: "Trouser/Pant", defaults: ["Waist", "Hip", "Inseam", "Outseam", "Thigh", "Bottom/Hem"] },
-  { id: "kurta", label: "Kurta", defaults: ["Chest", "Shoulder", "Sleeve Length", "Kurta Length", "Neck", "Hip"] },
-  { id: "blouse", label: "Blouse", defaults: ["Bust", "Under Bust", "Shoulder", "Sleeve Length", "Arm Hole", "Front Neck Depth", "Back Neck Depth"] },
-  { id: "saree", label: "Saree Fall/Pico", defaults: ["Saree Length"] },
-  { id: "general", label: "General", defaults: ["Chest", "Waist", "Hip", "Length"] }
-];
 
 export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, customerId }) {
   const dispatch = useDispatch();
   
+  const { templates } = useSelector((state) => state.sizeTemplate);
+  const { fields } = useSelector((state) => state.sizeField);
+
   const [formData, setFormData] = useState({
     profileName: "",
-    garmentType: "general",
+    garmentType: "",
     notes: ""
   });
 
   const [measurements, setMeasurements] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize form when modal opens
+  // Fetch initial data
+  useEffect(() => {
+    if (isOpen) {
+      dispatch(fetchAllTemplates({}));
+      dispatch(fetchAllSizeFields());
+    }
+  }, [isOpen, dispatch]);
+
+  // Initialize form when modal opens or templates load
   useEffect(() => {
     if (isOpen) {
       if (profileToEdit) {
         setFormData({
           profileName: profileToEdit.profileName || "",
-          garmentType: profileToEdit.garmentType || "general",
+          garmentType: profileToEdit.garmentType || "",
           notes: profileToEdit.notes || ""
         });
         setMeasurements(
@@ -42,27 +46,33 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
             id: Math.random().toString(36).substr(2, 9)
           }))
         );
-      } else {
+      } else if (templates && templates.length > 0 && !formData.garmentType) {
         // Defaults for new profile
-        handleGarmentTypeChange("shirt");
-        setFormData(prev => ({ ...prev, notes: "", profileName: "" }));
+        const firstTemplate = templates[0];
+        handleGarmentTypeChange(firstTemplate._id, firstTemplate.name);
+      }
+    } else {
+      // Clear form when closed
+      if (!profileToEdit) {
+         setFormData({ profileName: "", garmentType: "", notes: "" });
+         setMeasurements([]);
       }
     }
-  }, [isOpen, profileToEdit]);
+  }, [isOpen, profileToEdit, templates]);
 
-  const handleGarmentTypeChange = (type) => {
-    const garment = GARMENT_TYPES.find(g => g.id === type) || GARMENT_TYPES[5];
+  const handleGarmentTypeChange = (templateId, templateName) => {
+    const template = templates?.find(t => t._id === templateId);
     setFormData(prev => ({ 
       ...prev, 
-      garmentType: type,
-      profileName: prev.profileName || `${garment.label} Profile`
+      garmentType: templateId,
+      profileName: prev.profileName || `${templateName || template?.name || 'New'} Profile`
     }));
     
     // Only pre-fill defaults if not editing
-    if (!profileToEdit) {
+    if (!profileToEdit && template) {
       setMeasurements(
-        garment.defaults.map(field => ({
-          fieldName: field,
+        (template.sizeFields || []).map(field => ({
+          fieldName: field.displayName || field.name,
           value: "",
           unit: "inch",
           id: Math.random().toString(36).substr(2, 9)
@@ -94,6 +104,9 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
     // Validate
     if (!formData.profileName.trim()) {
       return showToast.error("Profile Name is required");
+    }
+    if (!formData.garmentType) {
+      return showToast.error("Garment Type is required");
     }
     
     const validMeasurements = measurements.filter(m => m.fieldName.trim() !== "" && m.value !== "");
@@ -166,11 +179,15 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
                 <select
                   disabled={!!profileToEdit} // Can't change type when editing
                   value={formData.garmentType}
-                  onChange={(e) => handleGarmentTypeChange(e.target.value)}
+                  onChange={(e) => {
+                      const t = templates?.find(temp => temp._id === e.target.value);
+                      handleGarmentTypeChange(e.target.value, t?.name);
+                  }}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 font-medium text-slate-700 disabled:opacity-50"
                 >
-                  {GARMENT_TYPES.map(g => (
-                    <option key={g.id} value={g.id}>{g.label}</option>
+                  <option value="" disabled>Select Garment Type</option>
+                  {templates?.map(t => (
+                    <option key={t._id} value={t._id}>{t.name}</option>
                   ))}
                 </select>
               </div>
@@ -193,59 +210,99 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
                 <button 
                   type="button" 
                   onClick={handleAddField}
-                  className="text-xs font-bold text-purple-600 bg-purple-100 hover:bg-purple-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                  className="text-xs font-bold text-blue-600 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
                 >
-                  <Plus size={14} /> Add Custom Field
+                  <Plus size={14} /> Add Measurement
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {measurements.map((m, index) => (
-                  <div key={m.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2 relative group">
-                    <button 
-                      type="button"
-                      onClick={() => handleRemoveField(m.id)}
-                      className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200"
-                    >
-                      <X size={12} />
-                    </button>
-                    
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 mb-1">Part / Field Name</label>
-                      <input
-                        type="text"
-                        value={m.fieldName}
-                        onChange={(e) => handleFieldChange(m.id, 'fieldName', e.target.value)}
-                        placeholder="e.g. Chest"
-                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-purple-400"
-                      />
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Value</label>
+              {/* Table Header like labels */}
+              {measurements.length > 0 && (
+                <div className="grid grid-cols-12 gap-2 sm:gap-3 mb-2 px-1">
+                   <div className="col-span-5 text-[10px] font-bold text-slate-500 uppercase">Measurement Name</div>
+                   <div className="col-span-4 text-[10px] font-bold text-slate-500 uppercase">Value</div>
+                   <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase">Unit</div>
+                   <div className="col-span-1 text-center text-[10px] font-bold text-slate-500 uppercase">Action</div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {measurements.map((m) => {
+                  const getDisabledStatus = (fieldName) => {
+                    return measurements.some(otherM => otherM.id !== m.id && otherM.fieldName === fieldName);
+                  };
+
+                  return (
+                    <div key={m.id} className="grid grid-cols-12 gap-2 sm:gap-3 items-center group">
+                      
+                      {/* Measurement Name */}
+                      <div className="col-span-5">
+                        <select
+                          value={m.fieldName}
+                          onChange={(e) => handleFieldChange(m.id, 'fieldName', e.target.value)}
+                          className="w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        >
+                          <option value="" disabled>Select Measurement</option>
+                          {fields?.map(f => (
+                            <option 
+                              key={f._id} 
+                              value={f.displayName}
+                              disabled={getDisabledStatus(f.displayName)}
+                            >
+                              {f.displayName}
+                            </option>
+                          ))}
+                          {/* Ensure legacy or custom names still show correctly if missing from fields */}
+                          {!fields?.find(f => f.displayName === m.fieldName) && m.fieldName && (
+                            <option value={m.fieldName}>{m.fieldName}</option>
+                          )}
+                        </select>
+                      </div>
+                      
+                      {/* Value */}
+                      <div className="col-span-4">
                         <input
                           type="text"
                           value={m.value}
                           onChange={(e) => handleFieldChange(m.id, 'value', e.target.value)}
                           placeholder="Value"
-                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-purple-400"
+                          className="w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         />
                       </div>
-                      <div className="w-16">
-                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Unit</label>
+                      
+                      {/* Unit */}
+                      <div className="col-span-2">
                         <select
                           value={m.unit}
                           onChange={(e) => handleFieldChange(m.id, 'unit', e.target.value)}
-                          className="w-full px-1 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 focus:outline-none focus:border-purple-400"
+                          className="w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         >
-                          <option value="inch">in</option>
+                          <option value="inch">inches</option>
                           <option value="cm">cm</option>
                         </select>
                       </div>
+
+                      {/* Delete Button */}
+                      <div className="col-span-1 flex justify-center">
+                        <button 
+                          type="button"
+                          onClick={() => handleRemoveField(m.id)}
+                          className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                          title="Delete Measurement"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+
                     </div>
+                  );
+                })}
+                
+                {measurements.length === 0 && (
+                  <div className="text-center py-6 text-sm text-slate-500">
+                    No measurements added. Click "Add Measurement" to start.
                   </div>
-                ))}
+                )}
               </div>
             </div>
 

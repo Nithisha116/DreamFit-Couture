@@ -15,7 +15,7 @@ const auditLogSchema = new mongoose.Schema({
   entityType: { 
     type: String, 
     required: true, 
-    enum: ["Invoice", "Order", "Payment", "Payroll"],
+    enum: ["Invoice", "Order", "Payment", "Payroll", "Garment"],
     index: true
   },
   entityId: { 
@@ -26,6 +26,9 @@ const auditLogSchema = new mongoose.Schema({
   description: { 
     type: String, 
     required: true 
+  },
+  reason: {
+    type: String
   },
   previousData: { 
     type: mongoose.Schema.Types.Mixed 
