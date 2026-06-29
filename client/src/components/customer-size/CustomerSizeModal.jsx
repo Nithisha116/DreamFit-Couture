@@ -42,7 +42,7 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
           (profileToEdit.measurements || []).map(m => ({
             fieldName: m.fieldDisplayName || m.fieldName,
             value: m.value,
-            unit: m.unit || "inches",
+            unit: m.unit || "inch",
             id: Math.random().toString(36).substr(2, 9)
           }))
         );
@@ -74,7 +74,7 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
         (template.sizeFields || []).map(field => ({
           fieldName: field.displayName || field.name,
           value: "",
-          unit: "inches",
+          unit: "inch",
           id: Math.random().toString(36).substr(2, 9)
         }))
       );
@@ -84,7 +84,7 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
   const handleAddField = () => {
     setMeasurements([
       ...measurements,
-      { fieldName: "", value: "", unit: "inches", id: Math.random().toString(36).substr(2, 9) }
+      { fieldName: "", value: "", unit: "inch", id: Math.random().toString(36).substr(2, 9) }
     ]);
   };
 
@@ -277,7 +277,7 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
                           onChange={(e) => handleFieldChange(m.id, 'unit', e.target.value)}
                           className="w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         >
-                          <option value="inches">inches</option>
+                          <option value="inch">inches</option>
                           <option value="cm">cm</option>
                         </select>
                       </div>
