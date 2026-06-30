@@ -131,6 +131,7 @@ export default function GarmentForm({
   // must NOT fire on initial load — it would silently overwrite the stored fabricPrice
   // with the fabric's CURRENT pricePerMeter, causing a data mismatch (10m → 9.8m).
   const fabricUserChanged = useRef(false);
+  const itemUserChanged = useRef(false);
 
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -223,6 +224,20 @@ export default function GarmentForm({
             }, 100);
           }
 
+          // FIX: Don't overwrite customized values if we are editing an existing garment with custom values
+          // AND the item hasn't explicitly been changed.
+          if (editingGarment && !itemUserChanged.current) {
+            return {
+              ...prev,
+              itemName: selectedItem.name || selectedItem.itemName || "",
+              priceRange: {
+                min: editingGarment.customMinPrice ?? editingGarment.priceRange?.min ?? newMin,
+                max: editingGarment.customMaxPrice ?? editingGarment.priceRange?.max ?? newMax,
+              },
+              finalizedPrice: newFinalized,
+            };
+          }
+
           return {
             ...prev,
             itemName: selectedItem.name || selectedItem.itemName || "",
@@ -235,7 +250,7 @@ export default function GarmentForm({
         });
       }
     }
-  }, [formData.item, items]);
+  }, [formData.item, items, editingGarment]);
 
   useEffect(() => {
     // Only auto-recalculate fabricPrice when the user has ACTIVELY changed the
@@ -363,6 +378,7 @@ export default function GarmentForm({
       // Reset the fabric-change guard so the price auto-calculation useEffect does
       // NOT fire on the initial async load of fabrics — preserving the stored values.
       fabricUserChanged.current = false;
+      itemUserChanged.current = false;
       setFormData({
         name: editingGarment.name || "",
         category: editingGarment.category?._id || editingGarment.category || "",
@@ -383,7 +399,10 @@ export default function GarmentForm({
         estimatedDelivery:
           editingGarment.estimatedDelivery?.split("T")[0] || "",
         priority: editingGarment.priority || "normal",
-        priceRange: editingGarment.priceRange || { min: "", max: "" },
+        priceRange: {
+          min: editingGarment.customMinPrice ?? editingGarment.priceRange?.min ?? "",
+          max: editingGarment.customMaxPrice ?? editingGarment.priceRange?.max ?? "",
+        },
         finalizedPrice: (editingGarment.finalizedPrice !== undefined && editingGarment.finalizedPrice !== null && editingGarment.finalizedPrice !== "" && editingGarment.finalizedPrice !== 0) ? editingGarment.finalizedPrice : "",
         fabricSource: editingGarment.fabricSource || "customer",
         selectedFabric: editingGarment.selectedFabric || "",
@@ -1044,6 +1063,8 @@ const renderDayContents = useCallback(
       formDataToSend.append("priceRange", JSON.stringify(formData.priceRange));
       formDataToSend.append("minPrice", String(formData.priceRange.min));
       formDataToSend.append("maxPrice", String(formData.priceRange.max));
+      formDataToSend.append("customMinPrice", String(formData.priceRange.min));
+      formDataToSend.append("customMaxPrice", String(formData.priceRange.max));
       if (formData.finalizedPrice !== undefined && formData.finalizedPrice !== null && formData.finalizedPrice !== "") {
         formDataToSend.append("finalizedPrice", String(formData.finalizedPrice));
       }
@@ -1239,10 +1260,11 @@ const renderDayContents = useCallback(
                     Item <span className="text-red-500">*</span>
                   </label>
                   <select
-                    value={formData.item}
-                    onChange={(e) =>
-                      setFormData({ ...formData, item: e.target.value })
-                    }
+                    value={formData.item || ""}
+                    onChange={(e) => {
+                      itemUserChanged.current = true;
+                      setFormData({ ...formData, item: e.target.value });
+                    }}
                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-white border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm sm:text-base"
                     required
                     disabled={!formData.category}

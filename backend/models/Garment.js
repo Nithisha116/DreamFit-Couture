@@ -238,6 +238,14 @@ const garmentSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  customMinPrice: {
+    type: Number,
+    default: null,
+  },
+  customMaxPrice: {
+    type: Number,
+    default: null,
+  },
   finalizedAmount: {
     type: Number,
     default: null,
