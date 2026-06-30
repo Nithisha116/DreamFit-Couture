@@ -2513,6 +2513,8 @@ export const updateGarment = async (req, res) => {
       finalizedPrice,
       minPrice,
       maxPrice,
+      customMinPrice,
+      customMaxPrice,
       finalizedAmount,
       status,
       existingReferenceImages,
@@ -2615,6 +2617,8 @@ export const updateGarment = async (req, res) => {
     if (priceRange) garment.priceRange = priceRange;
     if (minPrice !== undefined) garment.minPrice = (minPrice === "" || minPrice === null || minPrice === "null") ? 0 : Number(minPrice);
     if (maxPrice !== undefined) garment.maxPrice = (maxPrice === "" || maxPrice === null || maxPrice === "null") ? 0 : Number(maxPrice);
+    if (customMinPrice !== undefined) garment.customMinPrice = (customMinPrice === "" || customMinPrice === null || customMinPrice === "null") ? null : Number(customMinPrice);
+    if (customMaxPrice !== undefined) garment.customMaxPrice = (customMaxPrice === "" || customMaxPrice === null || customMaxPrice === "null") ? null : Number(customMaxPrice);
 
     const incomingFinalized = finalizedAmount !== undefined ? finalizedAmount : finalizedPrice;
     if (incomingFinalized !== undefined) {
