@@ -9,7 +9,10 @@ export const mapStageToOrderStatus = (stageKey, activeKey) => {
   if (key.includes('stitching') || key.includes('sewing')) return 'stitching';
   if (key.includes('trial')) return 'trial';
   if (key.includes('ironing') || key.includes('packing') || key.includes('packed') || key.includes('finishing')) return 'ready-to-delivery';
-  if (key.includes('delivered') || key.includes('delivery')) return 'delivered';
+  // "delivered" production stage should NOT auto-set order to delivered.
+  // Delivery is a separate manual action ("Mark as Delivered" button).
+  // Map it to ready-to-delivery instead.
+  if (key.includes('delivered') || key === 'delivery') return 'ready-to-delivery';
   
   // Embroidery, aari, and any other custom stages default to in-progress
   return 'in-progress';
@@ -20,7 +23,9 @@ export const syncOrderFromWork = async (orderId, newStageKey, activeKey, now, co
     if (!orderId) return;
 
     let newStatus = mapStageToOrderStatus(newStageKey, activeKey);
-    if (isCompleted && newStatus === 'in-progress') {
+    // When ALL production stages are completed, ALWAYS set to ready-to-delivery.
+    // The only way to reach 'delivered' is via the explicit "Mark as Delivered" action.
+    if (isCompleted) {
       newStatus = 'ready-to-delivery';
     }
 
