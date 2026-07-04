@@ -938,9 +938,6 @@ export const updateOrderStatus = async (req, res) => {
   try {
     const { status, pricingVersion } = req.body;
     const { id } = req.params;
-    
-    // 🔒 Lock Guard
-    await assertOrderNotLocked(id);
 
     const validStatuses = ["draft", "confirmed", "in-progress", "cutting", "stitching", "trial", "finishing", "ready-to-delivery", "delivered", "cancelled"];
     if (!validStatuses.includes(status)) {
