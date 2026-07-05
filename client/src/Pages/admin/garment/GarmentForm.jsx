@@ -132,6 +132,13 @@ export default function GarmentForm({
   // with the fabric's CURRENT pricePerMeter, causing a data mismatch (10m → 9.8m).
   const fabricUserChanged = useRef(false);
   const itemUserChanged = useRef(false);
+  // Guard: tracks whether the user has actively changed the customer profile
+  // dropdown or measurement template dropdown (vs. the initial async auto-select
+  // when loading an existing garment). The profile/template loader useEffects
+  // must NOT fire on initial load — they would overwrite the garment's saved
+  // measurements with the profile/template's original values.
+  const customerProfileUserChanged = useRef(false);
+  const templateUserChanged = useRef(false);
 
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -301,6 +308,13 @@ export default function GarmentForm({
       formData.measurementTemplate &&
       formData.measurementSource === "template"
     ) {
+      // Guard: when loading an existing garment, do NOT overwrite the saved
+      // measurements with template defaults unless the user explicitly changed
+      // the template dropdown.
+      if (editingGarment && !templateUserChanged.current) {
+        return;
+      }
+
       const template = templates?.find(
         (t) => t._id === formData.measurementTemplate,
       );
@@ -323,6 +337,13 @@ export default function GarmentForm({
 
   useEffect(() => {
     if (formData.measurementSource === "customer" && selectedCustomerTemplate) {
+      // Guard: when loading an existing garment, do NOT overwrite the saved
+      // measurements with customer profile values unless the user explicitly
+      // changed the customer profile dropdown.
+      if (editingGarment && !customerProfileUserChanged.current) {
+        return;
+      }
+
       const template = profiles?.find(
         (t) => t._id === selectedCustomerTemplate,
       );
@@ -356,7 +377,10 @@ export default function GarmentForm({
   // Auto-select latest profile on category match or just first available
   useEffect(() => {
     if (formData.measurementSource === "customer" && profiles && profiles.length > 0 && !selectedCustomerTemplate) {
-      // Find one matching category or just the first
+      // Guard: when loading an existing garment with measurementSource === "customer",
+      // we still auto-select the profile for the dropdown display, but the
+      // customerProfileUserChanged ref stays false so the profile loader
+      // useEffect above will NOT overwrite the garment's saved measurements.
       const catName = formData.categoryName?.toLowerCase() || "";
       const matched = profiles.find((p) => catName.includes(p.garmentType?.toLowerCase() || ""));
       if (matched) {
@@ -375,10 +399,12 @@ export default function GarmentForm({
 
   useEffect(() => {
     if (editingGarment) {
-      // Reset the fabric-change guard so the price auto-calculation useEffect does
-      // NOT fire on the initial async load of fabrics — preserving the stored values.
+      // Reset ALL user-change guards so the auto-calculation / auto-load useEffects
+      // do NOT fire on the initial async load — preserving the stored values.
       fabricUserChanged.current = false;
       itemUserChanged.current = false;
+      customerProfileUserChanged.current = false;
+      templateUserChanged.current = false;
       setFormData({
         name: editingGarment.name || "",
         category: editingGarment.category?._id || editingGarment.category || "",
@@ -585,6 +611,12 @@ export default function GarmentForm({
       measurements: prev.measurements.map((m) =>
         m.name === name ? { ...m, value: value } : m,
       ),
+    }));
+    // Keep manualMeasurements in sync — handleSubmit reads from BOTH
+    // formData.measurements AND manualMeasurements, so they must always agree.
+    setManualMeasurements((prev) => ({
+      ...prev,
+      [name]: value,
     }));
   };
 
@@ -998,17 +1030,20 @@ const renderDayContents = useCallback(
     // Prepare final measurements
     let finalMeasurements = [];
 
-    // Include template measurements if available
-    if (formData.measurementSource === "template" || formData.measurementSource === "manual") {
-      const templateMeasurements = formData.measurements
+    // Include formData.measurements for ALL sources (template, manual, AND customer).
+    // Previously this excluded "customer" source, causing edited values to be lost
+    // because the UI edits formData.measurements via handleMeasurementChange but
+    // handleSubmit was only serializing manualMeasurements for "customer" source.
+    if (formData.measurements && formData.measurements.length > 0) {
+      const formMeasurements = formData.measurements
         .filter((m) => m.value !== undefined && m.value !== null && String(m.value).trim() !== "")
         .map((m) => ({
           name: m.name,
           value: String(m.value),
           unit: m.unit || "inches",
         }));
-      finalMeasurements = finalMeasurements.concat(templateMeasurements);
-      console.log("📏 Template measurements:", templateMeasurements);
+      finalMeasurements = finalMeasurements.concat(formMeasurements);
+      console.log("📏 Form measurements:", formMeasurements);
     }
 
     // Include manual/customer measurements if provided
@@ -1772,6 +1807,9 @@ const renderDayContents = useCallback(
                     value="template"
                     checked={formData.measurementSource === "template"}
                     onChange={(e) => {
+                      // User is explicitly switching to "Use Template" source
+                      templateUserChanged.current = true;
+                      customerProfileUserChanged.current = true;
                       setFormData({
                         ...formData,
                         measurementSource: e.target.value,
@@ -1793,6 +1831,9 @@ const renderDayContents = useCallback(
                     value="customer"
                     checked={formData.measurementSource === "customer"}
                     onChange={(e) => {
+                      // User is explicitly switching to "Customer Profile" source
+                      customerProfileUserChanged.current = true;
+                      templateUserChanged.current = true;
                       setFormData({
                         ...formData,
                         measurementSource: e.target.value,
@@ -1812,6 +1853,9 @@ const renderDayContents = useCallback(
                     value="manual"
                     checked={formData.measurementSource === "manual"}
                     onChange={(e) => {
+                      // User is explicitly switching to "Manual Entry" source
+                      customerProfileUserChanged.current = true;
+                      templateUserChanged.current = true;
                       setFormData({
                         ...formData,
                         measurementSource: e.target.value,
@@ -1845,9 +1889,11 @@ const renderDayContents = useCallback(
                   ) : profiles && profiles.length > 0 ? (
                     <select
                       value={selectedCustomerTemplate}
-                      onChange={(e) =>
-                        setSelectedCustomerTemplate(e.target.value)
-                      }
+                      onChange={(e) => {
+                        // User explicitly selected a different customer profile
+                        customerProfileUserChanged.current = true;
+                        setSelectedCustomerTemplate(e.target.value);
+                      }}
                       className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     >
                       <option value="">-- Select a profile --</option>
@@ -1947,12 +1993,14 @@ const renderDayContents = useCallback(
                     </label>
                     <select
                       value={formData.measurementTemplate}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        // User explicitly selected a different measurement template
+                        templateUserChanged.current = true;
                         setFormData({
                           ...formData,
                           measurementTemplate: e.target.value,
-                        })
-                      }
+                        });
+                      }}
                       className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     >
                       <option value="">Select Template</option>
