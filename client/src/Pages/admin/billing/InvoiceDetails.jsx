@@ -156,6 +156,15 @@ const InvoiceDetails = () => {
       // Small settle delay for layout reflow (same as JobCardPDFExport.js)
       await new Promise((r) => setTimeout(r, 300));
 
+      // Record each top-level section's bottom edge (brand header, customer/order
+      // grid, items table, totals+terms grid, ledger history) BEFORE the canvas
+      // capture. These become the only allowed page-break points, so a section
+      // can never be sliced in half across two pages.
+      const sheetRect = element.getBoundingClientRect();
+      const sectionBreaksCss = Array.from(element.children).map(
+        (child) => child.getBoundingClientRect().bottom - sheetRect.top
+      );
+
       // Use html2canvas-pro directly — it natively supports oklch, no parsing errors
       const canvas = await html2canvas(element, {
         scale: 2,
@@ -171,39 +180,61 @@ const InvoiceDetails = () => {
       const imgW    = CONTENT_W;
       const imgH    = (canvas.height * imgW) / canvas.width;
 
+      // Convert the CSS-pixel section boundaries into canvas-pixel boundaries
+      const pxPerCssPx = canvas.height / element.scrollHeight;
+      const sectionBreaksPx = sectionBreaksCss
+        .map((y) => y * pxPerCssPx)
+        .concat(canvas.height)
+        .sort((a, b) => a - b);
+
       const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
 
       if (imgH <= CONTENT_H) {
-        // Single page — fits cleanly
+        // Single page — fits cleanly (unchanged)
         pdf.addImage(imgData, "PNG", MARGIN, MARGIN, imgW, imgH);
       } else {
-        // Multi-page slicing — same logic as JobCardPDFExport.js
-        let remaining = imgH;
+        // Section-aware multi-page slicing: each page break snaps to the
+        // bottom edge of a top-level section instead of a fixed pixel count,
+        // so sections are always kept whole on one page.
+        const pxPerPt    = canvas.width / imgW;
+        const maxSlicePx = CONTENT_H * pxPerPt;
+
         let srcY      = 0;
         let firstPage = true;
 
-        while (remaining > 0) {
+        while (srcY < canvas.height - 1) {
           if (!firstPage) {
             pdf.addPage();
           }
           firstPage = false;
 
-          const sliceH        = Math.min(remaining, CONTENT_H);
-          const sliceCanvasH  = (sliceH * canvas.width) / imgW;
+          const hardLimit = srcY + maxSlicePx;
+          const candidates = sectionBreaksPx.filter((y) => y > srcY + 1 && y <= hardLimit);
+          let sliceEndPx = candidates.length
+            ? candidates[candidates.length - 1]
+            : Math.min(hardLimit, canvas.height);
+
+          // A single section taller than one full page (rare) falls back to a
+          // hard pixel cut so pagination can never stall.
+          if (sliceEndPx <= srcY) {
+            sliceEndPx = Math.min(hardLimit, canvas.height);
+          }
+
+          const sliceCanvasH = Math.ceil(sliceEndPx - srcY);
+          const sliceH       = (sliceCanvasH * imgW) / canvas.width;
 
           const slice = document.createElement("canvas");
           slice.width  = canvas.width;
-          slice.height = Math.ceil(sliceCanvasH);
+          slice.height = sliceCanvasH;
           slice.getContext("2d").drawImage(
             canvas,
-            0, srcY, canvas.width, Math.ceil(sliceCanvasH),
-            0, 0,   canvas.width, Math.ceil(sliceCanvasH)
+            0, srcY, canvas.width, sliceCanvasH,
+            0, 0,   canvas.width, sliceCanvasH
           );
 
           pdf.addImage(slice.toDataURL("image/png"), "PNG", MARGIN, MARGIN, imgW, sliceH);
 
-          srcY      += Math.ceil(sliceCanvasH);
-          remaining -= sliceH;
+          srcY = sliceEndPx;
         }
       }
 
@@ -257,7 +288,7 @@ const InvoiceDetails = () => {
 
   if (loading && !invoice) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-gray-500">
+      <div className="flex flex-col items-center justify-center min-h-200 text-gray-500">
         <div className="animate-spin h-10 w-10 border-4 border-indigo-600 border-t-transparent rounded-full mb-3" />
         <span className="font-semibold">Loading sales invoice ledger...</span>
       </div>
@@ -318,7 +349,7 @@ const InvoiceDetails = () => {
               </button>
               <button 
                 onClick={() => setShowPaymentModal(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-95 transition-all text-white font-semibold text-xs shadow-md shadow-emerald-100"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-95 transition-all text-white font-semibold text-xs shadow-md shadow-emerald-100"
               >
                 <CreditCard className="h-4.5 w-4.5" />
                 <span>Settle Dues</span>
@@ -345,7 +376,7 @@ const InvoiceDetails = () => {
 
       {/* Live QR Drawer Banner */}
       {showQR && dueAmount > 0 && invoice.status !== "cancelled" && (
-        <div className="bg-gradient-to-br from-indigo-900 to-indigo-950 p-6 rounded-3xl border border-indigo-950 shadow-xl text-white flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200 print:hidden">
+        <div className="bg-linear-to-br from-indigo-900 to-indigo-950 p-6 rounded-3xl border border-indigo-950 shadow-xl text-white flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200 print:hidden">
           <div className="space-y-3 max-w-md text-center md:text-left">
             <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-300">UPI Instant Store QR Code</span>
             <h3 className="text-xl font-bold">Dynamic Tailoring Payment Settlement</h3>
@@ -415,15 +446,27 @@ const InvoiceDetails = () => {
                 <tr className="bg-gray-50 border-b border-gray-200 font-bold text-gray-500 uppercase">
                   <th className="py-3 px-4">Line Item Description</th>
                   <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4 text-center">Qty</th>
+                  <th className="py-3 px-4 text-right">Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {invoice.items?.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50/50">
-                    <td className="py-3.5 px-4 font-bold text-gray-800">{item.name}</td>
-                    <td className="py-3.5 px-4 text-gray-500 capitalize">{item.category || "Stitching"}</td>
-                  </tr>
-                ))}
+                {invoice.items?.map((item, idx) => {
+                  const itemMin = item.minPrice ?? item.price ?? 0;
+                  const itemMax = item.maxPrice ?? item.total ?? item.price ?? 0;
+                  return (
+                    <tr key={idx} className="hover:bg-gray-50/50">
+                      <td className="py-3.5 px-4 font-bold text-gray-800">{item.name}</td>
+                      <td className="py-3.5 px-4 text-gray-500 capitalize">{item.category || "Stitching"}</td>
+                      <td className="py-3.5 px-4 text-gray-500 text-center">{item.qty || 1}</td>
+                      <td className="py-3.5 px-4 text-gray-800 font-bold text-right">
+                        {itemMin === itemMax
+                          ? `₹${itemMax.toLocaleString("en-IN")}`
+                          : `₹${itemMin.toLocaleString("en-IN")} - ₹${itemMax.toLocaleString("en-IN")}`}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -551,7 +594,7 @@ const InvoiceDetails = () => {
             {/* Modal Form */}
             <form onSubmit={handlePaymentSubmit} className="p-6 space-y-5">
               {/* Due summary snapshot */}
-              <div className="grid grid-cols-2 gap-4 bg-gradient-to-r from-indigo-500 to-violet-600 p-5 rounded-2xl text-white shadow-lg">
+              <div className="grid grid-cols-2 gap-4 bg-linear-to-r from-indigo-500 to-violet-600 p-5 rounded-2xl text-white shadow-lg">
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-100">Total Invoice</span>
                   <p className="text-2xl font-black">₹{invoice.summary.grandTotal.toLocaleString("en-IN")}</p>
@@ -638,7 +681,7 @@ const InvoiceDetails = () => {
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl font-bold hover:from-emerald-600 hover:to-teal-700 transition-all text-sm shadow-lg flex items-center justify-center gap-2"
+                  className="flex-1 py-4 bg-linear-to-r from-emerald-500 to-teal-600 text-white rounded-2xl font-bold hover:from-emerald-600 hover:to-teal-700 transition-all text-sm shadow-lg flex items-center justify-center gap-2"
                 >
                   <span>Post Payment</span>
                 </button>
