@@ -202,6 +202,10 @@ export default function AddExpenseModal({ onClose, accountType = null, onSuccess
   const handleNormalSubmit = async (e) => {
     e.preventDefault();
     if (loading || isSubmitting) return;
+    if (formData.category === 'other-expense' && !formData.customCategory?.trim()) {
+      showToast.error('Please enter a name for the expense category');
+      return;
+    }
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
       showToast.error('Please enter a valid amount');
       return;
@@ -765,6 +769,25 @@ export default function AddExpenseModal({ onClose, accountType = null, onSuccess
           {!isSalaryFlow && step === 2 && (
             <form onSubmit={handleNormalSubmit} id="normalExpenseForm" className="space-y-6">
               <h3 className="font-bold text-slate-800">Enter Amount & Payment Method</h3>
+
+              {/* Custom category name input — only shown for "Other Expense" */}
+              {formData.category === 'other-expense' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Expense Category Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.customCategory}
+                    onChange={(e) => setFormData({ ...formData, customCategory: e.target.value })}
+                    placeholder="E.g. Office Supplies, Packaging, etc."
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
+                    autoFocus
+                    disabled={loading}
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Amount (₹) <span className="text-red-500">*</span></label>
                 <div className="relative">
@@ -774,7 +797,7 @@ export default function AddExpenseModal({ onClose, accountType = null, onSuccess
                     onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                     placeholder="0.00" min="0" step="0.01"
                     className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-2xl font-bold"
-                    autoFocus required disabled={loading}
+                    autoFocus={formData.category !== 'other-expense'} required disabled={loading}
                   />
                 </div>
               </div>
