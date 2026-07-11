@@ -138,9 +138,22 @@ customerSchema.pre("save", async function() {
     
     // 1. Generate customerId
     if (!this.customerId) {
-      const count = await mongoose.model("Customer").countDocuments();
       const year = new Date().getFullYear();
-      const sequential = String(count + 1).padStart(5, "0");
+      
+      // Find the customer with the highest customerId for the current year
+      const lastCustomer = await mongoose.model("Customer").findOne({
+        customerId: new RegExp(`^CUST-${year}-`)
+      }).sort({ customerId: -1 });
+
+      let nextSequence = 1;
+      if (lastCustomer && lastCustomer.customerId) {
+        const parts = lastCustomer.customerId.split('-');
+        if (parts.length === 3) {
+          nextSequence = parseInt(parts[2], 10) + 1;
+        }
+      }
+
+      const sequential = String(nextSequence).padStart(5, "0");
       this.customerId = `CUST-${year}-${sequential}`;
       console.log(`✅ ID Created: ${this.customerId}`);
     }
