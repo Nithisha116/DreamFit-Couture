@@ -841,7 +841,7 @@ export default function AddCustomer() {
       // showToast.success("Customer created successfully! 🎉");
       // console.log("🔄 Navigating to:", `${rolePath}/customers`);
       // navigate(`${rolePath}/customers`);
-      showToast.success("Customer created successfully! 🎉");
+      // Toast is handled by customerSlice.js
       console.log("🔄 Navigating to customer details:", result?._id);
       console.log("🔗 URL:", `${rolePath}/customers/${result?._id}`);
       navigate(`${rolePath}/customers/${result?._id}`);
@@ -859,10 +859,8 @@ export default function AddCustomer() {
         errorMsg.includes("Phone number")
       ) {
         console.log("❌ Duplicate phone number detected");
-        showToast.error(
-          "❌ This mobile number is already registered! Please use a different number.",
-        );
-
+        // Toast is already shown by the Redux thunk (customerSlice.js)
+        
         // Highlight the phone field with error
         setErrors((prev) => ({
           ...prev,
@@ -870,7 +868,7 @@ export default function AddCustomer() {
         }));
       } else {
         console.log("❌ Unknown error:", errorMsg);
-        showToast.error(error.message || "Failed to create customer");
+        // Toast is already shown by the Redux thunk
       }
     } finally {
       console.log("🏁 ========== FORM SUBMIT END ==========");
