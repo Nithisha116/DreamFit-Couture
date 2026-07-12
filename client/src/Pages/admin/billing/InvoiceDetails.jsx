@@ -447,23 +447,18 @@ const InvoiceDetails = () => {
                   <th className="py-3 px-4">Line Item Description</th>
                   <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4 text-center">Qty</th>
-                  <th className="py-3 px-4 text-right">Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {invoice.items?.map((item, idx) => {
-                  const itemMin = item.minPrice ?? item.price ?? 0;
-                  const itemMax = item.maxPrice ?? item.total ?? item.price ?? 0;
+                
+                  
                   return (
                     <tr key={idx} className="hover:bg-gray-50/50">
                       <td className="py-3.5 px-4 font-bold text-gray-800">{item.name}</td>
                       <td className="py-3.5 px-4 text-gray-500 capitalize">{item.category || "Stitching"}</td>
                       <td className="py-3.5 px-4 text-gray-500 text-center">{item.qty || 1}</td>
-                      <td className="py-3.5 px-4 text-gray-800 font-bold text-right">
-                        {itemMin === itemMax
-                          ? `₹${itemMax.toLocaleString("en-IN")}`
-                          : `₹${itemMin.toLocaleString("en-IN")} - ₹${itemMax.toLocaleString("en-IN")}`}
-                      </td>
+                      
                     </tr>
                   );
                 })}
