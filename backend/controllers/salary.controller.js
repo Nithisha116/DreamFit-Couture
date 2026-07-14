@@ -4,6 +4,9 @@ import User from "../models/User.js";
 import Tailor from "../models/Tailor.js";
 import CuttingMaster from "../models/CuttingMaster.js";
 import StoreKeeper from "../models/StoreKeeper.js";
+import AariWorker from "../models/AariWorker.js";
+import EmbroideryWorker from "../models/EmbroideryWorker.js";
+import Helper from "../models/Helper.js";
 import { 
   getMonthlyAttendanceStats, 
   calculatePayableDays, 
@@ -49,10 +52,13 @@ export const generateMonthlySalary = async (req, res) => {
     const config = await getPayrollConfig(month, year);
     
     // Fetch all active employees
-    const [tailors, cuttingMasters, storeKeepers, admins] = await Promise.all([
+    const [tailors, cuttingMasters, storeKeepers, aariWorkers, embroideryWorkers, helpers, admins] = await Promise.all([
       Tailor.find({ isActive: true }).session(session),
       CuttingMaster.find({ isActive: true }).session(session),
       StoreKeeper.find({ isActive: true }).session(session),
+      AariWorker.find({ isActive: true }).session(session),
+      EmbroideryWorker.find({ isActive: true }).session(session),
+      Helper.find({ isActive: true }).session(session),
       User.find({ isActive: true }).session(session),
     ]);
 
@@ -60,6 +66,9 @@ export const generateMonthlySalary = async (req, res) => {
       ...tailors.map(e => ({ ...e.toObject(), empId: e.tailorId, type: "Tailor" })),
       ...cuttingMasters.map(e => ({ ...e.toObject(), empId: e.cuttingMasterId, type: "Cutting Master" })),
       ...storeKeepers.map(e => ({ ...e.toObject(), empId: e.storeKeeperId, type: "Store Keeper" })),
+      ...aariWorkers.map(e => ({ ...e.toObject(), empId: e.aariWorkerId, type: "Aari Work" })),
+      ...embroideryWorkers.map(e => ({ ...e.toObject(), empId: e.embroideryWorkerId, type: "Embroidery" })),
+      ...helpers.map(e => ({ ...e.toObject(), empId: e.helperId, type: "Helper" })),
       ...admins.map(e => ({ ...e.toObject(), empId: e._id.toString(), type: "Admin" })),
     ];
 
@@ -69,6 +78,7 @@ export const generateMonthlySalary = async (req, res) => {
       // Check if salary already exists and is locked
       const existingSalary = await EmployeeSalary.findOne({ 
         employeeId: emp.empId, 
+        department: emp.type,
         month, 
         year 
       }).session(session);
@@ -225,6 +235,15 @@ export const getLiveSalaryRecalculation = async (req, res) => {
         break;
       case "Store Keeper": 
         employeeData = await StoreKeeper.findOne({ storeKeeperId: employeeId }); 
+        break;
+      case "Aari Work":
+        employeeData = await AariWorker.findOne({ aariWorkerId: employeeId });
+        break;
+      case "Embroidery":
+        employeeData = await EmbroideryWorker.findOne({ embroideryWorkerId: employeeId });
+        break;
+      case "Helper":
+        employeeData = await Helper.findOne({ helperId: employeeId });
         break;
       case "Admin": 
         employeeData = await User.findById(employeeId); 

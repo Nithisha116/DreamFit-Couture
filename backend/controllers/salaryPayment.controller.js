@@ -6,16 +6,22 @@ import AuditLog from "../models/AuditLog.js";
 import Tailor from "../models/Tailor.js";
 import CuttingMaster from "../models/CuttingMaster.js";
 import StoreKeeper from "../models/StoreKeeper.js";
+import AariWorker from "../models/AariWorker.js";
+import EmbroideryWorker from "../models/EmbroideryWorker.js";
+import Helper from "../models/Helper.js";
 import User from "../models/User.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPER: Get all active employees unified
 // ─────────────────────────────────────────────────────────────────────────────
 const getAllActiveEmployees = async () => {
-  const [tailors, cuttingMasters, storeKeepers, admins] = await Promise.all([
+  const [tailors, cuttingMasters, storeKeepers, aariWorkers, embroideryWorkers, helpers, admins] = await Promise.all([
     Tailor.find({ isActive: true }).select("tailorId name phone department basicSalary"),
     CuttingMaster.find({ isActive: true }).select("cuttingMasterId name phone department basicSalary"),
     StoreKeeper.find({ isActive: true }).select("storeKeeperId name phone department basicSalary"),
+    AariWorker.find({ isActive: true }).select("aariWorkerId name phone department basicSalary"),
+    EmbroideryWorker.find({ isActive: true }).select("embroideryWorkerId name phone department basicSalary"),
+    Helper.find({ isActive: true }).select("helperId name phone department basicSalary"),
     User.find({ isActive: true, role: "ADMIN" }).select("_id name email phone role basicSalary"),
   ]);
 
@@ -46,6 +52,33 @@ const getAllActiveEmployees = async () => {
       department: "Store Keeper",
       basicSalary: e.basicSalary || 0,
       role: "STORE_KEEPER",
+    })),
+    ...aariWorkers.map((e) => ({
+      _id: e._id,
+      employeeId: e.aariWorkerId,
+      name: e.name,
+      phone: e.phone,
+      department: "Aari Work",
+      basicSalary: e.basicSalary || 0,
+      role: "AARI_WORKER",
+    })),
+    ...embroideryWorkers.map((e) => ({
+      _id: e._id,
+      employeeId: e.embroideryWorkerId,
+      name: e.name,
+      phone: e.phone,
+      department: "Embroidery",
+      basicSalary: e.basicSalary || 0,
+      role: "EMBROIDERY_WORKER",
+    })),
+    ...helpers.map((e) => ({
+      _id: e._id,
+      employeeId: e.helperId,
+      name: e.name,
+      phone: e.phone,
+      department: "Helper",
+      basicSalary: e.basicSalary || 0,
+      role: "HELPER",
     })),
     ...admins.map((e) => ({
       _id: e._id,
@@ -404,6 +437,9 @@ export const getSalarySlip = async (req, res) => {
     if (dept === "Tailor") employee = await Tailor.findOne({ tailorId: employeeId });
     else if (dept === "Cutting Master") employee = await CuttingMaster.findOne({ cuttingMasterId: employeeId });
     else if (dept === "Store Keeper") employee = await StoreKeeper.findOne({ storeKeeperId: employeeId });
+    else if (dept === "Aari Work") employee = await AariWorker.findOne({ aariWorkerId: employeeId });
+    else if (dept === "Embroidery") employee = await EmbroideryWorker.findOne({ embroideryWorkerId: employeeId });
+    else if (dept === "Helper") employee = await Helper.findOne({ helperId: employeeId });
     else employee = await User.findById(employeeId);
 
     const authPaid = await computeAuthoritativePaidAmount(payroll._id);

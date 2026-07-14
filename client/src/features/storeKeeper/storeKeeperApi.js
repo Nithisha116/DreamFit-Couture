@@ -2,11 +2,12 @@
 import API from "../../app/axios";
 
 export const getAllStoreKeepersApi = async (params = {}) => {
-  const { search, department, page, limit } = params;
+  const { search, department, page, limit, isActive } = params;
   let url = "/store-keepers";
   const q = [];
   if (search) q.push(`search=${encodeURIComponent(search)}`);
   if (department && department !== 'all') q.push(`department=${department}`);
+  if (isActive) q.push(`isActive=${isActive}`);
   if (page) q.push(`page=${page}`);
   if (limit) q.push(`limit=${limit}`);
   if (q.length) url += `?${q.join('&')}`;

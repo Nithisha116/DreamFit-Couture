@@ -124,8 +124,15 @@ export const getAllCuttingMasters = async (req, res) => {
   try {
     console.log("🚀 Running High-Performance Aggregation for Cutting Master List...");
     
-    const { search, availability } = req.query;
-    let matchQuery = { isActive: true };
+    const { search, availability, isActive } = req.query;
+    let matchQuery = {};
+    if (isActive === 'false') {
+      matchQuery.isActive = false;
+    } else if (isActive === 'all') {
+      // Don't filter by isActive
+    } else {
+      matchQuery.isActive = true; // Default behavior
+    }
 
     // Search Logic
     if (search) {
@@ -147,47 +154,63 @@ export const getAllCuttingMasters = async (req, res) => {
       { $match: matchQuery },
       { $sort: { createdAt: -1 } },
       
-      // 1. Join with Works collection
+      // 1. Join with Works collection via assignments array
       {
         $lookup: {
           from: "works", 
           localField: "_id",
-          foreignField: "cuttingMaster",
+          foreignField: "assignments.workerId",
           as: "workDetails"
         }
       },
 
-      // 2. Calculate stats directly in DB
+      // 2. Calculate stats dynamically
+      {
+        $addFields: {
+          // Flatten all assignments for this cutting master
+          myAssignments: {
+            $filter: {
+              input: {
+                $reduce: {
+                  input: "$workDetails",
+                  initialValue: [],
+                  in: { $concatArrays: ["$$value", "$$this.assignments"] }
+                }
+              },
+              as: "asgn",
+              cond: { $eq: ["$$asgn.workerId", "$_id"] }
+            }
+          }
+        }
+      },
       {
         $addFields: {
           workStats: {
-            total: { $size: "$workDetails" },
+            total: { $size: "$myAssignments" },
             completed: { 
               $size: { 
                 $filter: { 
-                  input: "$workDetails", 
-                  as: "w", 
-                  cond: { $eq: ["$$w.status", "ready-to-deliver"] } 
+                  input: "$myAssignments", 
+                  as: "a", 
+                  cond: { $eq: ["$$a.status", "completed"] } 
                 } 
               } 
             },
             pending: { 
               $size: { 
                 $filter: { 
-                  input: "$workDetails", 
-                  as: "w", 
-                  cond: { $in: ["$$w.status", ["pending", "accepted"]] } 
+                  input: "$myAssignments", 
+                  as: "a", 
+                  cond: { $eq: ["$$a.status", "pending"] } 
                 } 
               } 
             },
             inProgress: { 
               $size: { 
                 $filter: { 
-                  input: "$workDetails", 
-                  as: "w", 
-                  cond: { 
-                    $in: ["$$w.status", ["cutting-started", "cutting-completed", "sewing-started", "sewing-completed", "ironing"]] 
-                  } 
+                  input: "$myAssignments", 
+                  as: "a", 
+                  cond: { $eq: ["$$a.status", "active"] } 
                 } 
               } 
             }
@@ -199,7 +222,8 @@ export const getAllCuttingMasters = async (req, res) => {
       {
         $project: {
           password: 0,
-          workDetails: 0
+          workDetails: 0,
+          myAssignments: 0
         }
       }
     ]);
@@ -233,7 +257,7 @@ export const getCuttingMasterById = async (req, res) => {
 
     // Get works assigned
     const works = await Work.find({ 
-      cuttingMaster: cuttingMaster._id,
+      "assignments.workerId": cuttingMaster._id,
       isActive: true 
     })
       .populate({
@@ -244,11 +268,17 @@ export const getCuttingMasterById = async (req, res) => {
       .populate('tailor', 'name employeeId')
       .sort({ createdAt: -1 });
 
+    // Flatten assignments for this cutting master
+    const allMyAssignments = works.reduce((acc, w) => {
+      const mine = w.assignments?.filter(a => a.workerId?.toString() === cuttingMaster._id.toString()) || [];
+      return [...acc, ...mine];
+    }, []);
+
     const workStats = {
-      total: works.length,
-      completed: works.filter(w => w.status === 'ready-to-deliver').length,
-      pending: works.filter(w => ['pending', 'accepted'].includes(w.status)).length,
-      inProgress: works.filter(w => ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing'].includes(w.status)).length
+      total: allMyAssignments.length,
+      completed: allMyAssignments.filter(a => a.status === 'completed').length,
+      inProgress: allMyAssignments.filter(a => a.status === 'active').length,
+      pending: allMyAssignments.filter(a => a.status === 'pending').length
     };
 
     res.json({

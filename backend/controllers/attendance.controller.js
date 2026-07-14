@@ -3,6 +3,9 @@ import Attendance from "../models/Attendance.js";
 import Tailor from "../models/Tailor.js";
 import CuttingMaster from "../models/CuttingMaster.js";
 import StoreKeeper from "../models/StoreKeeper.js";
+import AariWorker from "../models/AariWorker.js";
+import EmbroideryWorker from "../models/EmbroideryWorker.js";
+import Helper from "../models/Helper.js";
 
 // @desc    Get all attendance records (with pagination, filtering, search)
 // @route   GET /api/attendance
@@ -61,17 +64,23 @@ export const getAllAttendance = async (req, res) => {
     
     if (req.query.date) {
       // 1. Fetch all active employees from all categories
-      const [tailors, cuttingMasters, storeKeepers] = await Promise.all([
+      const [tailors, cuttingMasters, storeKeepers, aariWorkers, embroideryWorkers, helpers] = await Promise.all([
         Tailor.find({ isActive: true }).select("name tailorId specialization").lean(),
         CuttingMaster.find({ isActive: true }).select("name cuttingMasterId").lean(),
-        StoreKeeper.find({ isActive: true }).select("name storeKeeperId department").lean()
+        StoreKeeper.find({ isActive: true }).select("name storeKeeperId department").lean(),
+        AariWorker.find({ isActive: true }).select("name aariWorkerId").lean(),
+        EmbroideryWorker.find({ isActive: true }).select("name embroideryWorkerId").lean(),
+        Helper.find({ isActive: true }).select("name helperId").lean()
       ]);
 
       // 2. Map them to a unified format
       const allEmployees = [
         ...tailors.map(t => ({ employeeName: t.name, employeeId: t.tailorId, department: "Tailoring" })),
         ...cuttingMasters.map(cm => ({ employeeName: cm.name, employeeId: cm.cuttingMasterId, department: "Cutting" })),
-        ...storeKeepers.map(sk => ({ employeeName: sk.name, employeeId: sk.storeKeeperId, department: sk.department || "Store" }))
+        ...storeKeepers.map(sk => ({ employeeName: sk.name, employeeId: sk.storeKeeperId, department: sk.department || "Store" })),
+        ...aariWorkers.map(aw => ({ employeeName: aw.name, employeeId: aw.aariWorkerId, department: "Aari Work" })),
+        ...embroideryWorkers.map(ew => ({ employeeName: ew.name, employeeId: ew.embroideryWorkerId, department: "Embroidery" })),
+        ...helpers.map(h => ({ employeeName: h.name, employeeId: h.helperId, department: "Helper" }))
       ];
 
       // 3. Merge with existing attendance records
@@ -95,6 +104,16 @@ export const getAllAttendance = async (req, res) => {
           item.employeeName.toLowerCase().includes(search) || 
           item.employeeId.toLowerCase().includes(search)
         );
+      }
+
+      // Apply status filter on merged data (ghost records have status 'Not Marked')
+      if (req.query.status && req.query.status !== 'all') {
+        finalData = finalData.filter(item => item.status === req.query.status);
+      }
+
+      // Apply department filter on merged data
+      if (req.query.department && req.query.department !== 'all') {
+        finalData = finalData.filter(item => item.department === req.query.department);
       }
 
       // Handle pagination on merged data
@@ -166,14 +185,17 @@ export const getAttendanceStats = async (req, res) => {
       halfDay: 0,
     };
 
-    // Fetch total active workforce count
-    const [tailorCount, cmCount, skCount] = await Promise.all([
+    // Fetch total active workforce count (all 6 worker types)
+    const [tailorCount, cmCount, skCount, aariCount, embCount, helperCount] = await Promise.all([
       Tailor.countDocuments({ isActive: true }),
       CuttingMaster.countDocuments({ isActive: true }),
-      StoreKeeper.countDocuments({ isActive: true })
+      StoreKeeper.countDocuments({ isActive: true }),
+      AariWorker.countDocuments({ isActive: true }),
+      EmbroideryWorker.countDocuments({ isActive: true }),
+      Helper.countDocuments({ isActive: true })
     ]);
 
-    const totalActiveEmployees = tailorCount + cmCount + skCount;
+    const totalActiveEmployees = tailorCount + cmCount + skCount + aariCount + embCount + helperCount;
 
     // Fetch today's records to count unique people marked
     const markedEmployeesCount = await Attendance.distinct("employeeId", matchToday);
@@ -204,16 +226,22 @@ export const getAttendanceStats = async (req, res) => {
 // @access  Private
 export const getAttendanceEmployees = async (req, res) => {
   try {
-    const [tailors, cuttingMasters, storeKeepers] = await Promise.all([
+    const [tailors, cuttingMasters, storeKeepers, aariWorkers, embroideryWorkers, helpers] = await Promise.all([
       Tailor.find({ isActive: true }).select('tailorId name').lean(),
       CuttingMaster.find({ isActive: true }).select('cuttingMasterId name').lean(),
-      StoreKeeper.find({ isActive: true }).select('storeKeeperId name').lean()
+      StoreKeeper.find({ isActive: true }).select('storeKeeperId name').lean(),
+      AariWorker.find({ isActive: true }).select('aariWorkerId name').lean(),
+      EmbroideryWorker.find({ isActive: true }).select('embroideryWorkerId name').lean(),
+      Helper.find({ isActive: true }).select('helperId name').lean()
     ]);
 
     const allEmployees = [
       ...tailors.map(t => ({ employeeId: t.tailorId, employeeName: t.name, department: "Tailoring" })),
       ...cuttingMasters.map(cm => ({ employeeId: cm.cuttingMasterId, employeeName: cm.name, department: "Cutting" })),
-      ...storeKeepers.map(sk => ({ employeeId: sk.storeKeeperId, employeeName: sk.name, department: "Store" }))
+      ...storeKeepers.map(sk => ({ employeeId: sk.storeKeeperId, employeeName: sk.name, department: "Store" })),
+      ...aariWorkers.map(aw => ({ employeeId: aw.aariWorkerId, employeeName: aw.name, department: "Aari Work" })),
+      ...embroideryWorkers.map(ew => ({ employeeId: ew.embroideryWorkerId, employeeName: ew.name, department: "Embroidery" })),
+      ...helpers.map(h => ({ employeeId: h.helperId, employeeName: h.name, department: "Helper" }))
     ].sort((a, b) => a.employeeName.localeCompare(b.employeeName));
 
     res.status(200).json({ success: true, data: allEmployees });

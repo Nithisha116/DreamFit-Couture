@@ -103,8 +103,15 @@ export const createStoreKeeper = async (req, res) => {
 
 export const getAllStoreKeepers = async (req, res) => {
   try {
-    const { search, department } = req.query;
-    let matchQuery = { isActive: true };
+    const { search, department, isActive } = req.query;
+    let matchQuery = {};
+    if (isActive === 'false') {
+      matchQuery.isActive = false;
+    } else if (isActive === 'all') {
+      // Don't filter by isActive
+    } else {
+      matchQuery.isActive = true; // Default behavior
+    }
 
     // 1. Filter Logic
     if (search) {

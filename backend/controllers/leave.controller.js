@@ -4,12 +4,27 @@ import Attendance from "../models/Attendance.js";
 import Tailor from "../models/Tailor.js";
 import CuttingMaster from "../models/CuttingMaster.js";
 import StoreKeeper from "../models/StoreKeeper.js";
+import AariWorker from "../models/AariWorker.js";
+import EmbroideryWorker from "../models/EmbroideryWorker.js";
+import Helper from "../models/Helper.js";
 
 // Helper to get employee model by ID prefix or department
-const getEmployeeModel = (employeeId) => {
-  if (employeeId.startsWith("TLR")) return Tailor;
-  if (employeeId.startsWith("CM")) return CuttingMaster;
-  if (employeeId.startsWith("SK")) return StoreKeeper;
+const getEmployeeModel = (employeeId, department) => {
+  if (department) {
+    const dept = department.toLowerCase();
+    if (dept === "tailoring" || dept === "tailor") return Tailor;
+    if (dept === "cutting" || dept === "cutting master") return CuttingMaster;
+    if (dept === "store" || dept === "store keeper") return StoreKeeper;
+    if (dept === "aari work" || dept === "aari worker" || dept === "aari") return AariWorker;
+    if (dept === "embroidery" || dept === "embroidery worker") return EmbroideryWorker;
+    if (dept === "helper") return Helper;
+  }
+
+  if (employeeId) {
+    if (employeeId.startsWith("TLR")) return Tailor;
+    if (employeeId.startsWith("CM")) return CuttingMaster;
+    if (employeeId.startsWith("SK")) return StoreKeeper;
+  }
   return null;
 };
 
@@ -122,14 +137,45 @@ export const updateLeaveStatus = async (req, res) => {
        return res.status(400).json({ success: false, message: "Only pending requests can be approved or rejected" });
     }
 
-    const employeeModel = getEmployeeModel(leave.employeeId);
-    const employee = await employeeModel.findOne({ 
-      $or: [
-        { tailorId: leave.employeeId },
-        { cuttingMasterId: leave.employeeId },
-        { storeKeeperId: leave.employeeId }
-      ]
-    }).session(session);
+    let employeeModel = getEmployeeModel(leave.employeeId, leave.department);
+    let employee = null;
+
+    if (employeeModel) {
+      employee = await employeeModel.findOne({ 
+        $or: [
+          { tailorId: leave.employeeId },
+          { cuttingMasterId: leave.employeeId },
+          { storeKeeperId: leave.employeeId },
+          { aariWorkerId: leave.employeeId },
+          { embroideryWorkerId: leave.employeeId },
+          { helperId: leave.employeeId }
+        ]
+      }).session(session);
+    } else {
+      // Fallback sequential lookup for prefix collisions (such as AAR prefix)
+      const query = {
+        $or: [
+          { aariWorkerId: leave.employeeId },
+          { embroideryWorkerId: leave.employeeId },
+          { helperId: leave.employeeId }
+        ]
+      };
+
+      employee = await AariWorker.findOne(query).session(session);
+      if (employee) {
+        employeeModel = AariWorker;
+      } else {
+        employee = await EmbroideryWorker.findOne(query).session(session);
+        if (employee) {
+          employeeModel = EmbroideryWorker;
+        } else {
+          employee = await Helper.findOne(query).session(session);
+          if (employee) {
+            employeeModel = Helper;
+          }
+        }
+      }
+    }
 
     if (!employee) {
       await session.abortTransaction();

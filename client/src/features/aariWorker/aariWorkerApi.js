@@ -115,7 +115,8 @@ export const getAllAariWorkersApi = async (params = {}) => {
     page,
     limit,
     sortField,
-    sortOrder
+    sortOrder,
+    isActive
   } = params;
   
   let url = "/aari-workers";
@@ -125,6 +126,7 @@ export const getAllAariWorkersApi = async (params = {}) => {
   if (search) queryParams.push(`search=${encodeURIComponent(search)}`);
   if (status && status !== 'all') queryParams.push(`status=${status}`);
   if (availability && availability !== 'all') queryParams.push(`availability=${availability}`);
+  if (isActive) queryParams.push(`isActive=${isActive}`);
   
   // Pagination
   if (page) queryParams.push(`page=${page}`);

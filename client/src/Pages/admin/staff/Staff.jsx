@@ -6,12 +6,16 @@ import {
   Mail, Phone, Calendar, CheckCircle, XCircle,
   AlertCircle, UserCog, Power, Eye,
   Scissors, HardHat, Store, Menu, Grid, Filter, X,
-  TrendingUp, Activity, UserCheck
+  TrendingUp, Activity, UserCheck,
+  Wand2, Palette, Wrench
 } from "lucide-react";
 import { fetchAllStaff, updateStaff, deleteStaff, toggleStaffStatus } from "../../../features/user/userSlice";
 import { fetchAllTailors, deleteTailor } from "../../../features/tailor/tailorSlice";
 import { fetchAllCuttingMasters, deleteCuttingMaster } from "../../../features/cuttingMaster/cuttingMasterSlice";
 import { fetchAllStoreKeepers, deleteStoreKeeper } from "../../../features/storeKeeper/storeKeeperSlice";
+import { fetchAllAariWorkers, deleteAariWorker } from "../../../features/aariWorker/aariWorkerSlice";
+import { fetchAllEmbroideryWorkers, deleteEmbroideryWorker } from "../../../features/embroideryWorker/embroideryWorkerSlice";
+import { fetchAllHelpers, deleteHelper } from "../../../features/helper/helperSlice";
 import showToast from "../../../utils/toast";
 
 // 🚀 Skeleton Loader Components
@@ -65,6 +69,9 @@ export default function Staff() {
   const { tailors = [], loading: tailorsLoading = false } = useSelector((state) => state.tailor) || {};
   const { cuttingMasters = [], loading: cuttingMastersLoading = false } = useSelector((state) => state.cuttingMaster) || {};
   const { storeKeepers = [], loading: storeKeepersLoading = false } = useSelector((state) => state.storeKeeper) || {};
+  const { aariWorkers = [], loading: aariWorkersLoading = false } = useSelector((state) => state.aariWorker) || {};
+  const { embroideryWorkers = [], loading: embroideryWorkersLoading = false } = useSelector((state) => state.embroideryWorker) || {};
+  const { helpers = [], loading: helpersLoading = false } = useSelector((state) => state.helper) || {};
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -85,9 +92,12 @@ export default function Staff() {
 
   useEffect(() => {
     dispatch(fetchAllStaff());
-    dispatch(fetchAllTailors());
-    dispatch(fetchAllCuttingMasters());
-    dispatch(fetchAllStoreKeepers());
+    dispatch(fetchAllTailors({ isActive: 'all' }));
+    dispatch(fetchAllCuttingMasters({ isActive: 'all' }));
+    dispatch(fetchAllStoreKeepers({ isActive: 'all' }));
+    dispatch(fetchAllAariWorkers({ isActive: 'all' }));
+    dispatch(fetchAllEmbroideryWorkers({ isActive: 'all' }));
+    dispatch(fetchAllHelpers({ isActive: 'all' }));
   }, [dispatch]);
 
   const combinedStaff = useMemo(() => {
@@ -107,8 +117,23 @@ export default function Staff() {
       isActive: sk.isActive, createdAt: sk.joiningDate || sk.createdAt, updatedAt: sk.updatedAt,
       type: "storeKeeper", originalData: sk
     }));
-    return [...staffList, ...tailorList, ...cuttingMasterList, ...storeKeeperList];
-  }, [users, tailors, cuttingMasters, storeKeepers]);
+    const aariWorkerList = aariWorkers.map(aw => ({
+      _id: aw._id, name: aw.name, email: aw.email, phone: aw.phone, role: "AARI_WORKER",
+      isActive: aw.isActive, createdAt: aw.joiningDate || aw.createdAt, updatedAt: aw.updatedAt,
+      type: "aariWorker", originalData: aw
+    }));
+    const embroideryWorkerList = embroideryWorkers.map(ew => ({
+      _id: ew._id, name: ew.name, email: ew.email, phone: ew.phone, role: "EMBROIDERY_WORKER",
+      isActive: ew.isActive, createdAt: ew.joiningDate || ew.createdAt, updatedAt: ew.updatedAt,
+      type: "embroideryWorker", originalData: ew
+    }));
+    const helperList = helpers.map(h => ({
+      _id: h._id, name: h.name, email: h.email, phone: h.phone, role: "HELPER",
+      isActive: h.isActive, createdAt: h.joiningDate || h.createdAt, updatedAt: h.updatedAt,
+      type: "helper", originalData: h
+    }));
+    return [...staffList, ...tailorList, ...cuttingMasterList, ...storeKeeperList, ...aariWorkerList, ...embroideryWorkerList, ...helperList];
+  }, [users, tailors, cuttingMasters, storeKeepers, aariWorkers, embroideryWorkers, helpers]);
 
   const filteredUsers = useMemo(() => {
     return combinedStaff.filter(user => {
@@ -129,7 +154,7 @@ export default function Staff() {
     return { total, active, tailorsCount, othersCount };
   }, [combinedStaff]);
 
-  const isLoading = loading || tailorsLoading || cuttingMastersLoading || storeKeepersLoading;
+  const isLoading = loading || tailorsLoading || cuttingMastersLoading || storeKeepersLoading || aariWorkersLoading || embroideryWorkersLoading || helpersLoading;
   const isInitialLoading = isLoading && combinedStaff.length === 0;
 
   const handleAddStaff = () => navigate("/admin/add-staff");
@@ -138,12 +163,12 @@ export default function Staff() {
   const handleAddStoreKeeper = () => navigate("/admin/store-keepers/add");
 
   const handleViewDetails = (item) => {
-    const paths = { tailor: "tailors", cuttingMaster: "cutting-masters", storeKeeper: "store-keepers" };
+    const paths = { tailor: "tailors", cuttingMaster: "cutting-masters", storeKeeper: "store-keepers", aariWorker: "aari-workers", embroideryWorker: "embroidery-workers", helper: "helpers" };
     navigate(`/admin/${paths[item.type] || "staff"}/${item._id}`);
   };
 
   const handleEdit = (item) => {
-    const paths = { tailor: "tailors", cuttingMaster: "cutting-masters", storeKeeper: "store-keepers" };
+    const paths = { tailor: "tailors", cuttingMaster: "cutting-masters", storeKeeper: "store-keepers", aariWorker: "aari-workers", embroideryWorker: "embroidery-workers", helper: "helpers" };
     if (item.type) return navigate(`/admin/${paths[item.type]}/edit/${item._id}`);
     setSelectedUser(item);
     setEditFormData({ name: item.name || "", email: item.email || "", role: item.role || "STORE_KEEPER", phone: item.phone || "" });
@@ -160,7 +185,7 @@ export default function Staff() {
 
   const handleDelete = async () => {
     try {
-      const actions = { tailor: deleteTailor, cuttingMaster: deleteCuttingMaster, storeKeeper: deleteStoreKeeper };
+      const actions = { tailor: deleteTailor, cuttingMaster: deleteCuttingMaster, storeKeeper: deleteStoreKeeper, aariWorker: deleteAariWorker, embroideryWorker: deleteEmbroideryWorker, helper: deleteHelper };
       const action = actions[deleteType] || deleteStaff;
       await dispatch(action(selectedUser._id)).unwrap();
       showToast.success(`${deleteType.replace('_', ' ')} deleted successfully! 🗑️`);
@@ -175,12 +200,15 @@ export default function Staff() {
       CUTTING_MASTER: "bg-orange-50 text-orange-600 border-orange-100",
       STORE_KEEPER: "bg-emerald-50 text-emerald-600 border-emerald-100",
       ADMIN: "bg-purple-50 text-purple-600 border-purple-100",
+      AARI_WORKER: "bg-pink-50 text-pink-600 border-pink-100",
+      EMBROIDERY_WORKER: "bg-rose-50 text-rose-600 border-rose-100",
+      HELPER: "bg-amber-50 text-amber-600 border-amber-100",
     };
     return `px-3 py-1 rounded-full text-[11px] font-bold border ${config[role] || "bg-slate-50 text-slate-600 border-slate-100"}`;
   };
 
   const getRoleIcon = (role) => {
-    const icons = { TAILOR: <Scissors size={18} />, CUTTING_MASTER: <HardHat size={18} />, STORE_KEEPER: <Store size={18} />, ADMIN: <UserCog size={18} /> };
+    const icons = { TAILOR: <Scissors size={18} />, CUTTING_MASTER: <HardHat size={18} />, STORE_KEEPER: <Store size={18} />, ADMIN: <UserCog size={18} />, AARI_WORKER: <Wand2 size={18} />, EMBROIDERY_WORKER: <Palette size={18} />, HELPER: <Wrench size={18} /> };
     return icons[role] || <Users size={18} />;
   };
 
@@ -189,7 +217,10 @@ export default function Staff() {
       TAILOR: "from-blue-500 to-indigo-600",
       CUTTING_MASTER: "from-orange-400 to-red-500",
       STORE_KEEPER: "from-emerald-400 to-teal-600",
-      ADMIN: "from-purple-500 to-pink-600"
+      ADMIN: "from-purple-500 to-pink-600",
+      AARI_WORKER: "from-pink-400 to-rose-600",
+      EMBROIDERY_WORKER: "from-rose-400 to-red-500",
+      HELPER: "from-amber-400 to-orange-600"
     };
     return gradients[role] || "from-slate-400 to-slate-600";
   };
@@ -254,6 +285,9 @@ export default function Staff() {
                 <option value="STORE_KEEPER">Store Keepers</option>
                 <option value="CUTTING_MASTER">Cutting Masters</option>
                 <option value="TAILOR">Tailors</option>
+                <option value="AARI_WORKER">Aari Workers</option>
+                <option value="EMBROIDERY_WORKER">Embroidery Workers</option>
+                <option value="HELPER">Helpers</option>
               </select>
             </div>
           </div>

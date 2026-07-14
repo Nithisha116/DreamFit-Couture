@@ -1696,8 +1696,15 @@ export const createTailor = async (req, res) => {
 // };
 export const getAllTailors = async (req, res) => {
   try {
-    const { search, status, availability } = req.query;
-    let matchQuery = { isActive: true };
+    const { search, status, availability, isActive } = req.query;
+    let matchQuery = {};
+    if (isActive === 'false') {
+      matchQuery.isActive = false;
+    } else if (isActive === 'all') {
+      // Don't filter by isActive
+    } else {
+      matchQuery.isActive = true; // Default behavior
+    }
 
     // 1. Search Logic
     if (search) {

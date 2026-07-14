@@ -1691,8 +1691,15 @@ export const createEmbroideryWorker = async (req, res) => {
 // };
 export const getAllEmbroideryWorkers = async (req, res) => {
   try {
-    const { search, status, availability } = req.query;
-    let matchQuery = { isActive: true };
+    const { search, status, availability, isActive } = req.query;
+    let matchQuery = {};
+    if (isActive === 'false') {
+      matchQuery.isActive = false;
+    } else if (isActive === 'all') {
+      // Don't filter by isActive
+    } else {
+      matchQuery.isActive = true; // Default behavior
+    }
 
     // 1. Search Logic
     if (search) {
@@ -1718,40 +1725,71 @@ export const getAllEmbroideryWorkers = async (req, res) => {
       { $match: matchQuery },
       { $sort: { createdAt: -1 } },
       
-      // 🔥 Join with Work collection (Single Call)
+      // 🔥 Join with Work collection via assignments array
       {
         $lookup: {
-          from: "works", // Unga Work collection name check pannikonga
+          from: "works",
           localField: "_id",
-          foreignField: "embroideryWorker",
+          foreignField: "assignments.workerId",
           as: "allWorks"
         }
       },
 
-      // 📊 Calculate stats in Backend itself
+      // 📊 Calculate stats dynamically
       {
         $addFields: {
-          workStats: {
-            totalAssigned: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { $eq: ["$$w.isActive", true] } } } 
-            },
-            completed: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { $eq: ["$$w.status", "ready-to-deliver"] } } } 
-            },
-            pending: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { $in: ["$$w.status", ["pending", "accepted"]] } } } 
-            },
-            inProgress: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { 
-                $in: ["$$w.status", ["cutting-started", "cutting-completed", "sewing-started", "sewing-completed", "ironing"]] 
-              } } } 
+          // Flatten all assignments for this embroideryWorker
+          myAssignments: {
+            $filter: {
+              input: {
+                $reduce: {
+                  input: "$allWorks",
+                  initialValue: [],
+                  in: { $concatArrays: ["$$value", "$$this.assignments"] }
+                }
+              },
+              as: "asgn",
+              cond: { $eq: ["$$asgn.workerId", "$_id"] }
             }
           }
         }
       },
-
-      // 🧹 Clean up: remove the heavy works array, only keep stats
-      { $project: { allWorks: 0 } }
+      {
+        $addFields: {
+          workStats: {
+            totalAssigned: { $size: "$myAssignments" },
+            completed: {
+              $size: {
+                $filter: {
+                  input: "$myAssignments",
+                  as: "a",
+                  cond: { $eq: ["$$a.status", "completed"] }
+                }
+              }
+            },
+            inProgress: {
+              $size: {
+                $filter: {
+                  input: "$myAssignments",
+                  as: "a",
+                  cond: { $eq: ["$$a.status", "active"] }
+                }
+              }
+            },
+            pending: {
+              $size: {
+                $filter: {
+                  input: "$myAssignments",
+                  as: "a",
+                  cond: { $eq: ["$$a.status", "pending"] }
+                }
+              }
+            }
+          }
+        }
+      },
+      // 🧹 Clean up
+      { $project: { allWorks: 0, myAssignments: 0 } }
     ]);
 
     res.status(200).json(embroideryWorkers);
@@ -1777,7 +1815,7 @@ export const getEmbroideryWorkerById = async (req, res) => {
 
     // ✅ Get all works assigned to this embroideryWorker
     const works = await Work.find({ 
-      embroideryWorker: embroideryWorker._id,
+      "assignments.workerId": embroideryWorker._id,
       isActive: true 
     })
       .populate({
@@ -1795,15 +1833,18 @@ export const getEmbroideryWorkerById = async (req, res) => {
       .populate('cuttingMaster', 'name')
       .sort({ createdAt: -1 });
 
-    // ✅ Calculate work statistics from actual works
+    // ✅ Flatten all assignments for this embroideryWorker from all fetched works
+    const allMyAssignments = works.reduce((acc, w) => {
+      const mine = w.assignments?.filter(a => a.workerId?.toString() === embroideryWorker._id.toString()) || [];
+      return [...acc, ...mine];
+    }, []);
+
+    // ✅ Calculate work statistics from actual assignments
     const workStats = {
-      totalAssigned: works.length,
-      completed: works.filter(w => w.status === 'ready-to-deliver').length,
-      pending: works.filter(w => ['pending', 'accepted'].includes(w.status)).length,
-      inProgress: works.filter(w => 
-        ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing']
-        .includes(w.status)
-      ).length
+      totalAssigned: allMyAssignments.length,
+      completed: allMyAssignments.filter(a => a.status === 'completed').length,
+      inProgress: allMyAssignments.filter(a => a.status === 'active').length,
+      pending: allMyAssignments.filter(a => a.status === 'pending').length
     };
 
     console.log('📊 Recalculated workStats for embroideryWorker:', {

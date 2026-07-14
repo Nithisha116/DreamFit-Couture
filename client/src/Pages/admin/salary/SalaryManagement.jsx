@@ -181,6 +181,9 @@ export default function SalaryManagement() {
               <option value="Tailor">Tailors</option>
               <option value="Cutting Master">Cutting Masters</option>
               <option value="Store Keeper">Store Keepers</option>
+              <option value="Aari Work">Aari Workers</option>
+              <option value="Embroidery">Embroidery Workers</option>
+              <option value="Helper">Helpers</option>
             </select>
           </div>
 
