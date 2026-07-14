@@ -2005,12 +2005,10 @@ export const deleteTailor = async (req, res) => {
       });
     }
 
-    tailor.isActive = false;
-    await tailor.save();
+    await Tailor.findByIdAndDelete(tailor._id);
 
-    await User.findOneAndUpdate(
-      { tailorId: tailor._id },
-      { isActive: false }
+    await User.findOneAndDelete(
+      { tailorId: tailor._id }
     );
 
     res.json({ message: "Tailor deleted successfully" });

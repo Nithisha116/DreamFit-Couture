@@ -281,8 +281,9 @@ export const deleteStoreKeeper = async (req, res) => {
       });
     }
 
-    storeKeeper.isActive = false;
-    await storeKeeper.save();
+    await StoreKeeper.findByIdAndDelete(storeKeeper._id);
+
+    await User.findOneAndDelete({ storeKeeperId: storeKeeper._id });
 
     res.json({ message: "Store Keeper deleted successfully" });
   } catch (error) {

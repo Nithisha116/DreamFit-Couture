@@ -366,8 +366,9 @@ export const deleteCuttingMaster = async (req, res) => {
       });
     }
 
-    cuttingMaster.isActive = false;
-    await cuttingMaster.save();
+    await CuttingMaster.findByIdAndDelete(cuttingMaster._id);
+
+    await User.findOneAndDelete({ cuttingMasterId: cuttingMaster._id });
 
     res.json({ message: "Cutting Master deleted successfully" });
   } catch (error) {

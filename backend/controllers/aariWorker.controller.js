@@ -1996,12 +1996,10 @@ export const deleteAariWorker = async (req, res) => {
       });
     }
 
-    aariWorker.isActive = false;
-    await aariWorker.save();
+    await AariWorker.findByIdAndDelete(aariWorker._id);
 
-    await User.findOneAndUpdate(
-      { aariWorkerId: aariWorker._id },
-      { isActive: false }
+    await User.findOneAndDelete(
+      { aariWorkerId: aariWorker._id }
     );
 
     res.json({ message: "AariWorker deleted successfully" });

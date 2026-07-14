@@ -1996,12 +1996,10 @@ export const deleteHelper = async (req, res) => {
       });
     }
 
-    helper.isActive = false;
-    await helper.save();
+    await Helper.findByIdAndDelete(helper._id);
 
-    await User.findOneAndUpdate(
-      { helperId: helper._id },
-      { isActive: false }
+    await User.findOneAndDelete(
+      { helperId: helper._id }
     );
 
     res.json({ message: "Helper deleted successfully" });

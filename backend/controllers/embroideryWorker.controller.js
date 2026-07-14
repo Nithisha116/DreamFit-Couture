@@ -1996,12 +1996,10 @@ export const deleteEmbroideryWorker = async (req, res) => {
       });
     }
 
-    embroideryWorker.isActive = false;
-    await embroideryWorker.save();
+    await EmbroideryWorker.findByIdAndDelete(embroideryWorker._id);
 
-    await User.findOneAndUpdate(
-      { embroideryWorkerId: embroideryWorker._id },
-      { isActive: false }
+    await User.findOneAndDelete(
+      { embroideryWorkerId: embroideryWorker._id }
     );
 
     res.json({ message: "EmbroideryWorker deleted successfully" });
