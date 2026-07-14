@@ -1893,7 +1893,7 @@ export const updateHelper = async (req, res) => {
     const updatableFields = ['name', 'phone', 'email', 'address', 'specialization', 'experience', 'basicSalary'];
     
     if (isAdmin || isStoreKeeper) {
-      updatableFields.push('isAvailable', 'leaveStatus', 'leaveFrom', 'leaveTo', 'leaveReason');
+      updatableFields.push('isActive', 'isAvailable', 'leaveStatus', 'leaveFrom', 'leaveTo', 'leaveReason');
     }
 
     updatableFields.forEach(field => {

@@ -10,12 +10,12 @@ import {
   Wand2, Palette, Wrench
 } from "lucide-react";
 import { fetchAllStaff, updateStaff, deleteStaff, toggleStaffStatus } from "../../../features/user/userSlice";
-import { fetchAllTailors, deleteTailor } from "../../../features/tailor/tailorSlice";
-import { fetchAllCuttingMasters, deleteCuttingMaster } from "../../../features/cuttingMaster/cuttingMasterSlice";
-import { fetchAllStoreKeepers, deleteStoreKeeper } from "../../../features/storeKeeper/storeKeeperSlice";
-import { fetchAllAariWorkers, deleteAariWorker } from "../../../features/aariWorker/aariWorkerSlice";
-import { fetchAllEmbroideryWorkers, deleteEmbroideryWorker } from "../../../features/embroideryWorker/embroideryWorkerSlice";
-import { fetchAllHelpers, deleteHelper } from "../../../features/helper/helperSlice";
+import { fetchAllTailors, deleteTailor, updateTailor } from "../../../features/tailor/tailorSlice";
+import { fetchAllCuttingMasters, deleteCuttingMaster, updateCuttingMaster } from "../../../features/cuttingMaster/cuttingMasterSlice";
+import { fetchAllStoreKeepers, deleteStoreKeeper, updateStoreKeeper } from "../../../features/storeKeeper/storeKeeperSlice";
+import { fetchAllAariWorkers, deleteAariWorker, updateAariWorker } from "../../../features/aariWorker/aariWorkerSlice";
+import { fetchAllEmbroideryWorkers, deleteEmbroideryWorker, updateEmbroideryWorker } from "../../../features/embroideryWorker/embroideryWorkerSlice";
+import { fetchAllHelpers, deleteHelper, updateHelper } from "../../../features/helper/helperSlice";
 import showToast from "../../../utils/toast";
 
 // 🚀 Skeleton Loader Components
@@ -84,6 +84,7 @@ export default function Staff() {
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState({ name: "", email: "", role: "", phone: "" });
   const [filterRole, setFilterRole] = useState("all");
+  const [togglingId, setTogglingId] = useState(null);
 
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
@@ -175,12 +176,34 @@ export default function Staff() {
     setIsEditing(true);
   };
 
+  // Each role keeps its own worker record + update API; toggling status here
+  // just calls the same existing update action every edit form already uses.
+  const statusUpdateActions = {
+    tailor: (id, isActive) => updateTailor({ id, tailorData: { isActive } }),
+    cuttingMaster: (id, isActive) => updateCuttingMaster({ id, cuttingMasterData: { isActive } }),
+    storeKeeper: (id, isActive) => updateStoreKeeper({ id, data: { isActive } }),
+    aariWorker: (id, isActive) => updateAariWorker({ id, aariWorkerData: { isActive } }),
+    embroideryWorker: (id, isActive) => updateEmbroideryWorker({ id, embroideryWorkerData: { isActive } }),
+    helper: (id, isActive) => updateHelper({ id, helperData: { isActive } }),
+  };
+
   const handleToggleStatus = async (item) => {
-    if (item.type) return showToast.info(`${item.role.replace('_', ' ')} status managed in details page`);
+    if (togglingId === item._id) return;
+    setTogglingId(item._id);
+    const nextIsActive = !item.isActive;
     try {
-      await dispatch(toggleStaffStatus(item._id)).unwrap();
-      showToast.success(`Staff ${item.isActive ? 'deactivated' : 'activated'} successfully!`);
-    } catch (error) { showToast.error("Failed to toggle status"); }
+      if (item.type) {
+        const buildAction = statusUpdateActions[item.type];
+        await dispatch(buildAction(item._id, nextIsActive)).unwrap();
+      } else {
+        await dispatch(toggleStaffStatus(item._id)).unwrap();
+      }
+      showToast.success(`${item.role.replace('_', ' ')} ${nextIsActive ? 'activated' : 'deactivated'} successfully!`);
+    } catch (error) {
+      showToast.error(error?.message || error || "Failed to toggle status");
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   const handleDelete = async () => {
@@ -411,7 +434,7 @@ export default function Staff() {
 
                           {/* Activate/Deactivate Employee */}
                           <div className="relative group/btn">
-                            <button onClick={() => handleToggleStatus(item)} className={`p-3 rounded-xl transition-all shadow-sm border hover:scale-105 hover:shadow-md ${item.isActive ? 'bg-white border-slate-100 text-slate-600 hover:text-orange-600 hover:border-orange-100 hover:bg-orange-50' : 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600'}`}>
+                            <button onClick={() => handleToggleStatus(item)} disabled={togglingId === item._id} className={`p-3 rounded-xl transition-all shadow-sm border hover:scale-105 hover:shadow-md disabled:opacity-50 disabled:pointer-events-none ${item.isActive ? 'bg-white border-slate-100 text-slate-600 hover:text-orange-600 hover:border-orange-100 hover:bg-orange-50' : 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600'}`}>
                               <Power size={20} />
                             </button>
                             <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[11px] font-bold rounded-lg opacity-0 invisible group-hover/btn:opacity-100 group-hover/btn:visible transition-all duration-200 shadow-xl whitespace-nowrap z-50 pointer-events-none">
