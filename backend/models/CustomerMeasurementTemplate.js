@@ -45,8 +45,13 @@ const customerMeasurementTemplateSchema = new mongoose.Schema({
   lastUsed: {
     type: Date,
     default: Date.now
-  }
+  },
   
+  isDeleted: {
+    type: Boolean,
+    default: false,
+    index: true
+  }
 }, { 
   timestamps: true // Adds createdAt and updatedAt automatically
 });

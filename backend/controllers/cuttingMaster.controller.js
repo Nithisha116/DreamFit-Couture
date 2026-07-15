@@ -1,6 +1,9 @@
 // backend/controllers/cuttingMaster.controller.js
 
 import CuttingMaster from "../models/CuttingMaster.js";
+import User from "../models/User.js";
+import { logDeletion } from "../utils/auditLogger.js";
+import { hasActiveWorkAssignment } from "../utils/workerAssignment.js";
 import Work from "../models/Work.js";
 import Order from "../models/Order.js";
 import Tailor from "../models/Tailor.js";
@@ -343,34 +346,34 @@ export const updateCuttingMaster = async (req, res) => {
  */
 export const deleteCuttingMaster = async (req, res) => {
   try {
-    console.log(`🗑️ Deleting cutting master: ${req.params.id}`);
+    console.log(`🗑️ Soft-deleting cutting master: ${req.params.id}`);
     
     if (req.user.role !== 'ADMIN') {
       return res.status(403).json({ message: "Only admin can delete" });
     }
 
-    const cuttingMaster = await CuttingMaster.findById(req.params.id);
+    const cuttingMaster = await CuttingMaster.findOne({ _id: req.params.id, isActive: true });
     if (!cuttingMaster) {
-      return res.status(404).json({ message: "Cutting Master not found" });
+      return res.status(404).json({ message: "Cutting Master not found or already deactivated" });
     }
 
-    // Check active works
-    const activeWorks = await Work.countDocuments({
-      cuttingMaster: cuttingMaster._id,
-      status: { $nin: ['ready-to-deliver', 'cancelled'] }
-    });
-
-    if (activeWorks > 0) {
-      return res.status(400).json({ 
-        message: `Cannot delete with ${activeWorks} active works` 
+    // Check active work assignments
+    if (await hasActiveWorkAssignment(cuttingMaster._id)) {
+      return res.status(400).json({
+        message: "Cannot delete cutting master with active work assignments. Complete or reassign work first."
       });
     }
 
-    await CuttingMaster.findByIdAndDelete(cuttingMaster._id);
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_USER", "CuttingMaster", cuttingMaster, cuttingMaster);
 
-    await User.findOneAndDelete({ cuttingMasterId: cuttingMaster._id });
+    cuttingMaster.isActive = false;
+    await cuttingMaster.save();
 
-    res.json({ message: "Cutting Master deleted successfully" });
+    // Soft delete associated User document
+    await User.findOneAndUpdate({ cuttingMasterId: cuttingMaster._id }, { isActive: false });
+
+    res.json({ message: "Cutting Master deactivated successfully" });
   } catch (error) {
     console.error("❌ Delete error:", error);
     res.status(500).json({ message: error.message });

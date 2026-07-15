@@ -9442,22 +9442,12 @@ export const updateExistingOrder = createAsyncThunk(
 // Update order status
 export const updateOrderStatusThunk = createAsyncThunk(
   "orders/updateStatus",
-  async ({ id, status }, { rejectWithValue }) => {
-    console.log("\n========== 🔄 [Thunk] updateOrderStatus START ==========");
-    console.log('🔄 [Thunk] Order ID:', id);
-    console.log('🔄 [Thunk] New status:', status);
-    
+  async ({ id, status, cancelReason }, { rejectWithValue }) => {
     try {
-      const response = await orderApi.updateOrderStatus(id, status);
-      console.log('🔄 [Thunk] Response:', response);
-      
+      const response = await orderApi.updateOrderStatus(id, status, cancelReason);
       const result = response.order || response.data || response;
-      console.log('🔄 [Thunk] Updated order:', result);
-      console.log("========== ✅ [Thunk] updateOrderStatus END ==========\n");
       return result;
     } catch (error) {
-      console.error('❌ [Thunk] updateOrderStatus error:', error);
-      console.error("========== ❌ [Thunk] updateOrderStatus END ==========\n");
       return rejectWithValue(error.response?.data?.message || "Failed to update status");
     }
   }
@@ -9660,6 +9650,7 @@ const initialState = {
   // UI states
   loading: false,
   error: null,
+  mutationError: null,   // Non-fatal errors from status changes / delete actions
   success: false,
   
   // Filter info (for debugging)
@@ -9682,8 +9673,8 @@ const orderSlice = createSlice({
   initialState,
   reducers: {
     clearOrderError: (state) => {
-      console.log('🧹 [Reducer] clearOrderError');
       state.error = null;
+      state.mutationError = null;
     },
     clearCurrentOrder: (state) => {
       console.log('🧹 [Reducer] clearCurrentOrder');
@@ -9871,7 +9862,7 @@ const orderSlice = createSlice({
       .addCase(createNewOrder.pending, (state) => {
         console.log('⏳ [Reducer] createNewOrder pending');
         state.loading = true;
-        state.error = null;
+        state.mutationError = null;
         state.success = false;
       })
       .addCase(createNewOrder.fulfilled, (state, action) => {
@@ -9924,7 +9915,7 @@ const orderSlice = createSlice({
       .addCase(createNewOrder.rejected, (state, action) => {
         console.error('❌ [Reducer] createNewOrder rejected:', action.payload);
         state.loading = false;
-        state.error = action.payload;
+        state.mutationError = action.payload;
         state.success = false;
       })
 
@@ -9991,7 +9982,7 @@ const orderSlice = createSlice({
       .addCase(updateExistingOrder.pending, (state) => {
         console.log('⏳ [Reducer] updateExistingOrder pending');
         state.loading = true;
-        state.error = null;
+        state.mutationError = null;
       })
       .addCase(updateExistingOrder.fulfilled, (state, action) => {
         console.log('✅ [Reducer] updateExistingOrder fulfilled');
@@ -10053,7 +10044,7 @@ const orderSlice = createSlice({
       .addCase(updateExistingOrder.rejected, (state, action) => {
         console.error('❌ [Reducer] updateExistingOrder rejected:', action.payload);
         state.loading = false;
-        state.error = action.payload;
+        state.mutationError = action.payload;
       })
 
       // ===== UPDATE ORDER STATUS =====
@@ -10061,6 +10052,7 @@ const orderSlice = createSlice({
         console.log('⏳ [Reducer] updateOrderStatusThunk pending');
         state.loading = true;
         state.error = null;
+        state.mutationError = null;
       })
       .addCase(updateOrderStatusThunk.fulfilled, (state, action) => {
         console.log('✅ [Reducer] updateOrderStatusThunk fulfilled');
@@ -10114,9 +10106,9 @@ const orderSlice = createSlice({
         console.log('✅ [Reducer] Status update complete');
       })
       .addCase(updateOrderStatusThunk.rejected, (state, action) => {
-        console.error('❌ [Reducer] updateOrderStatusThunk rejected:', action.payload);
         state.loading = false;
-        state.error = action.payload;
+        // Use mutationError so the orders list page keeps rendering
+        state.mutationError = action.payload;
       })
 
       // ===== DELETE ORDER =====
@@ -10164,16 +10156,16 @@ const orderSlice = createSlice({
         state.success = true;
       })
       .addCase(deleteExistingOrder.rejected, (state, action) => {
-        console.error('❌ [Reducer] deleteExistingOrder rejected:', action.payload);
         state.loading = false;
-        state.error = action.payload;
+        // Use mutationError so the orders list page keeps rendering
+        state.mutationError = action.payload;
       })
 
       // ===== ADD PAYMENT =====
       .addCase(addPayment.pending, (state) => {
         console.log('⏳ [Reducer] addPayment pending');
         state.loading = true;
-        state.error = null;
+        state.mutationError = null;
       })
       .addCase(addPayment.fulfilled, (state, action) => {
         console.log('✅ [Reducer] addPayment fulfilled');
@@ -10205,7 +10197,7 @@ const orderSlice = createSlice({
       .addCase(addPayment.rejected, (state, action) => {
         console.error('❌ [Reducer] addPayment rejected:', action.payload);
         state.loading = false;
-        state.error = action.payload;
+        state.mutationError = action.payload;
       })
 
       // ===== FETCH ORDER PAYMENTS =====
@@ -10337,6 +10329,11 @@ export const selectOrderLoading = (state) => {
 export const selectOrderError = (state) => {
   const orderState = getOrderState(state);
   return orderState.error || null;
+};
+
+export const selectMutationError = (state) => {
+  const orderState = getOrderState(state);
+  return orderState.mutationError || null;
 };
 
 export const selectReadyToDelivery = (state) => {

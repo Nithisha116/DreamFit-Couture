@@ -1076,6 +1076,8 @@ import Payment from "../models/Payment.js";
 import Order from "../models/Order.js";
 import mongoose from "mongoose";
 import CustomerMeasurementTemplate from "../models/CustomerMeasurementTemplate.js";
+import CustomerSizeProfile from "../models/CustomerSizeProfile.js";
+import { logDeletion } from "../utils/auditLogger.js";
 import * as XLSX from "xlsx";
 
 
@@ -1374,7 +1376,7 @@ export const getAllCustomers = async (req, res) => {
     console.log("📋 Fetching all customers...");
     
     // ✅ OPTIONAL: Add populate if you want templates in list view
-    const customers = await Customer.find()
+    const customers = await Customer.find({ isDeleted: { $ne: true } })
       .populate('measurementTemplates') // Optional - remove if not needed
       .sort({ createdAt: -1 });
     
@@ -1656,7 +1658,7 @@ export const updateCustomer = async (req, res) => {
 export const deleteCustomer = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`🗑️ Deleting customer ID: ${id}`);
+    console.log(`🗑️ Soft-deleting customer ID: ${id}`);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -1664,10 +1666,18 @@ export const deleteCustomer = async (req, res) => {
         message: "Invalid customer ID format"
       });
     }
+
+    const customer = await Customer.findOne({ _id: id, isDeleted: { $ne: true } });
+    if (!customer) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Customer not found" 
+      });
+    }
     
-    // Check if customer has any orders or payments
-    const orders = await Order.countDocuments({ customer: id, isActive: true });
-    const payments = await Payment.countDocuments({ customer: id, isDeleted: false });
+    // Check if customer has any orders or payments (including inactive/deleted ones)
+    const orders = await Order.countDocuments({ customer: id });
+    const payments = await Payment.countDocuments({ customer: id });
 
     if (orders > 0 || payments > 0) {
       return res.status(400).json({ 
@@ -1676,18 +1686,20 @@ export const deleteCustomer = async (req, res) => {
       });
     }
     
-    const customer = await Customer.findByIdAndDelete(id);
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_CUSTOMER", "Customer", customer, customer);
 
-    if (!customer) {
-      return res.status(404).json({ 
-        success: false,
-        message: "Customer not found" 
-      });
-    }
+    customer.isDeleted = true;
+    customer.isActive = false;
+    await customer.save();
+
+    // Cascaded soft-delete on linked size profiles and templates
+    await CustomerSizeProfile.updateMany({ customer: id }, { isActive: false });
+    await CustomerMeasurementTemplate.updateMany({ customer: id }, { isDeleted: true });
 
     res.status(200).json({ 
       success: true,
-      message: "Customer deleted successfully"
+      message: "Customer soft-deleted successfully"
     });
   } catch (error) {
     console.error("❌ Delete customer error:", error);

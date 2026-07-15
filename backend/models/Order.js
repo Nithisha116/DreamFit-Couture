@@ -98,6 +98,7 @@ stageKeys: {
     required: [true, "Created by is required"],
   },
   isActive: { type: Boolean, default: true },
+  cancelReason: { type: String, default: "" },
 }, { timestamps: true });
 
 // ============================================

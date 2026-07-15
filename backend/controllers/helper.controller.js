@@ -1502,6 +1502,8 @@
 import Helper from "../models/Helper.js";
 import Work from "../models/Work.js";
 import User from "../models/User.js";
+import { logDeletion } from "../utils/auditLogger.js";
+import { hasActiveWorkAssignment } from "../utils/workerAssignment.js";
 import bcrypt from "bcryptjs";
 
 // ===== CREATE HELPER =====
@@ -1978,31 +1980,32 @@ export const updateLeaveStatus = async (req, res) => {
 // ===== DELETE HELPER (soft delete) =====
 export const deleteHelper = async (req, res) => {
   try {
-    const helper = await Helper.findById(req.params.id);
+    const helper = await Helper.findOne({ _id: req.params.id, isActive: true });
 
     if (!helper) {
-      return res.status(404).json({ message: "Helper not found" });
+      return res.status(404).json({ message: "Helper not found or already deactivated" });
     }
 
-    // ✅ Check if helper has active works
-    const activeWorks = await Work.countDocuments({
-      helper: helper._id,
-      status: { $nin: ['ready-to-deliver', 'cancelled'] }
-    });
-
-    if (activeWorks > 0) {
-      return res.status(400).json({ 
-        message: `Cannot delete helper with ${activeWorks} active works. Complete or reassign works first.` 
+    // ✅ Check if helper has active work assignments
+    if (await hasActiveWorkAssignment(helper._id)) {
+      return res.status(400).json({
+        message: "Cannot delete helper with active work assignments. Complete or reassign work first."
       });
     }
 
-    await Helper.findByIdAndDelete(helper._id);
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_USER", "Helper", helper, helper);
 
-    await User.findOneAndDelete(
-      { helperId: helper._id }
+    helper.isActive = false;
+    await helper.save();
+
+    // Soft delete associated User document
+    await User.findOneAndUpdate(
+      { helperId: helper._id },
+      { isActive: false }
     );
 
-    res.json({ message: "Helper deleted successfully" });
+    res.json({ message: "Helper deactivated successfully" });
   } catch (error) {
     console.error("Delete helper error:", error);
     res.status(500).json({ message: error.message });

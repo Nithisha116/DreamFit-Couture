@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, memo } from 'react';
-import { Eye, Edit, Trash2, MoreVertical, CheckCircle, Truck, MessageCircle, AlertTriangle, Clock, Search } from 'lucide-react';
+import { Eye, Edit, Trash2, MoreVertical, CheckCircle, Truck, MessageCircle, AlertTriangle, Clock, Search, XCircle } from 'lucide-react';
 import { OrderStatusBadge, PaymentStatusBadge, DeliveryBadge } from './OrderStatusBadge';
 import OrderProductImage from './OrderProductImage';
 
@@ -59,7 +59,7 @@ PaymentProgressBar.displayName = 'PaymentProgressBar';
 
 // ─── ActionMenu ───────────────────────────────────────────────────────────────
 
-function ActionMenu({ order, canEdit, isAdmin, onView, onEdit, onDelete, onMarkDelivered, onMarkReady }) {
+function ActionMenu({ order, canEdit, isAdmin, onView, onEdit, onDelete, onMarkDelivered, onMarkReady, onCancelTrigger }) {
   const [open, setOpen] = useState(false);
   const ref = useRef();
 
@@ -121,8 +121,18 @@ function ActionMenu({ order, canEdit, isAdmin, onView, onEdit, onDelete, onMarkD
     }} 
   />
 )}
-          {isAdmin && <div style={{ borderTop: '1px solid #f3f4f6', margin: '4px 0' }} />}
-          {isAdmin && <Item icon={Trash2} label="Delete" onClick={() => onDelete(order._id, order.orderId)} danger />}
+          {!['completed', 'delivered', 'cancelled'].includes(order.status) && (
+            <>
+              {((order.isAssigned && canEdit) || (!order.isAssigned && isAdmin)) && (
+                <div style={{ borderTop: '1px solid #f3f4f6', margin: '4px 0' }} />
+              )}
+              {order.isAssigned ? (
+                canEdit && <Item icon={XCircle} label="Cancel Order" onClick={() => onCancelTrigger(order._id, order.orderId)} danger />
+              ) : (
+                isAdmin && <Item icon={Trash2} label="Delete" onClick={() => onDelete(order._id, order.orderId)} danger />
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -131,7 +141,7 @@ function ActionMenu({ order, canEdit, isAdmin, onView, onEdit, onDelete, onMarkD
 
 // ─── OrderRow ─────────────────────────────────────────────────────────────────
 
-const OrderRow = memo(function OrderRow({ order, canEdit, isAdmin, isDeleting, onView, onEdit, onDelete, onMarkReady, onMarkDelivered }) {
+const OrderRow = memo(function OrderRow({ order, canEdit, isAdmin, isDeleting, onView, onEdit, onDelete, onMarkReady, onMarkDelivered, onCancelTrigger }) {
   const customer = order.customer || {};
   const garments = order.garments || [];
   const payStatus = order.paymentSummary?.paymentStatus || 'pending';
@@ -256,6 +266,7 @@ const OrderRow = memo(function OrderRow({ order, canEdit, isAdmin, isDeleting, o
             order={order} canEdit={canEdit} isAdmin={isAdmin}
             onView={onView} onEdit={onEdit} onDelete={onDelete}
             onMarkReady={onMarkReady} onMarkDelivered={onMarkDelivered}
+            onCancelTrigger={onCancelTrigger}
           />
         </div>
       </td>
@@ -287,7 +298,8 @@ export default function OrdersTable({
   onMarkReady, 
   onMarkDelivered,
   onClearSearch,
-  hasActiveFilters 
+  hasActiveFilters,
+  onCancelTrigger
 }) {
   if (!orders?.length) {
     return (
@@ -370,6 +382,7 @@ export default function OrdersTable({
               onDelete={onDelete}
               onMarkReady={onMarkReady}
               onMarkDelivered={onMarkDelivered}
+              onCancelTrigger={onCancelTrigger}
             />
           ))}
         </tbody>

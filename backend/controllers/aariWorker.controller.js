@@ -1502,6 +1502,8 @@
 import AariWorker from "../models/AariWorker.js";
 import Work from "../models/Work.js";
 import User from "../models/User.js";
+import { logDeletion } from "../utils/auditLogger.js";
+import { hasActiveWorkAssignment } from "../utils/workerAssignment.js";
 import bcrypt from "bcryptjs";
 
 // ===== CREATE AARI_WORKER =====
@@ -1978,31 +1980,32 @@ export const updateLeaveStatus = async (req, res) => {
 // ===== DELETE AARI_WORKER (soft delete) =====
 export const deleteAariWorker = async (req, res) => {
   try {
-    const aariWorker = await AariWorker.findById(req.params.id);
+    const aariWorker = await AariWorker.findOne({ _id: req.params.id, isActive: true });
 
     if (!aariWorker) {
-      return res.status(404).json({ message: "AariWorker not found" });
+      return res.status(404).json({ message: "AariWorker not found or already deactivated" });
     }
 
-    // ✅ Check if aariWorker has active works
-    const activeWorks = await Work.countDocuments({
-      aariWorker: aariWorker._id,
-      status: { $nin: ['ready-to-deliver', 'cancelled'] }
-    });
-
-    if (activeWorks > 0) {
-      return res.status(400).json({ 
-        message: `Cannot delete aariWorker with ${activeWorks} active works. Complete or reassign works first.` 
+    // ✅ Check if aariWorker has active work assignments
+    if (await hasActiveWorkAssignment(aariWorker._id)) {
+      return res.status(400).json({
+        message: "Cannot delete aari worker with active work assignments. Complete or reassign work first."
       });
     }
 
-    await AariWorker.findByIdAndDelete(aariWorker._id);
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_USER", "AariWorker", aariWorker, aariWorker);
 
-    await User.findOneAndDelete(
-      { aariWorkerId: aariWorker._id }
+    aariWorker.isActive = false;
+    await aariWorker.save();
+
+    // Soft delete associated User document
+    await User.findOneAndUpdate(
+      { aariWorkerId: aariWorker._id },
+      { isActive: false }
     );
 
-    res.json({ message: "AariWorker deleted successfully" });
+    res.json({ message: "AariWorker deactivated successfully" });
   } catch (error) {
     console.error("Delete aariWorker error:", error);
     res.status(500).json({ message: error.message });

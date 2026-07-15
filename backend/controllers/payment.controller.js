@@ -7,6 +7,7 @@ import Order from '../models/Order.js';
 import Garment from '../models/Garment.js';
 import { buildOrderPricingSummary } from '../utils/pricingEngine.js';
 import { assertOrderNotLocked } from '../utils/orderLock.js';
+import { logDeletion } from '../utils/auditLogger.js';
 
 // ============================================
 // 🔧 HELPER — Map payment type to income category
@@ -547,6 +548,9 @@ export const deletePayment = async (req, res) => {
     if (!payment) {
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
+
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_PAYMENT", "Payment", payment, payment);
 
     payment.isDeleted = true;
     payment.deletedAt = new Date();

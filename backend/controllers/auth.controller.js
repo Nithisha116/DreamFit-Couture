@@ -242,25 +242,45 @@ export const loginUser = async (req, res) => {
     let userType = null;
     let userId = null;
 
+    let Model = null;
+
     if (admin) {
       user = admin;
-      userType = "ADMIN";
+      const allowedRoles = [
+        "ADMIN",
+        "TAILOR",
+        "HELPER",
+        "STORE_KEEPER",
+        "CUTTING_MASTER",
+        "AARI_WORKER",
+        "EMBROIDERY_WORKER",
+        "STAFF",
+        "MANAGER"
+      ];
+      if (!allowedRoles.includes(admin.role)) {
+        return res.status(403).json({ message: "Invalid user role" });
+      }
+      userType = admin.role;
       userId = admin._id;
-      console.log("✅ Admin found");
+      Model = User;
+      console.log(`✅ User found with role: ${admin.role}`);
     } else if (cutting) {
       user = cutting;
       userType = "CUTTING_MASTER";
       userId = cutting._id;
+      Model = CuttingMaster;
       console.log("✅ Cutting Master found");
     } else if (store) {
       user = store;
       userType = "STORE_KEEPER";
       userId = store._id;
+      Model = StoreKeeper;
       console.log("✅ Store Keeper found");
     } else if (tailor) {
       user = tailor;
       userType = "TAILOR";
       userId = tailor._id;
+      Model = Tailor;
       console.log("✅ Tailor found");
     }
 
@@ -287,13 +307,6 @@ export const loginUser = async (req, res) => {
     }
 
     // 6️⃣ 🚀 OPTIMIZED: Update last login in background (don't await)
-    // Get the model dynamically based on userType
-    const Model = {
-      ADMIN: User,
-      CUTTING_MASTER: CuttingMaster,
-      STORE_KEEPER: StoreKeeper,
-      TAILOR: Tailor
-    }[userType];
     
     // Update in background without blocking response
     Model.findByIdAndUpdate(

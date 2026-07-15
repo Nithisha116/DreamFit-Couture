@@ -117,6 +117,17 @@ const customerSchema = new mongoose.Schema({
     trim: true
   },
   // ✅ Customer Overview Logic: Stats for dashboard
+  // Soft Delete fields
+  isDeleted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+    index: true
+  },
   totalOrders: {
     type: Number,
     default: 0

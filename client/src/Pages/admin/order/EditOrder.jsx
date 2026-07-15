@@ -34,7 +34,9 @@ import { fetchAllCustomers } from "../../../features/customer/customerSlice";
 
 import GarmentForm from "../garment/GarmentForm";
 import AddPaymentModal from "../../../components/AddPaymentModal";
+import CancelOrderModal from "../../../components/orders/CancelOrderModal";
 import showToast from "../../../utils/toast";
+import { getErrorMessage } from "../../../utils/errorUtils";
 import RangeBadge from "../../../components/RangeBadge";
 import { calculatePaymentSummary } from "../../../utils/paymentUtils";
 import { FileDown } from "lucide-react";
@@ -124,6 +126,8 @@ export default function EditOrder() {
   const [dataLoadTimeout, setDataLoadTimeout] = useState(false);
   const [fetchAttempts, setFetchAttempts] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   const isAdmin = user?.role === "ADMIN";
   const isStoreKeeper = user?.role === "STORE_KEEPER";
@@ -387,12 +391,20 @@ export default function EditOrder() {
   // ── Status handlers ────────────────────────────────────────────────────────
   const handleStatusChange = async (newStatus) => {
     if (!canEdit) { showToast.error("No permission to update status"); return; }
+
+    // Cancellation requires a reason — collect it via the shared modal instead
+    // of calling the status API directly (the backend now rejects a bare
+    // cancel with no reason).
+    if (newStatus === "cancelled") {
+      setShowCancelModal(true);
+      return;
+    }
+
     try {
       await dispatch(updateOrderStatusThunk({ id, status: newStatus })).unwrap();
       const messages = {
         "ready-to-delivery": "Order marked as ready for delivery",
         delivered: "Order marked as delivered",
-        cancelled: "Order cancelled",
         "in-progress": "Order status updated to in progress",
         confirmed: "Order confirmed",
         draft: "Order moved to draft",
@@ -400,8 +412,25 @@ export default function EditOrder() {
       showToast.success(messages[newStatus] || `Status updated to ${newStatus}`);
       setFormData((p) => ({ ...p, status: newStatus }));
       dispatch(fetchOrderById(id));
-    } catch {
-      showToast.error("Failed to update status");
+    } catch (error) {
+      showToast.error(getErrorMessage(error, "Failed to update status"));
+    }
+  };
+
+  const handleCancelConfirm = async (cancelReason) => {
+    setCancelLoading(true);
+    try {
+      await dispatch(updateOrderStatusThunk({ id, status: "cancelled", cancelReason })).unwrap();
+      showToast.success("Order cancelled");
+      setFormData((p) => ({ ...p, status: "cancelled" }));
+      setShowCancelModal(false);
+      dispatch(fetchOrderById(id));
+    } catch (error) {
+      // Leave formData.status untouched so the dropdown reflects the real,
+      // unchanged status rather than appearing stuck on "Cancelled".
+      showToast.error(getErrorMessage(error, "Failed to cancel order"));
+    } finally {
+      setCancelLoading(false);
     }
   };
 
@@ -567,6 +596,15 @@ export default function EditOrder() {
         title={editingPayment ? "Edit Payment" : isFullyPaid ? "Order Fully Paid" : "Add Payment"}
       />
 
+      {/* Cancel Order Modal */}
+      <CancelOrderModal
+        isOpen={showCancelModal}
+        orderId={currentOrder?.orderId}
+        onConfirm={handleCancelConfirm}
+        onClose={() => setShowCancelModal(false)}
+        loading={cancelLoading}
+      />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8">
         {/* Desktop Header */}
         <div className="hidden lg:flex items-center gap-4 mb-6">
@@ -588,7 +626,9 @@ export default function EditOrder() {
               <select
                 value={formData.status}
                 onChange={(e) => handleStatusChange(e.target.value)}
-                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm"
+                disabled={["delivered", "cancelled"].includes(formData.status)}
+                title={["delivered", "cancelled"].includes(formData.status) ? "This order's status is final and can no longer be changed" : undefined}
+                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="draft">Draft</option>
                 <option value="confirmed">Confirmed</option>

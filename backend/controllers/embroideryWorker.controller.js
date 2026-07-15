@@ -1502,6 +1502,8 @@
 import EmbroideryWorker from "../models/EmbroideryWorker.js";
 import Work from "../models/Work.js";
 import User from "../models/User.js";
+import { logDeletion } from "../utils/auditLogger.js";
+import { hasActiveWorkAssignment } from "../utils/workerAssignment.js";
 import bcrypt from "bcryptjs";
 
 // ===== CREATE EMBROIDERY_WORKER =====
@@ -1978,31 +1980,32 @@ export const updateLeaveStatus = async (req, res) => {
 // ===== DELETE EMBROIDERY_WORKER (soft delete) =====
 export const deleteEmbroideryWorker = async (req, res) => {
   try {
-    const embroideryWorker = await EmbroideryWorker.findById(req.params.id);
+    const embroideryWorker = await EmbroideryWorker.findOne({ _id: req.params.id, isActive: true });
 
     if (!embroideryWorker) {
-      return res.status(404).json({ message: "EmbroideryWorker not found" });
+      return res.status(404).json({ message: "EmbroideryWorker not found or already deactivated" });
     }
 
-    // ✅ Check if embroideryWorker has active works
-    const activeWorks = await Work.countDocuments({
-      embroideryWorker: embroideryWorker._id,
-      status: { $nin: ['ready-to-deliver', 'cancelled'] }
-    });
-
-    if (activeWorks > 0) {
-      return res.status(400).json({ 
-        message: `Cannot delete embroideryWorker with ${activeWorks} active works. Complete or reassign works first.` 
+    // ✅ Check if embroideryWorker has active work assignments
+    if (await hasActiveWorkAssignment(embroideryWorker._id)) {
+      return res.status(400).json({
+        message: "Cannot delete embroidery worker with active work assignments. Complete or reassign work first."
       });
     }
 
-    await EmbroideryWorker.findByIdAndDelete(embroideryWorker._id);
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_USER", "EmbroideryWorker", embroideryWorker, embroideryWorker);
 
-    await User.findOneAndDelete(
-      { embroideryWorkerId: embroideryWorker._id }
+    embroideryWorker.isActive = false;
+    await embroideryWorker.save();
+
+    // Soft delete associated User document
+    await User.findOneAndUpdate(
+      { embroideryWorkerId: embroideryWorker._id },
+      { isActive: false }
     );
 
-    res.json({ message: "EmbroideryWorker deleted successfully" });
+    res.json({ message: "EmbroideryWorker deactivated successfully" });
   } catch (error) {
     console.error("Delete embroideryWorker error:", error);
     res.status(500).json({ message: error.message });

@@ -1737,6 +1737,8 @@ import OrderInvoice from "../../../components/OrderInvoice";
 import PaymentReceipt from "../../../components/PaymentReceipt";
 import AddPaymentModal from "../../../components/AddPaymentModal";
 import showToast from "../../../utils/toast";
+import { getErrorMessage } from "../../../utils/errorUtils";
+import CancelOrderModal from "../../../components/orders/CancelOrderModal";
 import { calculatePaymentSummary } from "../../../utils/paymentUtils";
 import RangeBadge from "../../../components/RangeBadge";
 import WhatsAppShareButton from "../../../components/WhatsAppShareButton";
@@ -1934,6 +1936,8 @@ export default function OrderDetails() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showMobileActions, setShowMobileActions] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   // Non-blocking print implementation refs & hook
   const printableInvoiceRef = useRef(null);
@@ -1954,6 +1958,10 @@ export default function OrderDetails() {
   const isAdmin = user?.role === "ADMIN";
   const isStoreKeeper = user?.role === "STORE_KEEPER";
   const canEdit = isAdmin || isStoreKeeper;
+
+  // Order lifecycle: terminal orders can no longer be deleted or cancelled.
+  const isOrderTerminal = ['delivered', 'cancelled'].includes(currentOrder?.status);
+  const isOrderAssigned = !!currentOrder?.isAssigned;
 
   // Get base path based on user role
   const basePath = user?.role === "ADMIN" ? "/admin" : 
@@ -1999,7 +2007,7 @@ export default function OrderDetails() {
 
         } catch (error) {
           console.error("❌ Error fetching data:", error);
-          showToast.error(error?.message || "Failed to load order details");
+          showToast.error(getErrorMessage(error, "Failed to load order details"));
         }
       };
 
@@ -2126,7 +2134,7 @@ export default function OrderDetails() {
         showToast.success("Order deleted successfully");
         navigate(`${basePath}/orders`);
       } catch (error) {
-        showToast.error(error?.message || "Failed to delete order");
+        showToast.error(getErrorMessage(error, "Failed to delete order"));
       } finally {
         setDeleteLoading(false);
       }
@@ -2140,13 +2148,19 @@ export default function OrderDetails() {
       return;
     }
 
+    // Intercept cancellation — open the modal to collect a reason
+    if (newStatus === 'cancelled') {
+      setShowStatusMenu(false);
+      setShowCancelModal(true);
+      return;
+    }
+
     try {
       await dispatch(updateOrderStatusThunk({ id, status: newStatus })).unwrap();
 
       const statusMessages = {
         'ready-to-delivery': 'Order marked as ready for delivery',
         'delivered': 'Order marked as delivered',
-        'cancelled': 'Order cancelled',
         'in-progress': 'Order status updated to in progress',
         'confirmed': 'Order confirmed',
         'draft': 'Order moved to draft'
@@ -2156,7 +2170,22 @@ export default function OrderDetails() {
       setShowStatusMenu(false);
       dispatch(fetchOrderById(id));
     } catch (error) {
-      showToast.error(error?.message || "Failed to update status");
+      showToast.error(getErrorMessage(error, "Failed to update status"));
+    }
+  };
+
+  // Handle Cancel Confirmation (from CancelOrderModal)
+  const handleCancelConfirm = async (cancelReason) => {
+    setCancelLoading(true);
+    try {
+      await dispatch(updateOrderStatusThunk({ id, status: 'cancelled', cancelReason })).unwrap();
+      showToast.success('Order cancelled');
+      setShowCancelModal(false);
+      dispatch(fetchOrderById(id));
+    } catch (error) {
+      showToast.error(getErrorMessage(error, 'Failed to cancel order'));
+    } finally {
+      setCancelLoading(false);
     }
   };
 
@@ -2371,16 +2400,7 @@ const handleSavePayment = async (paymentData) => {
 
   } catch (error) {
     console.error("❌ Error saving payment:", error);
-    
-    // Detailed error logging
-    if (error.response?.data) {
-      console.error("Server error response:", error.response.data);
-      showToast.error(error.response.data.message || "Failed to save payment");
-    } else if (error.message) {
-      showToast.error(error.message);
-    } else {
-      showToast.error("Failed to save payment");
-    }
+    showToast.error(getErrorMessage(error, "Failed to save payment"));
   } finally {
     setPaymentLoading(false);
   }
@@ -2403,7 +2423,7 @@ const handleSavePayment = async (paymentData) => {
         await dispatch(fetchOrderPayments(id)).unwrap();
       } catch (error) {
         console.error("❌ Error deleting payment:", error);
-        showToast.error(error?.message || "Failed to delete payment");
+        showToast.error(getErrorMessage(error, "Failed to delete payment"));
       }
     }
   };
@@ -2776,22 +2796,39 @@ const handleSavePayment = async (paymentData) => {
                     </button>
                   )}
 
-                  {isAdmin && (
-                    <button
-                      onClick={() => {
-                        handleDelete();
-                        setMobileMenuOpen(false);
-                      }}
-                      disabled={deleteLoading}
-                      className="w-full flex items-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg font-bold disabled:opacity-50"
-                    >
-                      {deleteLoading ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Trash2 size={18} />
-                      )}
-                      Delete Order
-                    </button>
+                  {!isOrderTerminal && (
+                    isOrderAssigned ? (
+                      canEdit && (
+                        <button
+                          onClick={() => {
+                            setShowCancelModal(true);
+                            setMobileMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg font-bold"
+                        >
+                          <XCircle size={18} />
+                          Cancel Order
+                        </button>
+                      )
+                    ) : (
+                      isAdmin && (
+                        <button
+                          onClick={() => {
+                            handleDelete();
+                            setMobileMenuOpen(false);
+                          }}
+                          disabled={deleteLoading}
+                          className="w-full flex items-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg font-bold disabled:opacity-50"
+                        >
+                          {deleteLoading ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 size={18} />
+                          )}
+                          Delete Order
+                        </button>
+                      )
+                    )
                   )}
                 </>
               )}
@@ -2859,6 +2896,15 @@ const handleSavePayment = async (paymentData) => {
           initialData={editingPayment}
           pricingVersion={currentOrder?.pricingVersion}
           title={editingPayment ? "Edit Payment" : "Add Payment to Order"}
+        />
+
+        {/* Cancel Order Modal */}
+        <CancelOrderModal
+          isOpen={showCancelModal}
+          orderId={currentOrder?.orderId}
+          onConfirm={handleCancelConfirm}
+          onClose={() => setShowCancelModal(false)}
+          loading={cancelLoading}
         />
 
         {/* Hidden Full Invoice Component */}
@@ -2933,19 +2979,33 @@ const handleSavePayment = async (paymentData) => {
                   Edit
                 </button>
 
-                {isAdmin && (
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleteLoading}
-                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {deleteLoading ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Trash2 size={18} />
-                    )}
-                    Delete
-                  </button>
+                {!isOrderTerminal && (
+                  isOrderAssigned ? (
+                    canEdit && (
+                      <button
+                        onClick={() => setShowCancelModal(true)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"
+                      >
+                        <XCircle size={18} />
+                        Cancel Order
+                      </button>
+                    )
+                  ) : (
+                    isAdmin && (
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleteLoading}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {deleteLoading ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Trash2 size={18} />
+                        )}
+                        Delete
+                      </button>
+                    )
+                  )
                 )}
 
 {!hasFullPayment ? (

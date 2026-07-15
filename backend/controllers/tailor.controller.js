@@ -1502,6 +1502,8 @@
 import Tailor from "../models/Tailor.js";
 import Work from "../models/Work.js";
 import User from "../models/User.js";
+import { logDeletion } from "../utils/auditLogger.js";
+import { hasActiveWorkAssignment } from "../utils/workerAssignment.js";
 import bcrypt from "bcryptjs";
 import CuttingMaster from "../models/CuttingMaster.js";
 import StoreKeeper from "../models/StoreKeeper.js";
@@ -1987,31 +1989,32 @@ export const updateLeaveStatus = async (req, res) => {
 // ===== DELETE TAILOR (soft delete) =====
 export const deleteTailor = async (req, res) => {
   try {
-    const tailor = await Tailor.findById(req.params.id);
+    const tailor = await Tailor.findOne({ _id: req.params.id, isActive: true });
 
     if (!tailor) {
-      return res.status(404).json({ message: "Tailor not found" });
+      return res.status(404).json({ message: "Tailor not found or already deactivated" });
     }
 
-    // ✅ Check if tailor has active works
-    const activeWorks = await Work.countDocuments({
-      tailor: tailor._id,
-      status: { $nin: ['ready-to-deliver', 'cancelled'] }
-    });
-
-    if (activeWorks > 0) {
-      return res.status(400).json({ 
-        message: `Cannot delete tailor with ${activeWorks} active works. Complete or reassign works first.` 
+    // ✅ Check if tailor has active work assignments
+    if (await hasActiveWorkAssignment(tailor._id)) {
+      return res.status(400).json({
+        message: "Cannot delete tailor with active work assignments. Complete or reassign work first."
       });
     }
 
-    await Tailor.findByIdAndDelete(tailor._id);
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_USER", "Tailor", tailor, tailor);
 
-    await User.findOneAndDelete(
-      { tailorId: tailor._id }
+    tailor.isActive = false;
+    await tailor.save();
+
+    // Soft delete associated User document
+    await User.findOneAndUpdate(
+      { tailorId: tailor._id },
+      { isActive: false }
     );
 
-    res.json({ message: "Tailor deleted successfully" });
+    res.json({ message: "Tailor deactivated successfully" });
   } catch (error) {
     console.error("Delete tailor error:", error);
     res.status(500).json({ message: error.message });
