@@ -10,9 +10,11 @@ import {
   clearOrderError,
 } from "../../../features/order/orderSlice";
 import showToast from "../../../utils/toast";
+import { getErrorMessage } from "../../../utils/errorUtils";
 import OrdersKPI from "../../../components/orders/OrdersKPI";
 import OrderFilterTabs from "../../../components/orders/OrderFilterTabs";
 import OrdersTable from "../../../components/orders/OrdersTable";
+import CancelOrderModal from "../../../components/orders/CancelOrderModal";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const isOverdue = (order) => {
@@ -87,6 +89,15 @@ export default function Orders() {
   });
 
   const { user } = useSelector(s => ({ user: s.auth?.user }));
+  const mutationError = useSelector((state) => state.orders?.mutationError || state.order?.mutationError || null);
+
+  useEffect(() => {
+    if (mutationError) {
+      showToast.error(mutationError);
+      dispatch(clearOrderError());
+    }
+  }, [mutationError, dispatch]);
+
   const isAdmin     = user?.role === 'ADMIN';
   const isStoreKeeper = user?.role === 'STORE_KEEPER';
   const canEdit     = isAdmin || isStoreKeeper;
@@ -114,6 +125,9 @@ export default function Orders() {
   const [currentPage, setCurrentPage]       = useState(initialPage);
   const [deleteLoading, setDeleteLoading]   = useState({});
   const [showFilters, setShowFilters]       = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancellingOrder, setCancellingOrder] = useState(null);
+  const [cancelProcessing, setCancelProcessing] = useState(false);
 
   // ── debounce search ──
   useEffect(() => {
@@ -190,11 +204,36 @@ export default function Orders() {
       showToast.success("Order deleted");
       fetchData();
     } catch (e) {
-      showToast.error(e?.message || "Delete failed");
+      showToast.error(getErrorMessage(e, "Delete failed"));
     } finally {
       setDeleteLoading(p => ({ ...p, [id]: false }));
     }
   }, [canEdit, dispatch, fetchData]);
+
+  const onCancelTrigger = useCallback((id, orderId) => {
+    setCancellingOrder({ id, orderId });
+    setCancelModalOpen(true);
+  }, []);
+
+  const handleCancelConfirm = async (reason) => {
+    if (!cancellingOrder) return;
+    setCancelProcessing(true);
+    try {
+      await dispatch(updateOrderStatusThunk({ 
+        id: cancellingOrder.id, 
+        status: 'cancelled', 
+        cancelReason: reason 
+      })).unwrap();
+      showToast.success("Order cancelled successfully");
+      setCancelModalOpen(false);
+      setCancellingOrder(null);
+      fetchData();
+    } catch (e) {
+      showToast.error(getErrorMessage(e, "Cancellation failed"));
+    } finally {
+      setCancelProcessing(false);
+    }
+  };
 
   const onMarkReady = useCallback(async (id, orderId) => {
     if (!canEdit) return;
@@ -203,7 +242,7 @@ export default function Orders() {
       await dispatch(updateOrderStatusThunk({ id, status: 'ready-to-delivery' })).unwrap();
       showToast.success("Marked as Ready");
       fetchData();
-    } catch (e) { showToast.error(e?.message || "Failed"); }
+    } catch (e) { showToast.error(getErrorMessage(e, "Failed")); }
   }, [canEdit, dispatch, fetchData]);
 
   const onMarkDelivered = useCallback(async (id, orderId) => {
@@ -213,7 +252,7 @@ export default function Orders() {
       await dispatch(updateOrderStatusThunk({ id, status: 'delivered' })).unwrap();
       showToast.success("Marked as Delivered");
       fetchData();
-    } catch (e) { showToast.error(e?.message || "Failed"); }
+    } catch (e) { showToast.error(getErrorMessage(e, "Failed")); }
   }, [canEdit, dispatch, fetchData]);
 
   const clearFilters = () => {
@@ -394,11 +433,25 @@ export default function Orders() {
               onMarkDelivered={onMarkDelivered}
               onClearSearch={clearFilters}
               hasActiveFilters={hasActiveFilters}
+              onCancelTrigger={onCancelTrigger}
             />
           </div>
         )}
         <Pagination pagination={pagination} currentPage={currentPage} onPageChange={setCurrentPage} />
       </div>
+
+      <CancelOrderModal
+        isOpen={cancelModalOpen}
+        orderId={cancellingOrder?.orderId}
+        onConfirm={handleCancelConfirm}
+        onClose={() => {
+          if (!cancelProcessing) {
+            setCancelModalOpen(false);
+            setCancellingOrder(null);
+          }
+        }}
+        loading={cancelProcessing}
+      />
     </div>
   );
 }

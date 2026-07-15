@@ -1,6 +1,13 @@
 // backend/controllers/user.controller.js
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
+import StoreKeeper from "../models/StoreKeeper.js";
+import CuttingMaster from "../models/CuttingMaster.js";
+import Tailor from "../models/Tailor.js";
+import AariWorker from "../models/AariWorker.js";
+import EmbroideryWorker from "../models/EmbroideryWorker.js";
+import Helper from "../models/Helper.js";
+import { logDeletion } from "../utils/auditLogger.js";
 
 // ========== PROFILE ROUTES (Any logged in user) ==========
 
@@ -124,7 +131,8 @@ export const changePassword = async (req, res) => {
 export const getAllStaff = async (req, res) => {
   try {
     const staff = await User.find({ 
-      role: { $in: ["STORE_KEEPER", "CUTTING_MASTER", "STAFF"] } 
+      role: { $in: ["STORE_KEEPER", "CUTTING_MASTER", "STAFF"] },
+      isActive: true
     })
     .select("-password")
     .sort({ createdAt: -1 });
@@ -227,26 +235,45 @@ export const updateUser = async (req, res) => {
   }
 };
 
-// ❌ Delete User
+// ❌ Delete User (Soft Delete / Deactivate)
 export const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
     
     // Prevent deleting own account
-    if (id === req.user.id) {
+    if (id === req.user.id || id === req.user?._id?.toString()) {
       return res.status(400).json({ message: "Cannot delete your own account" });
     }
 
-    const user = await User.findById(id);
+    const user = await User.findOne({ _id: id, isActive: true });
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: "User not found or already deactivated" });
     }
 
-    await User.findByIdAndDelete(id);
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_USER", "User", user, user);
+
+    user.isActive = false;
+    await user.save();
+
+    // Deactivate linked worker profile to preserve historical trace
+    if (user.role === "STORE_KEEPER" && user.storeKeeperId) {
+      await StoreKeeper.findByIdAndUpdate(user.storeKeeperId, { isActive: false });
+    } else if (user.role === "CUTTING_MASTER" && user.cuttingMasterId) {
+      await CuttingMaster.findByIdAndUpdate(user.cuttingMasterId, { isActive: false });
+    } else if (user.role === "TAILOR" && user.tailorId) {
+      await Tailor.findByIdAndUpdate(user.tailorId, { isActive: false });
+    } else if (user.role === "AARI_WORKER" && user.aariWorkerId) {
+      await AariWorker.findByIdAndUpdate(user.aariWorkerId, { isActive: false });
+    } else if (user.role === "EMBROIDERY_WORKER" && user.embroideryWorkerId) {
+      await EmbroideryWorker.findByIdAndUpdate(user.embroideryWorkerId, { isActive: false });
+    } else if (user.role === "HELPER" && user.helperId) {
+      await Helper.findByIdAndUpdate(user.helperId, { isActive: false });
+    }
 
     res.status(200).json({ 
-      message: "User deleted successfully",
-      deletedUser: {
+      message: "User deactivated successfully",
+      deactivatedUser: {
         id: user._id,
         name: user.name,
         email: user.email

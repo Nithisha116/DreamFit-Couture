@@ -1,6 +1,8 @@
 // backend/controllers/storeKeeper.controller.js
 import StoreKeeper from "../models/StoreKeeper.js";
 import Order from "../models/Order.js";
+import User from "../models/User.js";
+import { logDeletion } from "../utils/auditLogger.js";
 import bcrypt from "bcryptjs";
 
 // ===== CREATE STORE KEEPER (Admin only) =====
@@ -264,9 +266,9 @@ export const deleteStoreKeeper = async (req, res) => {
       return res.status(403).json({ message: "Only admin can delete" });
     }
 
-    const storeKeeper = await StoreKeeper.findById(req.params.id);
+    const storeKeeper = await StoreKeeper.findOne({ _id: req.params.id, isActive: true });
     if (!storeKeeper) {
-      return res.status(404).json({ message: "Store Keeper not found" });
+      return res.status(404).json({ message: "Store Keeper not found or already deactivated" });
     }
 
     // Check if they have active orders
@@ -281,11 +283,16 @@ export const deleteStoreKeeper = async (req, res) => {
       });
     }
 
-    await StoreKeeper.findByIdAndDelete(storeKeeper._id);
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_USER", "StoreKeeper", storeKeeper, storeKeeper);
 
-    await User.findOneAndDelete({ storeKeeperId: storeKeeper._id });
+    storeKeeper.isActive = false;
+    await storeKeeper.save();
 
-    res.json({ message: "Store Keeper deleted successfully" });
+    // Soft delete associated User document
+    await User.findOneAndUpdate({ storeKeeperId: storeKeeper._id }, { isActive: false });
+
+    res.json({ message: "Store Keeper deactivated successfully" });
   } catch (error) {
     console.error("❌ Delete error:", error);
     res.status(500).json({ message: error.message });

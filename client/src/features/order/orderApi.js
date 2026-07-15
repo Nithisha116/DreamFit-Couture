@@ -1922,9 +1922,11 @@ export const updateOrder = async (id, updateData) => {
   }
 };
 
-export const updateOrderStatus = async (id, status) => {
+export const updateOrderStatus = async (id, status, cancelReason) => {
   try {
-    const response = await axiosInstance.patch(`${ORDER_BASE}/${id}/status`, { status });
+    const payload = { status };
+    if (cancelReason !== undefined) payload.cancelReason = cancelReason;
+    const response = await axiosInstance.patch(`${ORDER_BASE}/${id}/status`, payload);
     return response.data;
   } catch (error) {
     console.error(`❌ Error updating status:`, error);
