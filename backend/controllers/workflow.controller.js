@@ -488,6 +488,7 @@ export const processQrScan = async (req, res) => {
     try {
       const orderIdStr = work.order?.orderId || 'Unknown Order';
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const completedAssignment = activeAssignmentIndex >= 0 ? assignments[activeAssignmentIndex] : null;
       await createNotification({
         type: 'work-status-update',
         title: `${stageLabel(activeKey)} Completed`,
@@ -495,7 +496,13 @@ export const processQrScan = async (req, res) => {
         reference: {
           orderId: work.order?._id,
           workId: work._id
-        }
+        },
+        stage: activeKey,
+        workerId: completedAssignment?.workerId,
+        workerName: completedWorkerName,
+        // Exact server-side moment the stage was completed, not a
+        // freshly-generated timestamp inside the notification service.
+        scanTime: now
       });
     } catch (err) {
       console.error("Failed to create notification:", err.message);

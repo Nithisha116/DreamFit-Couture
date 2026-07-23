@@ -283,14 +283,10 @@ export default function NotificationBell() {
     return () => { isMounted.current = false; };
   }, [userId, dispatch, fetchNotificationData]);
 
-  // Periodic refresh every 30 seconds
-  useEffect(() => {
-    if (!userId) return;
-    const interval = setInterval(() => {
-      fetchNotificationData();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [userId, fetchNotificationData]);
+  // No periodic polling — GlobalSocketListener pushes new notifications into
+  // this same Redux state in real time via the notification:new socket event,
+  // and re-syncs on every (re)connect. This selector-driven bell updates
+  // automatically whenever that state changes.
 
   // Mark all as read
   const handleMarkAllAsRead = useCallback(async (e) => {

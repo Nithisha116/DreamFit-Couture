@@ -1950,8 +1950,23 @@ export const createNotification = async ({
   message,
   reference,
   priority = 'normal',
-  recipientModel = 'User'
+  recipientModel = 'User',
+  // Optional structured metadata for stage-completion events (QR scan /
+  // manual "Complete stage"). scanTime is the exact server-side moment the
+  // event happened; it defaults to "now" for notification types that don't
+  // have a more precise source time.
+  stage,
+  workerId,
+  workerName,
+  scanTime
 }) => {
+  const enrichedReference = {
+    ...(reference || {}),
+    ...(stage !== undefined ? { stage } : {}),
+    ...(workerId !== undefined ? { workerId } : {}),
+    ...(workerName !== undefined ? { workerName } : {})
+  };
+  const resolvedScanTime = scanTime || new Date();
   console.log('\n🔔 ===== CREATE NOTIFICATION STARTED =====');
   console.log('📌 Type:', type);
   console.log('👤 Recipient:', recipient);
@@ -2006,7 +2021,8 @@ export const createNotification = async ({
         recipientModel,
         title,
         message,
-        reference,
+        reference: enrichedReference,
+        scanTime: resolvedScanTime,
         priority,
         isRead: false,
         createdAt: new Date()
@@ -2045,7 +2061,8 @@ export const createNotification = async ({
       recipientModel: user.recipientModel || 'User',
       title,
       message,
-      reference,
+      reference: enrichedReference,
+      scanTime: resolvedScanTime,
       priority,
       isRead: false,
       createdAt: new Date()

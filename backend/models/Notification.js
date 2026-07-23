@@ -93,12 +93,27 @@ const notificationSchema = new mongoose.Schema({
       min: [0, 'Work count cannot be negative'],
       default: 0
     },
-    workIds: [{ 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'Work' 
-    }]
+    workIds: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Work'
+    }],
+
+    // Structured metadata for stage-completion notifications (QR scan / manual
+    // "Complete stage") so the frontend can render stage/worker as distinct
+    // fields instead of parsing them out of the message string.
+    stage: { type: String },
+    workerId: { type: mongoose.Schema.Types.ObjectId },
+    workerName: { type: String }
   },
-  
+
+  // Exact moment the underlying event happened on the server (e.g. the QR
+  // scan / stage completion), as opposed to `createdAt` which is when this
+  // Notification document itself was inserted a moment later. Falls back to
+  // `createdAt` for notification types that have no more precise source time.
+  scanTime: {
+    type: Date
+  },
+
   isRead: {
     type: Boolean,
     default: false,
