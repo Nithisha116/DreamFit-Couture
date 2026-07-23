@@ -168,8 +168,18 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+
+    // Grants access to the internal-only Activity Log (audit trail) and any
+    // future internal-team-only tooling. Deliberately a permission flag, not
+    // an email/role check — an ADMIN account is "the client's admin" unless
+    // this is explicitly set true. Never set via any user-facing update
+    // endpoint; only via seeding/direct DB action.
+    isInternalAdmin: {
+      type: Boolean,
+      default: false,
+    },
   },
-  { 
+  {
     timestamps: true
   }
 );

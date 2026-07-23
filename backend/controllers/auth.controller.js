@@ -205,6 +205,7 @@ import StoreKeeper from "../models/StoreKeeper.js";
 import Tailor from "../models/Tailor.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { logAction } from "../utils/auditLogger.js";
 
 export const loginUser = async (req, res) => {
   try {
@@ -310,10 +311,24 @@ export const loginUser = async (req, res) => {
     
     // Update in background without blocking response
     Model.findByIdAndUpdate(
-      userId, 
+      userId,
       { lastLogin: new Date() },
       { new: false }
     ).catch(err => console.error("LastLogin update failed:", err.message));
+
+    // Audit trail — records which specific account logged in (fire-and-forget,
+    // mirrors the lastLogin update above; never blocks or fails the login).
+    const loginEntityType = { CUTTING_MASTER: "CuttingMaster", STORE_KEEPER: "StoreKeeper", TAILOR: "Tailor" }[userType] || "User";
+    logAction(req, {
+      action: "LOGIN",
+      entityType: loginEntityType,
+      entityId: userId,
+      description: `${userType} login: ${user.name || "Unknown"} (${user.email || user.phone || "no contact"})`,
+      actorId: userId,
+      actorEmail: user.email || user.phone || "",
+      actorName: user.name || "",
+      actorRole: userType
+    }).catch(() => {});
 
     // 7️⃣ Generate JWT token
     const token = jwt.sign(
@@ -351,7 +366,8 @@ export const loginUser = async (req, res) => {
       email: user.email,
       phone: user.phone,
       role: userType,
-      ...(userType === "TAILOR" && { 
+      ...(userType === "ADMIN" && { isInternalAdmin: !!user.isInternalAdmin }),
+      ...(userType === "TAILOR" && {
         tailorId: user.tailorId,
         isAvailable: user.isAvailable 
       }),

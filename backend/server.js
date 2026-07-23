@@ -504,6 +504,7 @@ import itemRoutes from "./routes/item.routes.js";
 import sizeTemplateRoutes from "./routes/sizeTemplate.routes.js";
 import sizeFieldRoutes from "./routes/sizeField.routes.js";
 import leaveRoutes from "./routes/leave.routes.js";
+import auditLogRoutes from "./routes/auditLog.routes.js";
 
 // Customer Size Profile Routes
 import customerSizeRoutes from "./routes/customerSize.routes.js";
@@ -928,6 +929,11 @@ app.use("/api/invoices", invoiceRoutes);
 // ====================================================
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/leaves", leaveRoutes);
+
+// ====================================================
+// 🕵️ INTERNAL ACTIVITY LOG - Internal Admin only
+// ====================================================
+app.use("/api/audit-logs", auditLogRoutes);
 
 // ==================== FRONTEND STATIC SERVING ====================
 const __filename = fileURLToPath(import.meta.url);

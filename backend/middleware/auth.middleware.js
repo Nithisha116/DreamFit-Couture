@@ -29,6 +29,7 @@ import User from "../models/User.js";
 import CuttingMaster from "../models/CuttingMaster.js";
 import StoreKeeper from "../models/StoreKeeper.js";
 import Tailor from "../models/Tailor.js";
+import { attachAuditLogging } from "./auditMiddleware.js";
 
 // Helper to find user based on role and ID
 const findUserByRole = async (id, role) => {
@@ -103,6 +104,10 @@ export const protect = async (req, res, next) => {
       name: req.user.name
     });
 
+    // Admin action audit trail — no-op for non-ADMIN roles and GET requests.
+    // See middleware/auditMiddleware.js for what this actually records.
+    attachAuditLogging(req, res);
+
     next();
     
   } catch (error) {
@@ -153,6 +158,21 @@ export const authorize = (...roles) => {
     console.log("✅ Authorization granted");
     next();
   };
+};
+
+// Restricts access to the Internal Admin account (or any future account
+// explicitly flagged isInternalAdmin) — used for the Activity Log endpoint.
+// Deliberately checks the isInternalAdmin flag rather than email/role alone,
+// so the client's own ADMIN account (isInternalAdmin: false) is denied even
+// though it shares the same role.
+export const requireInternalAdmin = (req, res, next) => {
+  if (req.user?.role !== 'ADMIN' || !req.user?.isInternalAdmin) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access Denied'
+    });
+  }
+  next();
 };
 
 // Optional: Middleware to check if user is admin
