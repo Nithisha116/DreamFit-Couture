@@ -6,16 +6,35 @@ const auditLogSchema = new mongoose.Schema({
     required: true,
     index: true 
   }, // e.g. "CREATE_INVOICE", "CANCEL_INVOICE", "LOCK_BYPASS", "COLLECT_PAYMENT"
-  user: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "User", 
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
     required: true,
     index: true
   },
-  entityType: { 
-    type: String, 
-    required: true, 
-    enum: ["Invoice", "Order", "Payment", "Payroll", "Garment", "Customer", "User", "Work", "Tailor", "CuttingMaster", "StoreKeeper", "AariWorker", "EmbroideryWorker", "Helper"],
+  // Snapshot of the acting account's email at the time of the action, so the
+  // audit trail stays readable/attributable even if that account is later
+  // renamed, deactivated, or deleted.
+  userEmail: {
+    type: String
+  },
+  // Snapshot of the acting account's display name/role at the time of the
+  // action — same rationale as userEmail (readable/attributable without a
+  // live join, and resilient to the account changing later).
+  userName: {
+    type: String
+  },
+  userRole: {
+    type: String
+  },
+  entityType: {
+    type: String,
+    required: true,
+    // Intentionally not enum-restricted: this is populated automatically
+    // for any admin-mutated resource (see middleware/auditMiddleware.js), so
+    // a fixed whitelist would silently drop audit entries for any route not
+    // added to the list. Existing values remain valid; this only loosens
+    // the constraint going forward.
     index: true
   },
   entityId: { 
@@ -30,14 +49,20 @@ const auditLogSchema = new mongoose.Schema({
   reason: {
     type: String
   },
-  previousData: { 
-    type: mongoose.Schema.Types.Mixed 
+  previousData: {
+    type: mongoose.Schema.Types.Mixed
   },
-  newData: { 
-    type: mongoose.Schema.Types.Mixed 
+  newData: {
+    type: mongoose.Schema.Types.Mixed
+  },
+  ipAddress: {
+    type: String
+  },
+  userAgent: {
+    type: String
   }
-}, { 
-  timestamps: true 
+}, {
+  timestamps: true
 });
 
 // Compound indexes for rapid developer lookup

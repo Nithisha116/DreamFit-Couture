@@ -707,6 +707,9 @@ export default function MainLayout() {
       { id: 'banking', icon: Landmark, label: 'Banking', path: '#', show: canViewBanking, isDropdown: true },
       { id: 'employeeManagement', icon: UserCircle, label: 'Employee Management', path: '#', show: canViewStaff, isDropdown: true },
       { id: 'billing', icon: Receipt, label: 'Billing & Invoicing', path: `/${rolePath}/billing`, show: canViewBilling },
+      // Internal-only — never shown to the client's own Admin account, only
+      // to an account explicitly flagged isInternalAdmin.
+      { id: 'activityLog', icon: Shield, label: 'Activity Log', path: `/${rolePath}/activity-log`, show: !!user?.isInternalAdmin },
     ];
     return items.filter(item => item.show);
   };
