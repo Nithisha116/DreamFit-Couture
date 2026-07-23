@@ -627,6 +627,7 @@ const CreateInvoice = () => {
                       <tr className="bg-gray-50 border-b border-gray-200 font-bold text-gray-500 uppercase">
                         <th className="py-2 px-3">Line Item Description</th>
                         <th className="py-2 px-3">Category</th>
+                        <th className="py-2 px-3 text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -634,6 +635,7 @@ const CreateInvoice = () => {
                         <tr key={idx} className="hover:bg-gray-50/50">
                           <td className="py-2 px-3 font-bold text-gray-700">{item.name}</td>
                           <td className="py-2 px-3 text-gray-500">{item.category || "General"}</td>
+                          <td className="py-2 px-3 text-right font-bold text-gray-800">₹{Number(item.amount || 0).toLocaleString("en-IN")}</td>
                         </tr>
                       ))}
                     </tbody>

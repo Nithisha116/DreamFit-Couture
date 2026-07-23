@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { getSocket } from '../../utils/socket';
 import { fetchOrders, fetchOrderStats, fetchDashboardData, fetchReadyToDeliveryOrders } from '../../features/order/orderSlice';
 import { fetchWorkflowJobs } from '../../features/work/workSlice';
-import { addNotification } from '../../features/notification/notificationSlice';
+import { addNotification, fetchNotifications, fetchUnreadCount } from '../../features/notification/notificationSlice';
 import showToast from '../../utils/toast';
 
 const GlobalSocketListener = () => {
@@ -12,6 +12,17 @@ const GlobalSocketListener = () => {
 
   useEffect(() => {
     const socket = getSocket();
+
+    // Event-driven updates only — no polling. This fires on the initial
+    // connection (covers "initial page load") and again on every reconnect
+    // (covers "reconnection synchronization"), fetching whatever might have
+    // been missed while offline instead of re-querying on a timer.
+    const handleConnect = () => {
+      if (!user) return;
+      console.log('📡 [WebSocket] connected — syncing notifications');
+      dispatch(fetchNotifications());
+      dispatch(fetchUnreadCount());
+    };
 
     const handleWorkflowUpdated = (data) => {
       console.log('📡 [WebSocket] workflow:updated received:', data);
@@ -45,16 +56,24 @@ const GlobalSocketListener = () => {
     const handleNewNotification = (data) => {
       console.log('📡 [WebSocket] notification:new received:', data);
       const currentUserId = user?._id || user?.id;
-      if (user && data.recipient === currentUserId) {
+      // Compare as strings — recipient arrives as a serialized ObjectId hex
+      // string over the socket, and currentUserId may come from either shape.
+      if (user && currentUserId && String(data.recipient) === String(currentUserId)) {
         dispatch(addNotification(data));
         showToast.success(data.message);
       }
     };
 
+    socket.on('connect', handleConnect);
     socket.on('workflow:updated', handleWorkflowUpdated);
     socket.on('notification:new', handleNewNotification);
 
+    // The socket may already be connected by the time this effect runs
+    // (e.g. it was created earlier by another mount of this listener).
+    if (socket.connected) handleConnect();
+
     return () => {
+      socket.off('connect', handleConnect);
       socket.off('workflow:updated', handleWorkflowUpdated);
       socket.off('notification:new', handleNewNotification);
     };

@@ -669,8 +669,18 @@ const notificationSlice = createSlice({
       if (!Array.isArray(state.notifications)) {
         state.notifications = [];
       }
+
+      // Guard against duplicates — the same notification can arrive twice
+      // (a live socket event racing a reconnect resync fetch, or a retried
+      // socket emit). Skip silently rather than double-counting/double-listing.
+      const incomingId = action.payload?._id;
+      if (incomingId && state.notifications.some(n => n?._id === incomingId)) {
+        console.log("🔁 Duplicate notification ignored:", incomingId);
+        return;
+      }
+
       state.notifications.unshift(action.payload);
-      
+
       // 🔥 FIX 1: Check both isRead and read properties
       const isRead = action.payload.isRead || action.payload.read || false;
       if (!isRead) {
