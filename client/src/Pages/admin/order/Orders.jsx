@@ -19,11 +19,8 @@ import { getErrorMessage } from "../../../utils/errorUtils";
 import OrdersKPI from "../../../components/orders/OrdersKPI";
 import OrderFilterTabs from "../../../components/orders/OrderFilterTabs";
 import OrdersTable from "../../../components/orders/OrdersTable";
-<<<<<<< HEAD
 import DraftOrdersTable from "../../../components/orders/DraftOrdersTable";
-=======
 import CancelOrderModal from "../../../components/orders/CancelOrderModal";
->>>>>>> 94ca06e24cfa45f85b00214bce81df07dce4bae5
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const isOverdue = (order) => {
