@@ -19,6 +19,7 @@ import {
   resolveWorkflowForGarment,
   garmentsHaveWorkflow,
 } from "../utils/workflowStages.util.js";
+import { computeDraftProgress, computeDraftDisplayName } from "../utils/draftProgress.util.js";
 
 // Configure multer for memory storage
 export const upload = multer({ 
@@ -386,6 +387,8 @@ export const getOrderStats = async (req, res) => {
       }
     });
 
+    const draftsCount = await Order.countDocuments({ isDraftOrder: true });
+
     res.status(200).json({
       success: true,
       stats: {
@@ -393,21 +396,23 @@ export const getOrderStats = async (req, res) => {
         thisWeek: weekCount,
         thisMonth: monthCount,
         total: totalCount,
-        
+
         // Exact flat fields for OrdersKPI.jsx (handle synonyms)
         pending: paymentPendingCount,
         inProgress: inProgressCount,
         ready: (statusCounts['ready-to-delivery'] || 0) + (statusCounts['ready-to-deliver'] || 0) + (statusCounts['ready'] || 0),
         overdue: overdueCount,
         revenue: revenue,
-        
+
         // Exact flat fields for OrderFilterTabs.jsx
         ...statusCounts,
         cutting: cuttingCount,
         stitching: stitchingCount,
         trial: trialCount,
         finishing: finishingCount,
-        
+        __drafts: draftsCount,
+        draftsCount,
+
         // Legacy fallback
         statusBreakdown: statusStats,
         paymentBreakdown: paymentStats
@@ -1352,6 +1357,539 @@ export const getSimpleDeliveryDates = async (req, res) => {
     }));
     res.json({ success: true, allDates: formattedDates });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// 📝 DRAFT ORDERS — new, self-contained additions.
+// None of the functions above this banner are modified by the Draft Orders
+// feature. Drafts are Order documents with isDraftOrder:true + isActive:false
+// (isActive:false already excludes them from every query above, since every
+// one of those already filters isActive:true).
+// ============================================
+
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
+const draftNotEditableResponse = (res) =>
+  res.status(409).json({
+    success: false,
+    code: "DRAFT_ALREADY_CONVERTED",
+    message:
+      "This draft has already been converted into an order and can no longer be edited as a draft. Please edit the created order instead.",
+  });
+
+// ============================================
+// ✅ 20. CREATE DRAFT
+// ============================================
+export const createDraft = async (req, res) => {
+  try {
+    const creatorId = req.user?._id || req.user?.id;
+    if (!creatorId) {
+      return res.status(401).json({ success: false, message: "Authentication failed" });
+    }
+
+    const draftData = req.body?.draftData || {};
+
+    const hasMeaningfulData = Boolean(
+      draftData.customer ||
+      draftData.deliveryDate ||
+      (Array.isArray(draftData.garments) && draftData.garments.length > 0) ||
+      String(draftData.specialNotes || "").trim()
+    );
+
+    if (!hasMeaningfulData) {
+      return res.status(400).json({ success: false, message: "Draft requires at least some order details" });
+    }
+
+    const progressPercent = computeDraftProgress(draftData);
+    const customerDisplayName = computeDraftDisplayName(draftData);
+
+    const draft = await Order.create({
+      isDraftOrder: true,
+      isActive: false,
+      status: "draft",
+      customer: OBJECT_ID_RE.test(draftData.customer) ? draftData.customer : undefined,
+      deliveryDate: draftData.deliveryDate || undefined,
+      specialNotes: draftData.specialNotes || "",
+      draftData,
+      draftMeta: { progressPercent, customerDisplayName, lastEditedBy: creatorId },
+      createdBy: creatorId,
+    });
+
+    res.status(201).json({ success: true, draft });
+  } catch (error) {
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
+      return res.status(400).json({ success: false, message: "Validation failed", errors });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// ✅ 21. UPDATE DRAFT (AUTOSAVE — last write wins, no locking/version check)
+// ============================================
+export const updateDraft = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const draft = await Order.findById(id);
+
+    if (!draft) {
+      return res.status(404).json({ success: false, message: "Draft not found. It may have been deleted." });
+    }
+    if (!draft.isDraftOrder) {
+      return draftNotEditableResponse(res);
+    }
+
+    const creatorId = req.user?._id || req.user?.id;
+    const draftData = req.body?.draftData || {};
+
+    draft.draftData = draftData;
+    draft.markModified("draftData");
+
+    if (OBJECT_ID_RE.test(draftData.customer)) draft.customer = draftData.customer;
+    if (draftData.deliveryDate) draft.deliveryDate = draftData.deliveryDate;
+    if (draftData.specialNotes !== undefined) draft.specialNotes = draftData.specialNotes;
+
+    draft.draftMeta = {
+      progressPercent: computeDraftProgress(draftData),
+      customerDisplayName: computeDraftDisplayName(draftData),
+      lastEditedBy: creatorId,
+    };
+
+    await draft.save();
+
+    res.status(200).json({ success: true, draft });
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ success: false, message: "Invalid draft ID" });
+    }
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
+      return res.status(400).json({ success: false, message: "Validation failed", errors });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// ✅ 22. LIST DRAFTS
+// ============================================
+export const listDrafts = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search = "" } = req.query;
+    let query = { isDraftOrder: true };
+
+    if (search) {
+      const customerIds = await Customer.find({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { customerId: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+        ],
+      }).distinct("_id");
+
+      query.$or = [
+        { customer: { $in: customerIds } },
+        { "draftMeta.customerDisplayName": { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const total = await Order.countDocuments(query);
+    const drafts = await Order.find(query)
+      .populate("customer", "name phone customerId")
+      .sort({ updatedAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    res.json({
+      success: true,
+      drafts,
+      pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// ✅ 23. GET DRAFT BY ID (for Resume)
+// ============================================
+export const getDraftById = async (req, res) => {
+  try {
+    const draft = await Order.findById(req.params.id).populate("customer", "name phone customerId");
+
+    if (!draft) {
+      return res.status(404).json({ success: false, message: "Draft not found. It may have been deleted." });
+    }
+    if (!draft.isDraftOrder) {
+      return draftNotEditableResponse(res);
+    }
+
+    res.json({ success: true, draft });
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ success: false, message: "Invalid draft ID" });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// ✅ 24. DELETE DRAFT (hard delete — a pure draft has no garments/payments/work/invoice to clean up)
+// ============================================
+export const deleteDraft = async (req, res) => {
+  try {
+    const draft = await Order.findById(req.params.id);
+
+    if (!draft) {
+      return res.status(404).json({ success: false, message: "Draft not found. It may have already been deleted." });
+    }
+    if (!draft.isDraftOrder) {
+      return draftNotEditableResponse(res);
+    }
+
+    await Order.findByIdAndDelete(req.params.id);
+
+    res.json({ success: true, message: "Draft deleted" });
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ success: false, message: "Invalid draft ID" });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// ✅ 25. DUPLICATE DRAFT
+// ============================================
+export const duplicateDraft = async (req, res) => {
+  try {
+    const creatorId = req.user?._id || req.user?.id;
+    if (!creatorId) {
+      return res.status(401).json({ success: false, message: "Authentication failed" });
+    }
+
+    const source = await Order.findById(req.params.id);
+    if (!source) {
+      return res.status(404).json({ success: false, message: "Draft not found" });
+    }
+    if (!source.isDraftOrder) {
+      return draftNotEditableResponse(res);
+    }
+
+    const draftData = JSON.parse(JSON.stringify(source.draftData || {}));
+
+    const duplicate = await Order.create({
+      isDraftOrder: true,
+      isActive: false,
+      status: "draft",
+      customer: OBJECT_ID_RE.test(draftData.customer) ? draftData.customer : undefined,
+      deliveryDate: draftData.deliveryDate || undefined,
+      specialNotes: draftData.specialNotes || "",
+      draftData,
+      draftMeta: {
+        progressPercent: computeDraftProgress(draftData),
+        customerDisplayName: computeDraftDisplayName(draftData),
+        lastEditedBy: creatorId,
+      },
+      createdBy: creatorId,
+    });
+
+    res.status(201).json({ success: true, draft: duplicate });
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ success: false, message: "Invalid draft ID" });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// ✅ 26. CONVERT DRAFT INTO A REAL ORDER
+// Mirrors createOrder's finalize logic (same standalone helpers: createWorksFromGarments,
+// r2Service, createIncomeFromPayment, invoice/whatsapp sync) but updates the EXISTING
+// draft document in place instead of inserting a new one, so the order keeps the same _id
+// and no duplicate/leftover draft row is ever created. createOrder itself is untouched.
+// ============================================
+export const convertDraft = async (req, res) => {
+  try {
+    const draft = await Order.findById(req.params.id);
+    if (!draft) {
+      return res.status(404).json({ success: false, message: "Draft not found. It may have been deleted." });
+    }
+    if (!draft.isDraftOrder) {
+      return draftNotEditableResponse(res);
+    }
+
+    let orderData = { ...req.body };
+
+    if (typeof orderData.garments === "string") {
+      try { orderData.garments = JSON.parse(orderData.garments); } catch (e) {}
+    }
+    if (typeof orderData.payments === "string") {
+      try { orderData.payments = JSON.parse(orderData.payments); } catch (e) {}
+    }
+    if (typeof orderData.advancePayment === "string") {
+      try { orderData.advancePayment = JSON.parse(orderData.advancePayment); } catch (e) {}
+    }
+    if (typeof orderData.workflowStages === "string") {
+      try { orderData.workflowStages = JSON.parse(orderData.workflowStages); } catch (e) {}
+    }
+
+    const {
+      customer,
+      deliveryDate,
+      garments,
+      specialNotes,
+      priceSummary,
+      status,
+      orderDate,
+      payments = [],
+      workflowStages: rawWorkflowStages,
+    } = orderData;
+
+    const creatorId = req.user?._id || req.user?.id;
+    if (!creatorId) {
+      return res.status(401).json({ success: false, message: "Authentication failed" });
+    }
+
+    if (!customer || !deliveryDate) {
+      return res.status(400).json({ success: false, message: "Customer and Delivery Date are required" });
+    }
+
+    let incomingStages = Array.isArray(rawWorkflowStages) ? rawWorkflowStages : [];
+
+    let processedStages = incomingStages
+      .map((stage, index) => {
+        if (typeof stage === "string") {
+          const cleanKey = stage.trim().toLowerCase().replace(/\s+/g, "_");
+          const cleanLabel = stage.trim().replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          return { key: cleanKey, label: cleanLabel, order: index + 1 };
+        }
+        if (stage && typeof stage === "object") {
+          const rawKey = stage.key || stage.name || stage.label || stage.stageName || stage.title;
+          if (!rawKey) return null;
+          const cleanKey = String(rawKey).trim().toLowerCase().replace(/\s+/g, "_");
+          return {
+            key: cleanKey,
+            label: stage.label || cleanKey.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+            order: stage.order || index + 1,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    const perGarmentWorkflow = garmentsHaveWorkflow(garments);
+
+    if (processedStages.length === 0 && !perGarmentWorkflow) {
+      const defaultKeys = ["cutting", "stitching", "ironing", "packed"];
+      processedStages = defaultKeys.map((k, i) => ({
+        key: k,
+        label: k.charAt(0).toUpperCase() + k.slice(1),
+        order: i + 1,
+      }));
+    }
+
+    const stageKeys = processedStages.map((s) => s.key);
+    const activeStage = stageKeys[0] || "new";
+    const workflowStagesObj = {};
+    stageKeys.forEach((key) => {
+      workflowStagesObj[key] = { completed: false, completedAt: null, assignedTo: null };
+    });
+
+    let totalMin = 0;
+    let totalMax = 0;
+
+    if (garments && garments.length > 0) {
+      garments.forEach((g) => {
+        if (g.finalGarmentMinAmount !== undefined && g.finalGarmentMinAmount !== null) {
+          totalMin += Number(g.finalGarmentMinAmount);
+        } else {
+          const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+          const tailoringMin = finalized > 0 ? finalized : Number(g.minPrice || g.priceRange?.min || 0);
+          const fabric = Number(g.fabricPrice || 0);
+          const additional = Number(g.additionalCharges || 0);
+          totalMin += tailoringMin + fabric + additional;
+        }
+
+        if (g.finalGarmentMaxAmount !== undefined && g.finalGarmentMaxAmount !== null) {
+          totalMax += Number(g.finalGarmentMaxAmount);
+        } else {
+          const finalized = Number(g.finalizedAmount !== undefined && g.finalizedAmount !== null ? g.finalizedAmount : g.finalizedPrice);
+          const tailoringMax = finalized > 0 ? finalized : Number(g.maxPrice || g.priceRange?.max || 0);
+          const fabric = Number(g.fabricPrice || 0);
+          const additional = Number(g.additionalCharges || 0);
+          totalMax += tailoringMax + fabric + additional;
+        }
+      });
+    } else if (priceSummary) {
+      totalMin = Number(priceSummary.totalMin) || 0;
+      totalMax = Number(priceSummary.totalMax) || 0;
+    }
+
+    const allPayments = [...payments];
+    const totalInitialPaid = allPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    draft.customer = customer;
+    draft.deliveryDate = deliveryDate;
+    draft.currentStage = perGarmentWorkflow ? "new" : activeStage;
+    draft.workflowStages = perGarmentWorkflow ? {} : workflowStagesObj;
+    draft.stageKeys = perGarmentWorkflow ? [] : stageKeys;
+    draft.specialNotes = specialNotes;
+    draft.advancePayment = {
+      amount: allPayments.find((p) => p.type === "advance")?.amount || 0,
+      method: allPayments.find((p) => p.type === "advance")?.method || allPayments[0]?.method || "cash",
+      date: new Date(),
+    };
+    draft.minPrice = totalMin;
+    draft.maxPrice = totalMax;
+    draft.finalizedAmount = 0;
+    draft.dueAmount = totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMax - totalInitialPaid);
+    draft.balanceMin = totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMin - totalInitialPaid);
+    draft.balanceMax = totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMax - totalInitialPaid);
+    draft.priceSummary = { totalMin, totalMax };
+    draft.paymentSummary = {
+      totalPaid: totalInitialPaid,
+      lastPaymentDate: allPayments.length > 0 ? new Date() : null,
+      lastPaymentAmount: allPayments.length > 0 ? allPayments[allPayments.length - 1].amount : 0,
+      paymentCount: allPayments.length,
+      paymentStatus: totalInitialPaid >= totalMin ? "paid" : (totalInitialPaid > 0 ? "partial" : "pending"),
+    };
+    draft.balanceAmount = totalInitialPaid >= totalMin ? 0 : Math.max(0, totalMax - totalInitialPaid);
+    draft.status = status || "confirmed";
+    draft.orderDate = orderDate || draft.orderDate || new Date();
+    draft.isDraftOrder = false;
+    draft.isActive = true;
+    draft.draftData = undefined;
+
+    await draft.save();
+    const order = draft;
+
+    const fileGroups = extractGarmentFiles(req);
+
+    if (allPayments.length > 0) {
+      let runningPaid = 0;
+      for (const paymentData of allPayments) {
+        let safeAmount = Number(paymentData.amount) || 0;
+        runningPaid += safeAmount;
+
+        const now = new Date();
+        const paymentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        const payment = await Payment.create({
+          order: order._id,
+          customer: order.customer,
+          amount: safeAmount,
+          type: paymentData.type || "advance",
+          method: paymentData.method || "cash",
+          referenceNumber: paymentData.referenceNumber || "",
+          paymentDate: paymentData.paymentDate || new Date(),
+          paymentTime,
+          notes: paymentData.notes || "",
+          receivedBy: creatorId,
+          balanceMinAfterPayment: runningPaid >= totalMin ? 0 : Math.max(0, totalMin - runningPaid),
+          balanceMaxAfterPayment: runningPaid >= totalMin ? 0 : Math.max(0, totalMax - runningPaid),
+        });
+
+        await createIncomeFromPayment(payment, order, creatorId);
+      }
+    }
+
+    const createdGarmentIds = [];
+    if (garments && garments.length > 0) {
+      for (let i = 0; i < garments.length; i++) {
+        const g = garments[i];
+        if (i > 0) await new Promise((resolve) => setTimeout(resolve, 50));
+
+        const uploadedImages = { referenceImages: [], customerImages: [], customerClothImages: [] };
+
+        if (fileGroups[i]?.referenceImages?.length > 0) {
+          uploadedImages.referenceImages = await r2Service.uploadMultiple(fileGroups[i].referenceImages, `orders/${order._id}/garment_${i}/reference`);
+        }
+        if (fileGroups[i]?.customerImages?.length > 0) {
+          uploadedImages.customerImages = await r2Service.uploadMultiple(fileGroups[i].customerImages, `orders/${order._id}/garment_${i}/customer`);
+        }
+        if (fileGroups[i]?.customerClothImages?.length > 0) {
+          uploadedImages.customerClothImages = await r2Service.uploadMultiple(fileGroups[i].customerClothImages, `orders/${order._id}/garment_${i}/cloth`);
+        }
+
+        const garmentWorkflow = parseWorkflowStagesInput(
+          g.stageKeys?.length ? g.stageKeys : g.workflowStages,
+        );
+
+        const garmentData = {
+          name: g.name,
+          garmentType: g.garmentType || g.item || g.itemName || g.name,
+          category: g.category,
+          item: g.item,
+          categoryName: g.categoryName,
+          itemName: g.itemName,
+          measurements: g.measurements || [],
+          measurementTemplate: g.measurementTemplate && g.measurementTemplate !== "" ? g.measurementTemplate : null,
+          measurementSource: g.measurementSource || "customer",
+          additionalInfo: g.additionalInfo || "",
+          estimatedDelivery: g.estimatedDelivery || deliveryDate,
+          priority: g.priority || "normal",
+          priceRange: { min: Number(g.priceRange?.min) || 0, max: Number(g.priceRange?.max) || 0 },
+          finalizedPrice: Number(g.finalizedAmount || g.finalizedPrice) || 0,
+          finalizedAmount: Number(g.finalizedAmount || g.finalizedPrice) || 0,
+          minPrice: Number(g.minPrice || g.priceRange?.min) || 0,
+          maxPrice: Number(g.maxPrice || g.priceRange?.max) || 0,
+          fabricSource: g.fabricSource || "customer",
+          fabricPrice: g.fabricPrice || "0",
+          fabricMeters: g.fabricMeters || "",
+          fabricNotes: g.fabricNotes || "",
+          fabricSufficiency: g.fabricSufficiency || "To Be Verified",
+          selectedFabric: g.selectedFabric && g.selectedFabric !== "" ? g.selectedFabric : null,
+          referenceImages: uploadedImages.referenceImages,
+          customerImages: uploadedImages.customerImages,
+          customerClothImages: uploadedImages.customerClothImages,
+          stageKeys: garmentWorkflow.stageKeys,
+          workflowStages: garmentWorkflow.workflowStages,
+          order: order._id,
+          createdBy: creatorId,
+          status: "pending",
+        };
+
+        const garment = await Garment.create(garmentData);
+        createdGarmentIds.push(garment._id);
+      }
+
+      order.garments = createdGarmentIds;
+      order.status = "in-progress";
+      await order.save();
+
+      if (createdGarmentIds.length > 0) {
+        await createWorksFromGarments(order._id, createdGarmentIds, creatorId);
+      }
+    }
+
+    await order.populate("customer", "name phone customerId");
+
+    try {
+      const { sendOrderConfirmation } = await import("./whatsapp.controller.js");
+      sendOrderConfirmation(order._id).catch(() => {});
+    } catch (waErr) {}
+
+    try {
+      const { syncOrderInvoice } = await import("../services/invoice.service.js");
+      await syncOrderInvoice(order._id);
+    } catch (syncErr) {}
+
+    res.status(201).json({ success: true, message: "Order created successfully", order });
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ success: false, message: "Invalid draft ID" });
+    }
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
+      return res.status(400).json({ success: false, message: "Validation failed", errors });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };

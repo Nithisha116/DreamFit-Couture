@@ -315,7 +315,16 @@ import {
   getOrderStats,  // For pie chart & KPI cards (GET /api/orders/stats)
   getRecentOrders      ,      // For recent orders table (GET /api/orders/recent)
   getDashboardData, // Add dashboard data
-  
+
+  // Draft Orders
+  createDraft,
+  updateDraft,
+  listDrafts,
+  getDraftById,
+  deleteDraft,
+  duplicateDraft,
+  convertDraft,
+
 } from "../controllers/order.controller.js";
 import { protect, authorize } from "../middleware/auth.middleware.js";
 
@@ -463,6 +472,20 @@ router.post("/:id/payments", authorize("ADMIN", "STORE_KEEPER"), addPaymentToOrd
  * @access  Admin, Store Keeper, Cutting Master
  */
 router.get("/:id/payments", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getOrderPayments);
+
+// ============================================
+// 📝 DRAFT ORDER ROUTES
+// 🔥 MUST be registered before the generic "/:id" routes below — Express
+// matches path segments in registration order, and a 1-segment "/drafts"
+// route would otherwise be swallowed by "/:id" (id === "drafts").
+// ============================================
+router.get("/drafts", authorize("ADMIN", "STORE_KEEPER"), listDrafts);
+router.post("/drafts", authorize("ADMIN", "STORE_KEEPER"), createDraft);
+router.get("/drafts/:id", authorize("ADMIN", "STORE_KEEPER"), getDraftById);
+router.put("/drafts/:id", authorize("ADMIN", "STORE_KEEPER"), updateDraft);
+router.delete("/drafts/:id", authorize("ADMIN", "STORE_KEEPER"), deleteDraft);
+router.post("/drafts/:id/duplicate", authorize("ADMIN", "STORE_KEEPER"), duplicateDraft);
+router.post("/drafts/:id/convert", authorize("ADMIN", "STORE_KEEPER"), upload.any(), convertDraft);
 
 // ============================================
 // 🔍 SINGLE ORDER ROUTES

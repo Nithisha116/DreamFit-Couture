@@ -34,11 +34,11 @@ const orderSchema = new mongoose.Schema({
   customer: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Customer",
-    required: [true, "Customer reference is required"],
+    required: function () { return !this.isDraftOrder; },
   },
   orderId: { type: String, unique: true },
   orderDate: { type: Date, default: Date.now },
-  deliveryDate: { type: Date, required: [true, "Delivery date is required"] },
+  deliveryDate: { type: Date, required: function () { return !this.isDraftOrder; } },
   status: {
     type: String,
     enum: ["draft", "confirmed", "in-progress", "cutting", "stitching", "trial", "finishing", "ready-to-delivery", "delivered", "cancelled"],
@@ -98,6 +98,19 @@ stageKeys: {
     required: [true, "Created by is required"],
   },
   isActive: { type: Boolean, default: true },
+
+  // ============================================
+  // ✅ DRAFT ORDERS SUPPORT
+  // ============================================
+  // Drafts are stored as Order docs with isDraftOrder:true and isActive:false
+  // (isActive:false already excludes them from every existing order query/stat/dashboard).
+  isDraftOrder: { type: Boolean, default: false, index: true },
+  draftData: { type: mongoose.Schema.Types.Mixed },
+  draftMeta: {
+    progressPercent: { type: Number, default: 0 },
+    customerDisplayName: { type: String },
+    lastEditedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  },
 }, { timestamps: true });
 
 // ============================================
@@ -105,9 +118,11 @@ stageKeys: {
 // ============================================
 orderSchema.pre('save', async function() {
   try {
-    // Check required fields
-    if (!this.customer) throw new Error("Customer is required");
-    if (!this.deliveryDate) throw new Error("Delivery date is required");
+    // Check required fields (skipped for drafts, which may be intentionally incomplete)
+    if (!this.isDraftOrder) {
+      if (!this.customer) throw new Error("Customer is required");
+      if (!this.deliveryDate) throw new Error("Delivery date is required");
+    }
     if (!this.createdBy) throw new Error("Created by is required");
 
     // Generate Order ID if not present (fallback only)
@@ -364,6 +379,7 @@ orderSchema.index({ garments: 1 });
 orderSchema.index({ minPrice: 1 });
 orderSchema.index({ maxPrice: 1 });
 orderSchema.index({ balanceMax: 1 });
+orderSchema.index({ isDraftOrder: 1, updatedAt: -1 });
 
 // ============================================
 // ✅ EXPORT MODEL

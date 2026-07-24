@@ -9,10 +9,16 @@ import {
   updateOrderStatusThunk,
   clearOrderError,
 } from "../../../features/order/orderSlice";
+import {
+  fetchDrafts,
+  deleteDraftOrder,
+  duplicateDraftOrder,
+} from "../../../features/draftOrder/draftOrderSlice";
 import showToast from "../../../utils/toast";
 import OrdersKPI from "../../../components/orders/OrdersKPI";
 import OrderFilterTabs from "../../../components/orders/OrderFilterTabs";
 import OrdersTable from "../../../components/orders/OrdersTable";
+import DraftOrdersTable from "../../../components/orders/DraftOrdersTable";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const isOverdue = (order) => {
@@ -86,6 +92,12 @@ export default function Orders() {
     };
   });
 
+  const { drafts, draftsPagination, draftsLoading } = useSelector((state) => ({
+    drafts: state.draftOrder?.drafts || [],
+    draftsPagination: state.draftOrder?.pagination || { page: 1, pages: 1, total: 0, limit: 20 },
+    draftsLoading: state.draftOrder?.loading || false,
+  }));
+
   const { user } = useSelector(s => ({ user: s.auth?.user }));
   const isAdmin     = user?.role === 'ADMIN';
   const isStoreKeeper = user?.role === 'STORE_KEEPER';
@@ -138,8 +150,16 @@ export default function Orders() {
 
   // ── fetch data from backend ──
   const fetchData = useCallback(() => {
+    // Draft Orders tab has its own dedicated data source (isDraftOrder:true docs,
+    // which are excluded from every regular order query/stat below).
+    if (activeTab === '__drafts') {
+      dispatch(fetchDrafts({ page: currentPage, limit: draftsPagination?.limit || 20, search: debouncedSearch }));
+      dispatch(fetchOrderStats({ search: '', paymentStatus: '', timeFilter: 'all' }));
+      return;
+    }
+
     const statusParam = activeTab === 'all' ? '' : activeTab;
-    
+
     // Fetch paginated orders
     dispatch(fetchOrders({
       page: currentPage,
@@ -156,7 +176,7 @@ export default function Orders() {
       paymentStatus: payFilter !== 'all' ? payFilter : '',
       timeFilter,
     }));
-  }, [dispatch, currentPage, pagination?.limit, debouncedSearch, activeTab, payFilter, timeFilter]);
+  }, [dispatch, currentPage, pagination?.limit, draftsPagination?.limit, debouncedSearch, activeTab, payFilter, timeFilter]);
 
   useEffect(() => {
     fetchData();
@@ -204,6 +224,36 @@ export default function Orders() {
       showToast.success("Marked as Ready");
       fetchData();
     } catch (e) { showToast.error(e?.message || "Failed"); }
+  }, [canEdit, dispatch, fetchData]);
+
+  const onResumeDraft = useCallback((id) => {
+    navigate(`${basePath}/orders/new/${id}`);
+  }, [navigate, basePath]);
+
+  const onDeleteDraft = useCallback(async (id, displayName) => {
+    if (!canEdit) return showToast.error("No permission");
+    if (!window.confirm(`Delete draft "${displayName}"? This cannot be undone.`)) return;
+    setDeleteLoading(p => ({ ...p, [id]: true }));
+    try {
+      await dispatch(deleteDraftOrder(id)).unwrap();
+      showToast.success("Draft deleted");
+      fetchData();
+    } catch (e) {
+      showToast.error(e?.message || e || "Delete failed");
+    } finally {
+      setDeleteLoading(p => ({ ...p, [id]: false }));
+    }
+  }, [canEdit, dispatch, fetchData]);
+
+  const onDuplicateDraft = useCallback(async (id) => {
+    if (!canEdit) return showToast.error("No permission");
+    try {
+      await dispatch(duplicateDraftOrder(id)).unwrap();
+      showToast.success("Draft duplicated");
+      fetchData();
+    } catch (e) {
+      showToast.error(e?.message || e || "Duplicate failed");
+    }
   }, [canEdit, dispatch, fetchData]);
 
   const onMarkDelivered = useCallback(async (id, orderId) => {
@@ -359,7 +409,7 @@ export default function Orders() {
         position: 'relative'
       }}>
         {/* Infinite Progress Bar Loader */}
-        {loading && (
+        {(activeTab === '__drafts' ? draftsLoading : loading) && (
           <div style={{
             position: 'absolute', top: 0, left: 0, right: 0, height: 3,
             background: '#e0f2fe', overflow: 'hidden', zIndex: 10
@@ -372,7 +422,29 @@ export default function Orders() {
           </div>
         )}
 
-        {(loading && orders.length === 0) ? (
+        {activeTab === '__drafts' ? (
+          (draftsLoading && drafts.length === 0) ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <tbody>{Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}</tbody>
+            </table>
+          ) : (
+            <div style={{
+              opacity: draftsLoading ? 0.6 : 1,
+              pointerEvents: draftsLoading ? 'none' : 'auto',
+              transition: 'opacity 0.2s ease',
+            }}>
+              <DraftOrdersTable
+                drafts={drafts}
+                deleteLoading={deleteLoading}
+                onResume={onResumeDraft}
+                onDelete={onDeleteDraft}
+                onDuplicate={onDuplicateDraft}
+                onClearSearch={clearFilters}
+                hasActiveFilters={hasActiveFilters}
+              />
+            </div>
+          )
+        ) : (loading && orders.length === 0) ? (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <tbody>{Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}</tbody>
           </table>
@@ -397,7 +469,11 @@ export default function Orders() {
             />
           </div>
         )}
-        <Pagination pagination={pagination} currentPage={currentPage} onPageChange={setCurrentPage} />
+        <Pagination
+          pagination={activeTab === '__drafts' ? draftsPagination : pagination}
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+        />
       </div>
     </div>
   );

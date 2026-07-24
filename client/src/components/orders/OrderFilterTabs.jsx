@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 const TABS = [
   { key: 'all',               label: 'All Orders'       },
   { key: 'draft',             label: 'New'              },
+  { key: '__drafts',          label: 'Draft Orders'     },
   { key: 'confirmed',         label: 'Confirmed'        },
   { key: 'in-progress',       label: 'In Progress'      },
   { key: 'cutting',           label: 'Cutting'          },
@@ -20,6 +21,7 @@ export default function OrderFilterTabs({ stats, activeTab, onTabChange }) {
     return {
       all: stats.total || stats.totalOrders || 0,
       draft: stats.draft || 0,
+      __drafts: stats.draftsCount || stats.__drafts || 0,
       confirmed: stats.confirmed || 0,
       'in-progress': stats['in-progress'] || 0,
       cutting: stats.cutting || 0,

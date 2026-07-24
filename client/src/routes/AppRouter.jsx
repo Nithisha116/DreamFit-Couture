@@ -685,6 +685,7 @@ export default function AppRouter() {
             {/* Orders Management */}
             <Route path="orders" element={<Orders />} />
             <Route path="orders/new" element={<NewOrder />} />
+            <Route path="orders/new/:draftId" element={<NewOrder />} />
             <Route path="orders/:id" element={<OrderDetails />} />
             <Route path="orders/edit/:id" element={<EditOrder />} />
             
@@ -831,6 +832,7 @@ export default function AppRouter() {
             {/* Orders Management */}
             <Route path="orders" element={<Orders />} />
             <Route path="orders/new" element={<NewOrder />} />
+            <Route path="orders/new/:draftId" element={<NewOrder />} />
             <Route path="orders/:id" element={<OrderDetails />} />
             <Route path="orders/edit/:id" element={<EditOrder />} />
             

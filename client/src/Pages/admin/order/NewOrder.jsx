@@ -3915,7 +3915,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
+import debounce from "lodash/debounce";
 import {
   ArrowLeft,
   Save,
@@ -3960,11 +3961,20 @@ import {
   isValidWorkflowStages,
   normalizeWorkflowStages,
 } from "../../../workflow/workflowStageUtils";
+import {
+  createDraftOrder,
+  updateDraftOrder,
+  fetchDraftById,
+  convertDraftToOrder,
+  clearCurrentDraft,
+  DRAFT_LOCK_MESSAGE,
+} from "../../../features/draftOrder/draftOrderSlice";
 
 export default function NewOrder() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
+  const { draftId: draftIdParam } = useParams();
 
   /* Inga irukkura classes hover matrum selection-ai Red-ku mathum */
   const calendarStyles = `
@@ -4071,9 +4081,140 @@ export default function NewOrder() {
   const userRole = user?.role;
 
   // 🧭 Base path based on user role (navigation purpose)
-  const basePath = user?.role === "ADMIN" ? "/admin" : 
-                   user?.role === "STORE_KEEPER" ? "/storekeeper" : 
+  const basePath = user?.role === "ADMIN" ? "/admin" :
+                   user?.role === "STORE_KEEPER" ? "/storekeeper" :
                    "/cuttingmaster";
+
+  // ============================================
+  // 📝 DRAFT ORDERS — autosave + resume
+  // ============================================
+  const { autosaveStatus, lastSavedAt, lockMessage } = useSelector(
+    (state) => state.draftOrder || {}
+  );
+  const currentDraftIdRef = useRef(draftIdParam || null);
+  const draftAutosaveStoppedRef = useRef(false);
+  const draftHydratingRef = useRef(Boolean(draftIdParam));
+  const formDataRef = useRef(formData);
+  const garmentsRef = useRef(garments);
+  const paymentsRef = useRef(payments);
+  const selectedCustomerDisplayRef = useRef(selectedCustomerDisplay);
+
+  useEffect(() => { formDataRef.current = formData; }, [formData]);
+  useEffect(() => { garmentsRef.current = garments; }, [garments]);
+  useEffect(() => { paymentsRef.current = payments; }, [payments]);
+  useEffect(() => { selectedCustomerDisplayRef.current = selectedCustomerDisplay; }, [selectedCustomerDisplay]);
+
+  // Resume: hydrate the form from a saved draft
+  useEffect(() => {
+    if (!draftIdParam) return;
+
+    dispatch(fetchDraftById(draftIdParam))
+      .unwrap()
+      .then((draft) => {
+        const d = draft?.draftData || {};
+        setFormData({
+          customer: d.customer || "",
+          deliveryDate: d.deliveryDate || "",
+          specialNotes: d.specialNotes || "",
+          advancePayment: d.advancePayment || { amount: 0, method: "cash" },
+        });
+        setGarments(Array.isArray(d.garments) ? d.garments : []);
+        setPayments(Array.isArray(d.payments) ? d.payments : []);
+        if (d.customerName) {
+          setSelectedCustomerDisplay(d.customerName);
+          setSearchTerm(d.customerName);
+        }
+        draftHydratingRef.current = false;
+      })
+      .catch((err) => {
+        draftHydratingRef.current = false;
+        if (err?.alreadyConverted) {
+          draftAutosaveStoppedRef.current = true;
+          showToast.error(DRAFT_LOCK_MESSAGE);
+          navigate(`${basePath}/orders/edit/${draftIdParam}`);
+        } else {
+          showToast.error(err?.message || "Could not load this draft");
+          navigate(`${basePath}/orders`);
+        }
+      });
+
+    return () => { dispatch(clearCurrentDraft()); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftIdParam]);
+
+  // Debounced autosave — created once so rapid edits are properly coalesced;
+  // it always reads the *current* form state via refs (never a stale closure).
+  const debouncedSaveDraft = useMemo(
+    () =>
+      debounce(() => {
+        if (draftAutosaveStoppedRef.current || draftHydratingRef.current) return;
+
+        const fd = formDataRef.current;
+        const g = garmentsRef.current;
+        const p = paymentsRef.current;
+
+        const hasMeaningfulData = Boolean(
+          fd.customer || fd.deliveryDate || String(fd.specialNotes || "").trim() || g.length > 0
+        );
+        if (!hasMeaningfulData) return;
+
+        // Raw File objects (pending image uploads) aren't JSON-serializable —
+        // strip them from the autosaved snapshot; everything else restores exactly.
+        const snapshotGarments = g.map((garment) => {
+          const copy = { ...garment };
+          delete copy.referenceImages;
+          delete copy.customerImages;
+          delete copy.customerClothImages;
+          return copy;
+        });
+
+        const draftData = {
+          customer: fd.customer,
+          customerName: selectedCustomerDisplayRef.current,
+          deliveryDate: fd.deliveryDate,
+          specialNotes: fd.specialNotes,
+          advancePayment: fd.advancePayment,
+          garments: snapshotGarments,
+          payments: p,
+        };
+
+        if (currentDraftIdRef.current) {
+          dispatch(updateDraftOrder({ id: currentDraftIdRef.current, draftData }))
+            .unwrap()
+            .catch((err) => {
+              if (err?.alreadyConverted) {
+                draftAutosaveStoppedRef.current = true;
+                showToast.error(DRAFT_LOCK_MESSAGE);
+              } else {
+                // Transient failure (e.g. network blip) — one soft retry.
+                setTimeout(() => {
+                  if (!draftAutosaveStoppedRef.current && currentDraftIdRef.current) {
+                    dispatch(updateDraftOrder({ id: currentDraftIdRef.current, draftData }));
+                  }
+                }, 5000);
+              }
+            });
+        } else {
+          dispatch(createDraftOrder(draftData))
+            .unwrap()
+            .then((draft) => {
+              currentDraftIdRef.current = draft._id;
+              // Reflect the new draft id in the URL (no remount) so a refresh/back
+              // navigation resumes the same draft instead of starting a blank form.
+              window.history.replaceState(null, "", `${basePath}/orders/new/${draft._id}`);
+            })
+            .catch(() => {});
+        }
+      }, 1600),
+    [dispatch, basePath]
+  );
+
+  useEffect(() => () => debouncedSaveDraft.cancel(), [debouncedSaveDraft]);
+
+  useEffect(() => {
+    if (isSubmittingRef.current) return; // never autosave mid/after final submit
+    debouncedSaveDraft();
+  }, [formData, garments, payments, debouncedSaveDraft]);
 
   // Load customers on mount
   useEffect(() => {
@@ -5405,9 +5546,29 @@ const renderDayContents = useCallback((day, date) => {
       console.log("%c📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡", "background: blue; color: white; font-size: 14px");
       console.log("\n");
 
-      // 🔥 Create the order
-      console.log("📡 Dispatching createNewOrder...");
-      const result = await dispatch(createNewOrder(orderData)).unwrap();
+      // 🔥 Create the order (or, if resuming a draft, convert that draft into a real order)
+      draftAutosaveStoppedRef.current = true;
+      debouncedSaveDraft.cancel();
+
+      let result;
+      if (currentDraftIdRef.current) {
+        console.log("📡 Dispatching convertDraftToOrder...");
+        try {
+          result = await dispatch(convertDraftToOrder({ id: currentDraftIdRef.current, orderData })).unwrap();
+        } catch (convertErr) {
+          if (convertErr?.alreadyConverted) {
+            showToast.error(DRAFT_LOCK_MESSAGE);
+            navigate(`${basePath}/orders/edit/${currentDraftIdRef.current}`);
+            isSubmittingRef.current = false;
+            setIsSubmitting(false);
+            return;
+          }
+          throw new Error(convertErr?.message || "Failed to create order from draft");
+        }
+      } else {
+        console.log("📡 Dispatching createNewOrder...");
+        result = await dispatch(createNewOrder(orderData)).unwrap();
+      }
       
       console.log("\n");
       console.log("%c✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅", "background: green; color: white; font-size: 16px; font-weight: bold");
@@ -5544,11 +5705,40 @@ const renderDayContents = useCallback((day, date) => {
         >
           <ArrowLeft size={20} className="text-slate-600" />
         </button>
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Create New Order</h1>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Create New Order</h1>
+            {autosaveStatus !== "idle" && autosaveStatus !== "locked" && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                style={{
+                  color: autosaveStatus === "error" ? "#b91c1c" : autosaveStatus === "saving" ? "#92400e" : "#166534",
+                  background: autosaveStatus === "error" ? "#fef2f2" : autosaveStatus === "saving" ? "#fffbeb" : "#f0fdf4",
+                }}
+              >
+                {autosaveStatus === "saving" && "Saving draft…"}
+                {autosaveStatus === "saved" && `Draft saved • ${lastSavedAt ? new Date(lastSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "just now"}`}
+                {autosaveStatus === "error" && "Couldn't save draft — retrying"}
+              </span>
+            )}
+          </div>
           <p className="text-slate-500">Add customer details and garments to create an order</p>
         </div>
       </div>
+
+      {autosaveStatus === "locked" && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-medium text-red-700">{lockMessage || DRAFT_LOCK_MESSAGE}</p>
+          {currentDraftIdRef.current && (
+            <button
+              type="button"
+              onClick={() => navigate(`${basePath}/orders/edit/${currentDraftIdRef.current}`)}
+              className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+            >
+              Go to Edit Order
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Main Form */}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">

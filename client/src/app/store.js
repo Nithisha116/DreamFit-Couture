@@ -34,6 +34,7 @@ import workerReducer from "../features/worker/workerSlice";
 import leaveReducer from "../features/leave/leaveSlice";
 import salaryReducer from "../features/salary/salarySlice";
 import invoiceReducer from "../features/invoice/invoiceSlice";
+import draftOrderReducer from "../features/draftOrder/draftOrderSlice";
 
 // Combine all reducers
 const rootReducer = combineReducers({
@@ -68,6 +69,7 @@ notification: notificationReducer,
   outsourcingVendor: outsourcingVendorReducer,
   salary: salaryReducer,
   invoice: invoiceReducer,
+  draftOrder: draftOrderReducer,
 });
 
 // Persist config
