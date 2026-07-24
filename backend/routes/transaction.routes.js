@@ -310,10 +310,9 @@
 
 // routes/transaction.routes.js - ADD THE MISSING /today ROUTE
 
-const express = require('express');
-const router = express.Router();
-const { protect, authorize } = require('../middleware/auth.middleware');
-const {
+import express from 'express';
+import { protect, authorize } from '../middleware/auth.middleware.js';
+import {
   createTransaction,
   getTransactions,
   getTransactionSummary,
@@ -329,7 +328,9 @@ const {
   getDashboardData,
   getDailyRevenueStats,
   getTodayTransactions  // ✅ ADD THIS IMPORT
-} = require('../controllers/transaction.controller');
+} from '../controllers/transaction.controller.js';
+
+const router = express.Router();
 
 // All routes require authentication
 router.use(protect);
@@ -371,4 +372,4 @@ router.route('/:id')
   .put(authorize('ADMIN'), updateTransaction)
   .delete(authorize('ADMIN'), deleteTransaction);
 
-module.exports = router;
+export default router;

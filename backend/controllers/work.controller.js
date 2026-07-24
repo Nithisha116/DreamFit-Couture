@@ -6674,6 +6674,7 @@ import CuttingMaster from '../models/CuttingMaster.js';
 import Tailor from '../models/Tailor.js';
 import Notification from '../models/Notification.js';
 import { createNotification } from './notification.controller.js';
+import { logDeletion } from '../utils/auditLogger.js';
 
 // ============================================
 // ✅ HELPER: GENERATE WORK ID (OrderID.sequence)
@@ -7845,12 +7846,12 @@ const statusUpdates = {
 // @access  Private (Admin only)
 export const deleteWork = async (req, res) => {
   try {
-    const work = await Work.findById(req.params.id);
+    const work = await Work.findOne({ _id: req.params.id, isActive: true });
 
     if (!work) {
       return res.status(404).json({
         success: false,
-        message: 'Work not found'
+        message: 'Work not found or already deactivated'
       });
     }
 
@@ -7897,11 +7898,15 @@ export const deleteWork = async (req, res) => {
       console.log('⚠️ Deletion notification failed:', notifError.message);
     }
 
-    await work.deleteOne();
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_WORK", "Work", work, work);
+
+    work.isActive = false;
+    await work.save();
 
     res.json({
       success: true,
-      message: 'Work deleted successfully'
+      message: 'Work deactivated successfully'
     });
 
   } catch (error) {

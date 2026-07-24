@@ -115,7 +115,8 @@ export const getAllHelpersApi = async (params = {}) => {
     page,
     limit,
     sortField,
-    sortOrder
+    sortOrder,
+    isActive
   } = params;
   
   let url = "/helpers";
@@ -125,6 +126,7 @@ export const getAllHelpersApi = async (params = {}) => {
   if (search) queryParams.push(`search=${encodeURIComponent(search)}`);
   if (status && status !== 'all') queryParams.push(`status=${status}`);
   if (availability && availability !== 'all') queryParams.push(`availability=${availability}`);
+  if (isActive) queryParams.push(`isActive=${isActive}`);
   
   // Pagination
   if (page) queryParams.push(`page=${page}`);

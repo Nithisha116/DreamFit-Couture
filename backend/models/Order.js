@@ -98,6 +98,7 @@ stageKeys: {
     required: [true, "Created by is required"],
   },
   isActive: { type: Boolean, default: true },
+<<<<<<< HEAD
 
   // ============================================
   // ✅ DRAFT ORDERS SUPPORT
@@ -111,6 +112,9 @@ stageKeys: {
     customerDisplayName: { type: String },
     lastEditedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
+=======
+  cancelReason: { type: String, default: "" },
+>>>>>>> 94ca06e24cfa45f85b00214bce81df07dce4bae5
 }, { timestamps: true });
 
 // ============================================

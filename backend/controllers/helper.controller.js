@@ -1502,6 +1502,8 @@
 import Helper from "../models/Helper.js";
 import Work from "../models/Work.js";
 import User from "../models/User.js";
+import { logDeletion } from "../utils/auditLogger.js";
+import { hasActiveWorkAssignment } from "../utils/workerAssignment.js";
 import bcrypt from "bcryptjs";
 
 // ===== CREATE HELPER =====
@@ -1691,8 +1693,15 @@ export const createHelper = async (req, res) => {
 // };
 export const getAllHelpers = async (req, res) => {
   try {
-    const { search, status, availability } = req.query;
-    let matchQuery = { isActive: true };
+    const { search, status, availability, isActive } = req.query;
+    let matchQuery = {};
+    if (isActive === 'false') {
+      matchQuery.isActive = false;
+    } else if (isActive === 'all') {
+      // Don't filter by isActive
+    } else {
+      matchQuery.isActive = true; // Default behavior
+    }
 
     // 1. Search Logic
     if (search) {
@@ -1718,40 +1727,71 @@ export const getAllHelpers = async (req, res) => {
       { $match: matchQuery },
       { $sort: { createdAt: -1 } },
       
-      // 🔥 Join with Work collection (Single Call)
+      // 🔥 Join with Work collection via assignments array
       {
         $lookup: {
-          from: "works", // Unga Work collection name check pannikonga
+          from: "works",
           localField: "_id",
-          foreignField: "helper",
+          foreignField: "assignments.workerId",
           as: "allWorks"
         }
       },
 
-      // 📊 Calculate stats in Backend itself
+      // 📊 Calculate stats dynamically
       {
         $addFields: {
-          workStats: {
-            totalAssigned: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { $eq: ["$$w.isActive", true] } } } 
-            },
-            completed: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { $eq: ["$$w.status", "ready-to-deliver"] } } } 
-            },
-            pending: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { $in: ["$$w.status", ["pending", "accepted"]] } } } 
-            },
-            inProgress: { 
-              $size: { $filter: { input: "$allWorks", as: "w", cond: { 
-                $in: ["$$w.status", ["cutting-started", "cutting-completed", "sewing-started", "sewing-completed", "ironing"]] 
-              } } } 
+          // Flatten all assignments for this helper
+          myAssignments: {
+            $filter: {
+              input: {
+                $reduce: {
+                  input: "$allWorks",
+                  initialValue: [],
+                  in: { $concatArrays: ["$$value", "$$this.assignments"] }
+                }
+              },
+              as: "asgn",
+              cond: { $eq: ["$$asgn.workerId", "$_id"] }
             }
           }
         }
       },
-
-      // 🧹 Clean up: remove the heavy works array, only keep stats
-      { $project: { allWorks: 0 } }
+      {
+        $addFields: {
+          workStats: {
+            totalAssigned: { $size: "$myAssignments" },
+            completed: {
+              $size: {
+                $filter: {
+                  input: "$myAssignments",
+                  as: "a",
+                  cond: { $eq: ["$$a.status", "completed"] }
+                }
+              }
+            },
+            inProgress: {
+              $size: {
+                $filter: {
+                  input: "$myAssignments",
+                  as: "a",
+                  cond: { $eq: ["$$a.status", "active"] }
+                }
+              }
+            },
+            pending: {
+              $size: {
+                $filter: {
+                  input: "$myAssignments",
+                  as: "a",
+                  cond: { $eq: ["$$a.status", "pending"] }
+                }
+              }
+            }
+          }
+        }
+      },
+      // 🧹 Clean up
+      { $project: { allWorks: 0, myAssignments: 0 } }
     ]);
 
     res.status(200).json(helpers);
@@ -1777,7 +1817,7 @@ export const getHelperById = async (req, res) => {
 
     // ✅ Get all works assigned to this helper
     const works = await Work.find({ 
-      helper: helper._id,
+      "assignments.workerId": helper._id,
       isActive: true 
     })
       .populate({
@@ -1795,15 +1835,18 @@ export const getHelperById = async (req, res) => {
       .populate('cuttingMaster', 'name')
       .sort({ createdAt: -1 });
 
-    // ✅ Calculate work statistics from actual works
+    // ✅ Flatten all assignments for this helper from all fetched works
+    const allMyAssignments = works.reduce((acc, w) => {
+      const mine = w.assignments?.filter(a => a.workerId?.toString() === helper._id.toString()) || [];
+      return [...acc, ...mine];
+    }, []);
+
+    // ✅ Calculate work statistics from actual assignments
     const workStats = {
-      totalAssigned: works.length,
-      completed: works.filter(w => w.status === 'ready-to-deliver').length,
-      pending: works.filter(w => ['pending', 'accepted'].includes(w.status)).length,
-      inProgress: works.filter(w => 
-        ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing']
-        .includes(w.status)
-      ).length
+      totalAssigned: allMyAssignments.length,
+      completed: allMyAssignments.filter(a => a.status === 'completed').length,
+      inProgress: allMyAssignments.filter(a => a.status === 'active').length,
+      pending: allMyAssignments.filter(a => a.status === 'pending').length
     };
 
     console.log('📊 Recalculated workStats for helper:', {
@@ -1852,7 +1895,7 @@ export const updateHelper = async (req, res) => {
     const updatableFields = ['name', 'phone', 'email', 'address', 'specialization', 'experience', 'basicSalary'];
     
     if (isAdmin || isStoreKeeper) {
-      updatableFields.push('isAvailable', 'leaveStatus', 'leaveFrom', 'leaveTo', 'leaveReason');
+      updatableFields.push('isActive', 'isAvailable', 'leaveStatus', 'leaveFrom', 'leaveTo', 'leaveReason');
     }
 
     updatableFields.forEach(field => {
@@ -1937,33 +1980,32 @@ export const updateLeaveStatus = async (req, res) => {
 // ===== DELETE HELPER (soft delete) =====
 export const deleteHelper = async (req, res) => {
   try {
-    const helper = await Helper.findById(req.params.id);
+    const helper = await Helper.findOne({ _id: req.params.id, isActive: true });
 
     if (!helper) {
-      return res.status(404).json({ message: "Helper not found" });
+      return res.status(404).json({ message: "Helper not found or already deactivated" });
     }
 
-    // ✅ Check if helper has active works
-    const activeWorks = await Work.countDocuments({
-      helper: helper._id,
-      status: { $nin: ['ready-to-deliver', 'cancelled'] }
-    });
-
-    if (activeWorks > 0) {
-      return res.status(400).json({ 
-        message: `Cannot delete helper with ${activeWorks} active works. Complete or reassign works first.` 
+    // ✅ Check if helper has active work assignments
+    if (await hasActiveWorkAssignment(helper._id)) {
+      return res.status(400).json({
+        message: "Cannot delete helper with active work assignments. Complete or reassign work first."
       });
     }
+
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_USER", "Helper", helper, helper);
 
     helper.isActive = false;
     await helper.save();
 
+    // Soft delete associated User document
     await User.findOneAndUpdate(
       { helperId: helper._id },
       { isActive: false }
     );
 
-    res.json({ message: "Helper deleted successfully" });
+    res.json({ message: "Helper deactivated successfully" });
   } catch (error) {
     console.error("Delete helper error:", error);
     res.status(500).json({ message: error.message });

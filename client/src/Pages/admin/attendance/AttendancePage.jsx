@@ -152,7 +152,7 @@ export default function AttendancePage() {
   };
 
   // Extract unique departments for filter (simple implementation)
-  const departments = ["Tailoring", "Cutting", "Store", "Sales", "Admin", "General"];
+  const departments = ["Tailoring", "Cutting", "Store", "Sales", "Admin", "General", "Aari Work", "Embroidery", "Helper"];
 
   return (
     <div className="space-y-6">

@@ -205,6 +205,7 @@ import StoreKeeper from "../models/StoreKeeper.js";
 import Tailor from "../models/Tailor.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { logAction } from "../utils/auditLogger.js";
 
 export const loginUser = async (req, res) => {
   try {
@@ -242,25 +243,45 @@ export const loginUser = async (req, res) => {
     let userType = null;
     let userId = null;
 
+    let Model = null;
+
     if (admin) {
       user = admin;
-      userType = "ADMIN";
+      const allowedRoles = [
+        "ADMIN",
+        "TAILOR",
+        "HELPER",
+        "STORE_KEEPER",
+        "CUTTING_MASTER",
+        "AARI_WORKER",
+        "EMBROIDERY_WORKER",
+        "STAFF",
+        "MANAGER"
+      ];
+      if (!allowedRoles.includes(admin.role)) {
+        return res.status(403).json({ message: "Invalid user role" });
+      }
+      userType = admin.role;
       userId = admin._id;
-      console.log("✅ Admin found");
+      Model = User;
+      console.log(`✅ User found with role: ${admin.role}`);
     } else if (cutting) {
       user = cutting;
       userType = "CUTTING_MASTER";
       userId = cutting._id;
+      Model = CuttingMaster;
       console.log("✅ Cutting Master found");
     } else if (store) {
       user = store;
       userType = "STORE_KEEPER";
       userId = store._id;
+      Model = StoreKeeper;
       console.log("✅ Store Keeper found");
     } else if (tailor) {
       user = tailor;
       userType = "TAILOR";
       userId = tailor._id;
+      Model = Tailor;
       console.log("✅ Tailor found");
     }
 
@@ -287,20 +308,27 @@ export const loginUser = async (req, res) => {
     }
 
     // 6️⃣ 🚀 OPTIMIZED: Update last login in background (don't await)
-    // Get the model dynamically based on userType
-    const Model = {
-      ADMIN: User,
-      CUTTING_MASTER: CuttingMaster,
-      STORE_KEEPER: StoreKeeper,
-      TAILOR: Tailor
-    }[userType];
     
     // Update in background without blocking response
     Model.findByIdAndUpdate(
-      userId, 
+      userId,
       { lastLogin: new Date() },
       { new: false }
     ).catch(err => console.error("LastLogin update failed:", err.message));
+
+    // Audit trail — records which specific account logged in (fire-and-forget,
+    // mirrors the lastLogin update above; never blocks or fails the login).
+    const loginEntityType = { CUTTING_MASTER: "CuttingMaster", STORE_KEEPER: "StoreKeeper", TAILOR: "Tailor" }[userType] || "User";
+    logAction(req, {
+      action: "LOGIN",
+      entityType: loginEntityType,
+      entityId: userId,
+      description: `${userType} login: ${user.name || "Unknown"} (${user.email || user.phone || "no contact"})`,
+      actorId: userId,
+      actorEmail: user.email || user.phone || "",
+      actorName: user.name || "",
+      actorRole: userType
+    }).catch(() => {});
 
     // 7️⃣ Generate JWT token
     const token = jwt.sign(
@@ -338,7 +366,8 @@ export const loginUser = async (req, res) => {
       email: user.email,
       phone: user.phone,
       role: userType,
-      ...(userType === "TAILOR" && { 
+      ...(userType === "ADMIN" && { isInternalAdmin: !!user.isInternalAdmin }),
+      ...(userType === "TAILOR" && {
         tailorId: user.tailorId,
         isAvailable: user.isAvailable 
       }),

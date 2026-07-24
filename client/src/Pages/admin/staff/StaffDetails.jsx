@@ -5,11 +5,15 @@ import {
   User, Mail, Phone, Calendar, MapPin, 
   ChevronLeft, Edit, Power, AlertCircle,
   Shield, Clock, CheckCircle, XCircle, Scissors, Star,
-  HardHat, Store, Briefcase, Sparkles, Activity, Wallet
+  HardHat, Store, Briefcase, Sparkles, Activity, Wallet,
+  UserCog, Wand2, Palette, Wrench
 } from "lucide-react";
 import { fetchTailorById } from "../../../features/tailor/tailorSlice";
 import { fetchCuttingMasterById } from "../../../features/cuttingMaster/cuttingMasterSlice";
 import { fetchStoreKeeperById } from "../../../features/storeKeeper/storeKeeperSlice";
+import { fetchAariWorkerById } from "../../../features/aariWorker/aariWorkerSlice";
+import { fetchEmbroideryWorkerById } from "../../../features/embroideryWorker/embroideryWorkerSlice";
+import { fetchHelperById } from "../../../features/helper/helperSlice";
 import showToast from "../../../utils/toast";
 import API from "../../../app/axios";
 
@@ -40,15 +44,21 @@ export default function StaffDetails() {
       const results = await Promise.allSettled([
         dispatch(fetchTailorById(id)).unwrap(),
         dispatch(fetchCuttingMasterById(id)).unwrap(),
-        dispatch(fetchStoreKeeperById(id)).unwrap()
+        dispatch(fetchStoreKeeperById(id)).unwrap(),
+        dispatch(fetchAariWorkerById(id)).unwrap(),
+        dispatch(fetchEmbroideryWorkerById(id)).unwrap(),
+        dispatch(fetchHelperById(id)).unwrap()
       ]);
 
-      const found = results.find(r => r.status === "fulfilled" && (r.value.tailor || r.value.cuttingMaster || r.value.storeKeeper));
+      const found = results.find(r => r.status === "fulfilled" && (r.value.tailor || r.value.cuttingMaster || r.value.storeKeeper || r.value.aariWorker || r.value.embroideryWorker || r.value.helper));
       if (found) {
         const val = found.value;
         if (val.tailor) { setStaff(val.tailor); setUserType("tailor"); }
         else if (val.cuttingMaster) { setStaff(val.cuttingMaster); setUserType("cuttingMaster"); }
         else if (val.storeKeeper) { setStaff(val.storeKeeper); setUserType("storeKeeper"); }
+        else if (val.aariWorker) { setStaff(val.aariWorker); setUserType("aariWorker"); }
+        else if (val.embroideryWorker) { setStaff(val.embroideryWorker); setUserType("embroideryWorker"); }
+        else if (val.helper) { setStaff(val.helper); setUserType("helper"); }
         setLoading(false);
         return;
       }
@@ -70,7 +80,10 @@ export default function StaffDetails() {
       ADMIN: "bg-purple-100 text-purple-700 border-purple-200",
       TAILOR: "bg-blue-100 text-blue-700 border-blue-200",
       CUTTING_MASTER: "bg-orange-100 text-orange-700 border-orange-200",
-      STORE_KEEPER: "bg-emerald-100 text-emerald-700 border-emerald-200"
+      STORE_KEEPER: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      AARI_WORKER: "bg-pink-100 text-pink-700 border-pink-200",
+      EMBROIDERY_WORKER: "bg-rose-100 text-rose-700 border-rose-200",
+      HELPER: "bg-amber-100 text-amber-700 border-amber-200"
     };
     return `px-4 py-1.5 rounded-full text-xs font-black border uppercase tracking-widest ${configs[role] || "bg-slate-100 text-slate-700 border-slate-200"}`;
   };
@@ -81,14 +94,17 @@ export default function StaffDetails() {
       ADMIN: "from-purple-600 to-indigo-700",
       TAILOR: "from-blue-600 to-indigo-700",
       CUTTING_MASTER: "from-orange-500 to-red-600",
-      STORE_KEEPER: "from-emerald-600 to-teal-700"
+      STORE_KEEPER: "from-emerald-600 to-teal-700",
+      AARI_WORKER: "from-pink-500 to-rose-600",
+      EMBROIDERY_WORKER: "from-rose-500 to-red-600",
+      HELPER: "from-amber-500 to-orange-600"
     };
     return gradients[role] || "from-slate-700 to-slate-900";
   };
 
   const getRoleIcon = () => {
     const role = staff?.role || userType.toUpperCase();
-    const icons = { ADMIN: <UserCog size={40} />, TAILOR: <Scissors size={40} />, CUTTING_MASTER: <HardHat size={40} />, STORE_KEEPER: <Store size={40} /> };
+    const icons = { ADMIN: <UserCog size={40} />, TAILOR: <Scissors size={40} />, CUTTING_MASTER: <HardHat size={40} />, STORE_KEEPER: <Store size={40} />, AARI_WORKER: <Wand2 size={40} />, EMBROIDERY_WORKER: <Palette size={40} />, HELPER: <Wrench size={40} /> };
     return icons[role] || <User size={40} />;
   };
 

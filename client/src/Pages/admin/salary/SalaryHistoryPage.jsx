@@ -23,6 +23,9 @@ import {
   CreditCard,
   Plus,
   FileText,
+  Wand2,
+  Palette,
+  Wrench,
 } from 'lucide-react';
 import { fetchSalaryHistory, fetchActiveEmployees } from '../../../features/salary/salarySlice';
 
@@ -39,6 +42,9 @@ const ROLE_ICONS = {
   TAILOR: <Scissors size={18} />,
   CUTTING_MASTER: <HardHat size={18} />,
   STORE_KEEPER: <Store size={18} />,
+  AARI_WORKER: <Wand2 size={18} />,
+  EMBROIDERY_WORKER: <Palette size={18} />,
+  HELPER: <Wrench size={18} />,
   ADMIN: <UserCog size={18} />,
 };
 
@@ -46,6 +52,9 @@ const ROLE_COLORS = {
   TAILOR: 'blue',
   CUTTING_MASTER: 'orange',
   STORE_KEEPER: 'emerald',
+  AARI_WORKER: 'pink',
+  EMBROIDERY_WORKER: 'rose',
+  HELPER: 'amber',
   ADMIN: 'purple',
 };
 

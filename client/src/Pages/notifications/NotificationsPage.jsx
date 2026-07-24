@@ -2037,16 +2037,11 @@ export default function NotificationsPage() {
     loadNotifications();
   }, [filter, page, dispatch]);
 
-  // Load unread count periodically
+  // Initial unread count load. No polling from here on — GlobalSocketListener
+  // pushes new notifications into the same Redux state in real time and
+  // re-syncs on every (re)connect, so this page updates automatically.
   useEffect(() => {
     dispatch(fetchUnreadCount());
-    
-    const interval = setInterval(() => {
-      dispatch(fetchUnreadCount());
-      loadNotifications(true);
-    }, 30000);
-    
-    return () => clearInterval(interval);
   }, [dispatch]);
 
   const loadNotifications = async (silent = false) => {

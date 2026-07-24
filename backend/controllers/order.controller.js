@@ -2,6 +2,8 @@
 import Order from "../models/Order.js";
 import Garment from "../models/Garment.js";
 import Work from "../models/Work.js";
+import Invoice from "../models/Invoice.js";
+import { logDeletion } from "../utils/auditLogger.js";
 import Customer from "../models/Customer.js";
 import Payment from "../models/Payment.js";
 import Transaction from "../models/Transaction.js";
@@ -20,6 +22,34 @@ import {
   garmentsHaveWorkflow,
 } from "../utils/workflowStages.util.js";
 import { computeDraftProgress, computeDraftDisplayName } from "../utils/draftProgress.util.js";
+import { isWorkAssigned, checkOrderAssignment } from "../utils/orderAssignment.js";
+
+const enrichOrdersWithAssignedStatus = async (orders) => {
+  if (!orders || orders.length === 0) return [];
+  const orderIds = orders.map(o => o._id);
+  const works = await Work.find({ order: { $in: orderIds } });
+  
+  const worksByOrder = {};
+  works.forEach(w => {
+    const oid = w.order.toString();
+    if (!worksByOrder[oid]) worksByOrder[oid] = [];
+    worksByOrder[oid].push(w);
+  });
+
+  return orders.map(order => {
+    const orderObj = order.toObject ? order.toObject() : order;
+    const orderWorks = worksByOrder[orderObj._id.toString()] || [];
+    orderObj.isAssigned = orderWorks.some(isWorkAssigned);
+    return orderObj;
+  });
+};
+
+const enrichSingleOrder = async (order) => {
+  if (!order) return null;
+  const orderObj = order.toObject ? order.toObject() : order;
+  orderObj.isAssigned = await checkOrderAssignment(orderObj._id);
+  return orderObj;
+};
 
 // Configure multer for memory storage
 export const upload = multer({ 
@@ -813,7 +843,8 @@ export const getAllOrders = async (req, res) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
-    res.json({ success: true, orders, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } });
+    const enrichedOrders = await enrichOrdersWithAssignedStatus(orders);
+    res.json({ success: true, orders: enrichedOrders, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -845,7 +876,8 @@ export const getOrderById = async (req, res) => {
 
     const works = await Work.find({ order: order._id, isActive: true }).populate('garment', 'name item category');
 
-    res.json({ success: true, order, payments, works });
+    const enrichedOrder = await enrichSingleOrder(order);
+    res.json({ success: true, order: enrichedOrder, payments, works });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -929,8 +961,9 @@ export const updateOrder = async (req, res) => {
       const { syncOrderInvoice } = await import('../services/invoice.service.js');
       await syncOrderInvoice(order._id);
     } catch (syncErr) {}
-    
-    res.json({ success: true, message: "Order updated successfully", order });
+
+    const enrichedOrder = await enrichSingleOrder(order);
+    res.json({ success: true, message: "Order updated successfully", order: enrichedOrder });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -941,7 +974,7 @@ export const updateOrder = async (req, res) => {
 // ============================================
 export const updateOrderStatus = async (req, res) => {
   try {
-    const { status, pricingVersion } = req.body;
+    const { status, pricingVersion, cancelReason } = req.body;
     const { id } = req.params;
 
     const validStatuses = ["draft", "confirmed", "in-progress", "cutting", "stitching", "trial", "finishing", "ready-to-delivery", "delivered", "cancelled"];
@@ -951,6 +984,24 @@ export const updateOrderStatus = async (req, res) => {
     
     const order = await Order.findById(id).populate('customer').populate('garments');
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    // 🚫 Reject status changes on terminal orders
+    if (order.status === 'cancelled' || order.status === 'delivered') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot change status of a ${order.status} order.`
+      });
+    }
+
+    // 🚫 Require a cancellation reason when cancelling
+    if (status === 'cancelled') {
+      if (!cancelReason || !cancelReason.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Cancellation reason is required."
+        });
+      }
+    }
 
     // 🔄 Optimistic Concurrency Check
     if (pricingVersion !== undefined && order.pricingVersion !== undefined && order.pricingVersion !== pricingVersion) {
@@ -969,6 +1020,11 @@ export const updateOrderStatus = async (req, res) => {
     
     const oldStatus = order.status;
     order.status = status;
+
+    // Save cancellation reason if provided
+    if (status === 'cancelled' && cancelReason) {
+      order.cancelReason = cancelReason.trim();
+    }
     
     // Fallback safe closure for final milestones
     if (status === 'delivered') {
@@ -988,7 +1044,17 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     if (status === 'cancelled') {
-      await Work.updateMany({ order: order._id, status: { $ne: 'ready-to-deliver' } }, { status: 'cancelled', isActive: false });
+      // Only stop active work; preserve completed and delivered work records
+      await Work.updateMany(
+        { order: order._id, status: { $nin: ['ready-to-deliver', 'delivered'] } },
+        { status: 'cancelled', isActive: false }
+      );
+      // Cancel only pending transactions — do NOT touch completed transactions (financial history)
+      await Transaction.updateMany(
+        { order: order._id, status: 'pending' },
+        { status: 'cancelled' }
+      );
+      // NOTE: Payments are NOT deleted or modified. They are permanent financial records.
     } else if (['in-progress', 'cutting', 'stitching', 'trial', 'finishing'].includes(status)) {
       const targetStage = status === 'in-progress' ? (order.stageKeys?.[0] || 'cutting') : status;
 
@@ -1030,8 +1096,9 @@ export const updateOrderStatus = async (req, res) => {
       const { syncOrderInvoice } = await import('../services/invoice.service.js');
       await syncOrderInvoice(updatedOrder._id);
     } catch (syncErr) {}
-    
-    res.json({ success: true, message: `Order status updated`, order: updatedOrder });
+
+    const enrichedOrder = await enrichSingleOrder(updatedOrder);
+    res.json({ success: true, message: `Order status updated`, order: enrichedOrder });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -1045,16 +1112,45 @@ export const deleteOrder = async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
 
+    // 1. Reject deletion of delivered orders (permanent sales/financial record)
+    if (order.status === 'delivered') {
+      return res.status(400).json({
+        success: false,
+        message: "Delivered orders cannot be deleted."
+      });
+    }
+
+    // 2. Check ALL historical Work records (not filtered by isActive)
+    //    Once an order has been assigned to production it can never be permanently deleted.
+    const assigned = await checkOrderAssignment(order._id);
+    if (assigned) {
+      return res.status(400).json({
+        success: false,
+        message: "This order has been assigned to production or a worker. It cannot be deleted. Cancel it instead."
+      });
+    }
+
+    // 3. Check for active invoice
+    const invoice = await Invoice.findOne({ order: order._id, isDeleted: { $ne: true } });
+    if (invoice) {
+      return res.status(409).json({
+        success: false,
+        message: "This order has an active invoice and cannot be deleted. Cancel or void it instead."
+      });
+    }
+
+    // 4. Write deletion audit log
+    await logDeletion(req, "DELETE_ORDER", "Order", order, order);
+
+    // 5. Soft-delete garments and unassigned Work records only — do NOT touch payments or transactions
     await Garment.updateMany({ _id: { $in: order.garments } }, { isActive: false });
     await Work.updateMany({ order: order._id }, { isActive: false });
-    await Payment.updateMany({ order: order._id }, { isDeleted: true });
-    await Transaction.updateMany({ order: order._id }, { status: 'cancelled' });
 
     await Order.findByIdAndUpdate(
-  order._id,
-  { isActive: false },
-  { runValidators: false }
-);
+      order._id,
+      { isActive: false },
+      { runValidators: false }
+    );
     res.json({ success: true, message: "Order deleted successfully" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -1279,7 +1375,8 @@ export const getRecentOrders = async (req, res) => {
     }
 
     const orders = await Order.find(dateFilter).populate('customer', 'name phone').populate('garments', 'name type quantity').sort({ orderDate: -1 }).limit(parseInt(limit));
-    res.json({ success: true, orders, count: orders.length });
+    const enrichedOrders = await enrichOrdersWithAssignedStatus(orders);
+    res.json({ success: true, orders: enrichedOrders, count: enrichedOrders.length });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -1298,8 +1395,9 @@ export const getFilteredOrders = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const orders = await Order.find(filter).populate('customer', 'name phone').populate('garments').sort({ orderDate: -1 }).skip(skip).limit(parseInt(limit));
     const totalCount = await Order.countDocuments(filter);
+    const enrichedOrders = await enrichOrdersWithAssignedStatus(orders);
 
-    res.json({ success: true, orders, pagination: { currentPage: parseInt(page), totalPages: Math.ceil(totalCount / parseInt(limit)), totalCount } });
+    res.json({ success: true, orders: enrichedOrders, pagination: { currentPage: parseInt(page), totalPages: Math.ceil(totalCount / parseInt(limit)), totalCount } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

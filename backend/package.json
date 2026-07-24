@@ -1,6 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -8,6 +9,7 @@
     "dev": "nodemon --exec \"node --env-file=.env\" server.js",
     "seed": "node seed/seed.js",
     "seed:admin": "node seed/admin.seed.js",
+    "seed:internal-admin": "node seed/internalAdmin.seed.js",
     "seed:storekeeper": "node seed/storekeeper.seed.js",
     "seed:cuttingmaster": "node seed/cuttingmaster.seed.js",
     "seed:tailor": "node seed/tailor.seed.js",

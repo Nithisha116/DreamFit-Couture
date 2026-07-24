@@ -565,12 +565,13 @@ import API from "../../app/axios";
 
 // ===== GET ALL CUTTING MASTERS =====
 export const getAllCuttingMastersApi = async (params = {}) => {
-  const { search, availability, page, limit } = params;
+  const { search, availability, page, limit, isActive } = params;
   let url = "/cutting-masters";
   const queryParams = [];
   
   if (search) queryParams.push(`search=${encodeURIComponent(search)}`);
   if (availability && availability !== 'all') queryParams.push(`availability=${availability}`);
+  if (isActive) queryParams.push(`isActive=${isActive}`);
   if (page) queryParams.push(`page=${page}`);
   if (limit) queryParams.push(`limit=${limit}`);
   

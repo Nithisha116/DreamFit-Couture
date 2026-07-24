@@ -428,6 +428,7 @@ const CustomerDetails = lazy(() => import("../Pages/admin/Customers/CustomerDeta
 const Staff = lazy(() => import("../Pages/admin/staff/Staff"));
 const StaffDetails = lazy(() => import("../Pages/admin/staff/StaffDetails"));
 const AddStaff = lazy(() => import("../Pages/admin/staff/AddStaff"));
+const ActivityLogPage = lazy(() => import("../Pages/admin/ActivityLogPage"));
 
 // 🚀 LAZY LOADING - Product Management Components
 const Products = lazy(() => import("../Pages/admin/Products/Products"));
@@ -681,7 +682,10 @@ export default function AppRouter() {
           >
             {/* Dashboard */}
             <Route path="dashboard" element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
-            
+
+            {/* Internal-only Activity Log — page itself checks isInternalAdmin */}
+            <Route path="activity-log" element={<ActivityLogPage />} />
+
             {/* Orders Management */}
             <Route path="orders" element={<Orders />} />
             <Route path="orders/new" element={<NewOrder />} />

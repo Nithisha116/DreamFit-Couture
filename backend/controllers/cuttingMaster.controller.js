@@ -1,6 +1,9 @@
 // backend/controllers/cuttingMaster.controller.js
 
 import CuttingMaster from "../models/CuttingMaster.js";
+import User from "../models/User.js";
+import { logDeletion } from "../utils/auditLogger.js";
+import { hasActiveWorkAssignment } from "../utils/workerAssignment.js";
 import Work from "../models/Work.js";
 import Order from "../models/Order.js";
 import Tailor from "../models/Tailor.js";
@@ -124,8 +127,15 @@ export const getAllCuttingMasters = async (req, res) => {
   try {
     console.log("🚀 Running High-Performance Aggregation for Cutting Master List...");
     
-    const { search, availability } = req.query;
-    let matchQuery = { isActive: true };
+    const { search, availability, isActive } = req.query;
+    let matchQuery = {};
+    if (isActive === 'false') {
+      matchQuery.isActive = false;
+    } else if (isActive === 'all') {
+      // Don't filter by isActive
+    } else {
+      matchQuery.isActive = true; // Default behavior
+    }
 
     // Search Logic
     if (search) {
@@ -147,47 +157,63 @@ export const getAllCuttingMasters = async (req, res) => {
       { $match: matchQuery },
       { $sort: { createdAt: -1 } },
       
-      // 1. Join with Works collection
+      // 1. Join with Works collection via assignments array
       {
         $lookup: {
           from: "works", 
           localField: "_id",
-          foreignField: "cuttingMaster",
+          foreignField: "assignments.workerId",
           as: "workDetails"
         }
       },
 
-      // 2. Calculate stats directly in DB
+      // 2. Calculate stats dynamically
+      {
+        $addFields: {
+          // Flatten all assignments for this cutting master
+          myAssignments: {
+            $filter: {
+              input: {
+                $reduce: {
+                  input: "$workDetails",
+                  initialValue: [],
+                  in: { $concatArrays: ["$$value", "$$this.assignments"] }
+                }
+              },
+              as: "asgn",
+              cond: { $eq: ["$$asgn.workerId", "$_id"] }
+            }
+          }
+        }
+      },
       {
         $addFields: {
           workStats: {
-            total: { $size: "$workDetails" },
+            total: { $size: "$myAssignments" },
             completed: { 
               $size: { 
                 $filter: { 
-                  input: "$workDetails", 
-                  as: "w", 
-                  cond: { $eq: ["$$w.status", "ready-to-deliver"] } 
+                  input: "$myAssignments", 
+                  as: "a", 
+                  cond: { $eq: ["$$a.status", "completed"] } 
                 } 
               } 
             },
             pending: { 
               $size: { 
                 $filter: { 
-                  input: "$workDetails", 
-                  as: "w", 
-                  cond: { $in: ["$$w.status", ["pending", "accepted"]] } 
+                  input: "$myAssignments", 
+                  as: "a", 
+                  cond: { $eq: ["$$a.status", "pending"] } 
                 } 
               } 
             },
             inProgress: { 
               $size: { 
                 $filter: { 
-                  input: "$workDetails", 
-                  as: "w", 
-                  cond: { 
-                    $in: ["$$w.status", ["cutting-started", "cutting-completed", "sewing-started", "sewing-completed", "ironing"]] 
-                  } 
+                  input: "$myAssignments", 
+                  as: "a", 
+                  cond: { $eq: ["$$a.status", "active"] } 
                 } 
               } 
             }
@@ -199,7 +225,8 @@ export const getAllCuttingMasters = async (req, res) => {
       {
         $project: {
           password: 0,
-          workDetails: 0
+          workDetails: 0,
+          myAssignments: 0
         }
       }
     ]);
@@ -233,7 +260,7 @@ export const getCuttingMasterById = async (req, res) => {
 
     // Get works assigned
     const works = await Work.find({ 
-      cuttingMaster: cuttingMaster._id,
+      "assignments.workerId": cuttingMaster._id,
       isActive: true 
     })
       .populate({
@@ -244,11 +271,17 @@ export const getCuttingMasterById = async (req, res) => {
       .populate('tailor', 'name employeeId')
       .sort({ createdAt: -1 });
 
+    // Flatten assignments for this cutting master
+    const allMyAssignments = works.reduce((acc, w) => {
+      const mine = w.assignments?.filter(a => a.workerId?.toString() === cuttingMaster._id.toString()) || [];
+      return [...acc, ...mine];
+    }, []);
+
     const workStats = {
-      total: works.length,
-      completed: works.filter(w => w.status === 'ready-to-deliver').length,
-      pending: works.filter(w => ['pending', 'accepted'].includes(w.status)).length,
-      inProgress: works.filter(w => ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing'].includes(w.status)).length
+      total: allMyAssignments.length,
+      completed: allMyAssignments.filter(a => a.status === 'completed').length,
+      inProgress: allMyAssignments.filter(a => a.status === 'active').length,
+      pending: allMyAssignments.filter(a => a.status === 'pending').length
     };
 
     res.json({
@@ -313,33 +346,34 @@ export const updateCuttingMaster = async (req, res) => {
  */
 export const deleteCuttingMaster = async (req, res) => {
   try {
-    console.log(`🗑️ Deleting cutting master: ${req.params.id}`);
+    console.log(`🗑️ Soft-deleting cutting master: ${req.params.id}`);
     
     if (req.user.role !== 'ADMIN') {
       return res.status(403).json({ message: "Only admin can delete" });
     }
 
-    const cuttingMaster = await CuttingMaster.findById(req.params.id);
+    const cuttingMaster = await CuttingMaster.findOne({ _id: req.params.id, isActive: true });
     if (!cuttingMaster) {
-      return res.status(404).json({ message: "Cutting Master not found" });
+      return res.status(404).json({ message: "Cutting Master not found or already deactivated" });
     }
 
-    // Check active works
-    const activeWorks = await Work.countDocuments({
-      cuttingMaster: cuttingMaster._id,
-      status: { $nin: ['ready-to-deliver', 'cancelled'] }
-    });
-
-    if (activeWorks > 0) {
-      return res.status(400).json({ 
-        message: `Cannot delete with ${activeWorks} active works` 
+    // Check active work assignments
+    if (await hasActiveWorkAssignment(cuttingMaster._id)) {
+      return res.status(400).json({
+        message: "Cannot delete cutting master with active work assignments. Complete or reassign work first."
       });
     }
+
+    // Write deletion audit log
+    await logDeletion(req, "DELETE_USER", "CuttingMaster", cuttingMaster, cuttingMaster);
 
     cuttingMaster.isActive = false;
     await cuttingMaster.save();
 
-    res.json({ message: "Cutting Master deleted successfully" });
+    // Soft delete associated User document
+    await User.findOneAndUpdate({ cuttingMasterId: cuttingMaster._id }, { isActive: false });
+
+    res.json({ message: "Cutting Master deactivated successfully" });
   } catch (error) {
     console.error("❌ Delete error:", error);
     res.status(500).json({ message: error.message });

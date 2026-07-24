@@ -13,7 +13,7 @@ import LeaveModal from "../../../components/leave/LeaveModal";
 import LeaveStatusBadge from "../../../components/leave/LeaveStatusBadge";
 
 const STATUS_OPTIONS = ["all", "Pending", "Approved", "Rejected", "Cancelled"];
-const DEPARTMENTS = ["all", "Tailoring", "Cutting", "Store", "Sales", "Admin"];
+const DEPARTMENTS = ["all", "Tailoring", "Cutting", "Store", "Sales", "Admin", "Aari Work", "Embroidery", "Helper"];
 
 export default function LeavePage() {
   const dispatch = useDispatch();
