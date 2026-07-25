@@ -99,7 +99,6 @@ export default function Orders() {
     draftsPagination: state.draftOrder?.pagination || { page: 1, pages: 1, total: 0, limit: 20 },
     draftsLoading: state.draftOrder?.loading || false,
   }));
-
   const { user } = useSelector(s => ({ user: s.auth?.user }));
   const mutationError = useSelector((state) => state.orders?.mutationError || state.order?.mutationError || null);
 
