@@ -327,7 +327,8 @@ import {
   getTransactionsByDateRange,
   getDashboardData,
   getDailyRevenueStats,
-  getTodayTransactions  // ✅ ADD THIS IMPORT
+  getTodayTransactions,  // ✅ ADD THIS IMPORT
+  getTransactionMonths
 } from '../controllers/transaction.controller.js';
 
 const router = express.Router();
@@ -347,6 +348,9 @@ router.get('/stats', authorize('ADMIN'), getTransactionStats);
 
 // ✅ ADD THIS - TODAY'S TRANSACTIONS ROUTE
 router.get('/summary/today', authorize('ADMIN', 'STORE_KEEPER'), getTodayTransactions);
+
+// Distinct months with transaction data — powers the dynamic month filter
+router.get('/months', authorize('ADMIN', 'STORE_KEEPER'), getTransactionMonths);
 
 // ============================================
 // ✅ 2. SPECIALIZED & BULK (Before /:id)
