@@ -4864,13 +4864,18 @@ const INCOME_CATEGORIES = [
 ];
 
 const EXPENSE_CATEGORIES = [
-  'salary', 
-  'electricity', 
-  'travel', 
-  'material-purchase', 
-  'rent', 
+  'salary',
+  'electricity',
+  'travel',
+  'material-purchase',
+  'rent',
   'maintenance'
 ];
+
+// Escapes regex metacharacters in free-text search input before it's used
+// to build a MongoDB $regex filter, so a search term like "(a+)+" can't be
+// interpreted as a regex (ReDoS / unexpected matches) — it's matched literally.
+const escapeRegex = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // ============================================
 // ✅ CREATE TRANSACTION - FIXED VERSION
@@ -5616,11 +5621,21 @@ export const getTransactions = async (req, res) => {
     if (order) filter.order = order;
     if (customer) filter.customer = customer;
 
-    // Search in description or reference
+    // Search across all relevant fields: description, category, employee,
+    // payment method, account, reference number. Input is regex-escaped so a
+    // user's search text is always matched literally, never interpreted as
+    // a regex pattern.
     if (search) {
+      const searchRegex = { $regex: escapeRegex(search), $options: 'i' };
       filter.$or = [
-        { description: { $regex: search, $options: 'i' } },
-        { referenceNumber: { $regex: search, $options: 'i' } }
+        { description: searchRegex },
+        { referenceNumber: searchRegex },
+        { category: searchRegex },
+        { customCategory: searchRegex },
+        { paymentMethod: searchRegex },
+        { accountType: searchRegex },
+        { employeeRef: searchRegex },
+        { 'customerDetails.name': searchRegex },
       ];
     }
 
@@ -5806,6 +5821,60 @@ export const getTransactions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch transactions',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ GET DISTINCT MONTHS WITH TRANSACTIONS
+// ============================================
+// Returns every calendar month that actually has matching transaction data,
+// most recent first — used to populate the month filter dropdown so it never
+// needs a hardcoded list and a newly-created month appears automatically.
+export const getTransactionMonths = async (req, res) => {
+  try {
+    const { type, accountType } = req.query;
+
+    const match = { status: 'completed' };
+    if (type) match.type = type;
+    if (accountType) match.accountType = accountType;
+
+    const months = await Transaction.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$transactionDate' },
+            month: { $month: '$transactionDate' }
+          }
+        }
+      },
+      { $sort: { '_id.year': -1, '_id.month': -1 } }
+    ]);
+
+    const MONTH_NAMES = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    const data = months.map(({ _id }) => ({
+      year: _id.year,
+      month: _id.month, // 1-12
+      label: `${MONTH_NAMES[_id.month - 1]} ${_id.year}`,
+      // Inclusive UTC-day boundaries the frontend can pass straight back as
+      // startDate/endDate — kept in sync with how getTransactions already
+      // widens startDate/endDate to whole-day bounds.
+      startDate: new Date(Date.UTC(_id.year, _id.month - 1, 1)).toISOString().split('T')[0],
+      endDate: new Date(Date.UTC(_id.year, _id.month, 0)).toISOString().split('T')[0],
+    }));
+
+    res.json({ success: true, months: data });
+  } catch (error) {
+    console.error('❌ Get transaction months error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available months',
       error: error.message
     });
   }
@@ -6401,17 +6470,36 @@ export const exportTransactions = async (req, res) => {
       startDate,
       endDate,
       accountType,
+      category,
+      search,
       customerId
     } = req.query;
 
     console.log("\n📤 EXPORT TRANSACTIONS CALLED");
-    console.log("Export filters:", { type, startDate, endDate, accountType, customerId });
+    console.log("Export filters:", { type, startDate, endDate, accountType, category, search, customerId });
 
     const filter = { status: 'completed' };
 
     if (type) filter.type = type;
     if (accountType) filter.accountType = accountType;
+    if (category) filter.category = category;
     if (customerId) filter.customer = customerId;
+
+    // Same field coverage as getTransactions, so an export always matches
+    // whatever the on-screen search/filters currently show.
+    if (search) {
+      const searchRegex = { $regex: escapeRegex(search), $options: 'i' };
+      filter.$or = [
+        { description: searchRegex },
+        { referenceNumber: searchRegex },
+        { category: searchRegex },
+        { customCategory: searchRegex },
+        { paymentMethod: searchRegex },
+        { accountType: searchRegex },
+        { employeeRef: searchRegex },
+        { 'customerDetails.name': searchRegex },
+      ];
+    }
 
     if (startDate || endDate) {
       filter.transactionDate = {};

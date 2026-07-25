@@ -1243,16 +1243,20 @@ import {
   Menu,
   Clock
 } from 'lucide-react';
-import { 
+import {
   fetchExpenseTransactions,
+  fetchTransactionMonths,
   deleteExistingTransaction,
   setFilters,
   resetFilters,
   selectExpenseTransactions,
   selectTransactionPagination,
   selectTransactionLoading,
-  selectTransactionFilters
+  selectTransactionFilters,
+  selectTransactionSummary,
+  selectAvailableMonths
 } from '../../features/transaction/transactionSlice';
+import * as transactionApi from '../../features/transaction/transactionApi';
 import AddExpenseModal from '../../components/Banking/AddExpenseModal';
 import TransactionDetailsModal from '../../components/Banking/TransactionDetailsModal';
 import showToast from '../../utils/toast';
@@ -1269,6 +1273,8 @@ export default function ExpensePage() {
   const pagination = useSelector(selectTransactionPagination);
   const filters = useSelector(selectTransactionFilters);
   const loading = useSelector(selectTransactionLoading);
+  const summary = useSelector(selectTransactionSummary);
+  const availableMonths = useSelector(selectAvailableMonths);
   const { user } = useSelector((state) => state.auth);
 
   // Get base path based on user role
@@ -1283,7 +1289,8 @@ export default function ExpensePage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
-  const [dateRange, setDateRange] = useState('month');
+  // 'all' | '<year>-<month>' (matches an entry in availableMonths) | 'custom'
+  const [dateRange, setDateRange] = useState('all');
   const [customDates, setCustomDates] = useState({ start: '', end: '' });
   const [showFilters, setShowFilters] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(accountFilter || 'all');
@@ -1306,28 +1313,23 @@ export default function ExpensePage() {
   const isAdmin = user?.role === 'ADMIN';
   const canDelete = isAdmin;
 
-  // Calculate totals based on expense transactions
-  const totalExpense = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
-  
-  const handCashTotal = transactions
-    .filter(t => t.accountType === 'hand-cash')
-    .reduce((sum, t) => sum + (t.amount || 0), 0);
+  // ✅ FIX: totals come from the backend's aggregate query over ALL matching
+  // records (respecting whatever search/date/account filters are currently
+  // applied) — not a client-side reduce over just the current page.
+  const totalExpense = summary.totalExpense;
+  const handCashTotal = summary.handCash.expense;
+  const bankTotal = summary.bank.expense;
 
-  const bankTotal = transactions
-    .filter(t => t.accountType === 'bank')
-    .reduce((sum, t) => sum + (t.amount || 0), 0);
+  // ✅ FIX: `transactions` is already filtered server-side by accountType
+  // (see handleAccountFilter/handleCardClick below, which dispatch it as a
+  // real query filter) — no need to re-filter it again on the client.
+  const displayedTransactions = transactions;
 
-  // Get filtered transactions based on active view
-  const getFilteredTransactions = () => {
-    if (activeView === 'hand-cash') {
-      return transactions.filter(t => t.accountType === 'hand-cash');
-    } else if (activeView === 'bank') {
-      return transactions.filter(t => t.accountType === 'bank');
-    }
-    return transactions;
-  };
-
-  const displayedTransactions = getFilteredTransactions();
+  // Populate the month filter dropdown from real data — no hardcoded list,
+  // new months appear automatically as soon as they have expense records.
+  useEffect(() => {
+    dispatch(fetchTransactionMonths({ type: 'expense' }));
+  }, [dispatch]);
 
   useEffect(() => {
     if (accountFilter && accountFilter !== 'all') {
@@ -1350,6 +1352,30 @@ export default function ExpensePage() {
     loadTransactions();
   }, [filters, dispatch]);
 
+  // Edge case: deleting the last remaining row on a page (or a filter change
+  // shrinking the result set) can leave `filters.page` pointing past the end
+  // of the now-smaller result set — step back to the last real page instead
+  // of showing a stuck "empty" table while pagination.total says otherwise.
+  useEffect(() => {
+    if (!loading && pagination.pages > 0 && pagination.page > pagination.pages) {
+      dispatch(setFilters({ page: pagination.pages }));
+    }
+  }, [pagination.page, pagination.pages, loading, dispatch]);
+
+  // ✅ FIX: search was captured into local state but never actually sent
+  // anywhere — dispatch it as a real backend filter (debounced so it
+  // doesn't fire a request on every keystroke), same as every other filter
+  // on this page. The backend searches description, category, employee,
+  // payment method, account, and reference number.
+  useEffect(() => {
+    if (searchQuery === (filters.search || '')) return; // nothing changed — skip the redundant request
+    const handle = setTimeout(() => {
+      dispatch(setFilters({ search: searchQuery, page: 1 }));
+    }, 400);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, dispatch]);
+
   const loadTransactions = async (showToastMessage = false) => {
     try {
       await dispatch(fetchExpenseTransactions(filters)).unwrap();
@@ -1367,50 +1393,30 @@ export default function ExpensePage() {
     }
   };
 
+  // ✅ FIX: 'range' is now either 'all', 'custom', or a real "<year>-<month>"
+  // key matching one of the dynamically-fetched availableMonths entries —
+  // no more hardcoded today/week/month/year buckets.
   const handleDateRangeChange = (range) => {
     setDateRange(range);
-    let startDate = '';
-    let endDate = '';
 
-    const today = new Date();
-    const endOfDay = new Date(today);
-    endOfDay.setHours(23, 59, 59, 999);
-    
-    if (range === 'today') {
-      startDate = today.toISOString().split('T')[0];
-      endDate = endOfDay.toISOString().split('T')[0];
+    if (range === 'all') {
       setShowCustomDatePicker(false);
-    } else if (range === 'week') {
-      const weekStart = new Date(today);
-      weekStart.setDate(today.getDate() - today.getDay());
-      weekStart.setHours(0, 0, 0, 0);
-      startDate = weekStart.toISOString().split('T')[0];
-      endDate = endOfDay.toISOString().split('T')[0];
-      setShowCustomDatePicker(false);
-    } else if (range === 'month') {
-      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      monthStart.setHours(0, 0, 0, 0);
-      startDate = monthStart.toISOString().split('T')[0];
-      endDate = endOfDay.toISOString().split('T')[0];
-      setShowCustomDatePicker(false);
-    } else if (range === 'year') {
-      const yearStart = new Date(today.getFullYear(), 0, 1);
-      yearStart.setHours(0, 0, 0, 0);
-      startDate = yearStart.toISOString().split('T')[0];
-      endDate = endOfDay.toISOString().split('T')[0];
-      setShowCustomDatePicker(false);
-    } else if (range === 'custom') {
-      setShowCustomDatePicker(true);
-      if (customDates.start && customDates.end) {
-        startDate = customDates.start;
-        endDate = customDates.end;
-      } else {
-        return;
-      }
+      dispatch(setFilters({ startDate: '', endDate: '', page: 1 }));
+      return;
     }
 
-    if (startDate && endDate) {
-      dispatch(setFilters({ startDate, endDate, page: 1 }));
+    if (range === 'custom') {
+      setShowCustomDatePicker(true);
+      if (customDates.start && customDates.end) {
+        dispatch(setFilters({ startDate: customDates.start, endDate: customDates.end, page: 1 }));
+      }
+      return;
+    }
+
+    setShowCustomDatePicker(false);
+    const monthEntry = availableMonths.find((m) => `${m.year}-${m.month}` === range);
+    if (monthEntry) {
+      dispatch(setFilters({ startDate: monthEntry.startDate, endDate: monthEntry.endDate, page: 1 }));
     }
   };
 
@@ -1425,8 +1431,7 @@ export default function ExpensePage() {
   const handleCustomDateClear = () => {
     setCustomDates({ start: '', end: '' });
     setShowCustomDatePicker(false);
-    setDateRange('month');
-    handleDateRangeChange('month');
+    handleDateRangeChange('all');
   };
 
   const handleAccountFilter = (account) => {
@@ -1454,7 +1459,6 @@ export default function ExpensePage() {
 
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
-    // Filter logic can be added here if needed
   };
 
   const handlePageChange = (newPage) => {
@@ -1477,8 +1481,28 @@ export default function ExpensePage() {
     loadTransactions(true);
   };
 
-  const handleExport = () => {
-    exportToExcel(displayedTransactions, 'expense_transactions', 'expense');
+  // ✅ FIX: exporting used to dump only `displayedTransactions` — the
+  // current page (and, before the accountType fix above, a further
+  // client-narrowed subset of it). Export must reflect every record that
+  // matches the currently-applied filters, not just what's visible on
+  // screen, so this fetches all matching pages from the backend first.
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const response = await transactionApi.getTransactions({
+        ...filters,
+        page: 1,
+        limit: 10000,
+      });
+      const allMatching = response?.data?.transactions || [];
+      exportToExcel(allMatching, 'expense_transactions', 'expense');
+    } catch (error) {
+      console.error('Export failed:', error);
+      showToast.error('Failed to export expenses');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleViewDetails = (transaction) => {
@@ -1695,7 +1719,7 @@ const formatTime = (dateString) => {
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-slate-500 mb-2">Date Range</label>
+              <label className="block text-xs font-medium text-slate-500 mb-2">Month</label>
               <select
                 value={dateRange}
                 onChange={(e) => {
@@ -1704,10 +1728,10 @@ const formatTime = (dateString) => {
                 }}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
               >
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-                <option value="year">This Year</option>
+                <option value="all">All Expenses</option>
+                {availableMonths.map((m) => (
+                  <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>{m.label}</option>
+                ))}
                 <option value="custom">Custom Range</option>
               </select>
             </div>
@@ -1825,10 +1849,11 @@ const formatTime = (dateString) => {
             <div className="flex gap-3">
               <button
                 onClick={handleExport}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-medium text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2"
+                disabled={exporting}
+                className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-medium text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2 disabled:opacity-50"
               >
                 <Download size={18} />
-                Export
+                {exporting ? 'Exporting...' : 'Export'}
               </button>
               <button
                 onClick={handleRefresh}
@@ -2011,10 +2036,10 @@ const formatTime = (dateString) => {
                 onChange={(e) => handleDateRangeChange(e.target.value)}
                 className="px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
               >
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-                <option value="year">This Year</option>
+                <option value="all">All Expenses</option>
+                {availableMonths.map((m) => (
+                  <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>{m.label}</option>
+                ))}
                 <option value="custom">Custom Range</option>
               </select>
 

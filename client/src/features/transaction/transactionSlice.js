@@ -3401,7 +3401,10 @@ const initialState = {
     total: 0,
     pages: 0
   },
-  
+
+  // Distinct months with real transaction data, for the dynamic month filter
+  availableMonths: [],
+
   loading: false,
   autoIncomeLoading: false,
   error: null,
@@ -3410,6 +3413,7 @@ const initialState = {
     type: '',
     accountType: '',
     category: '',
+    search: '',
     startDate: '',
     endDate: '',
     page: 1,
@@ -3523,6 +3527,19 @@ export const fetchTransactionSummary = createAsyncThunk(
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message);
+    }
+  }
+);
+
+// Fetch distinct months that actually have transaction data (dynamic month filter)
+export const fetchTransactionMonths = createAsyncThunk(
+  'transaction/fetchTransactionMonths',
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const response = await transactionApi.getTransactionMonths(params);
+      return response.months || [];
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch available months');
     }
   }
 );
@@ -4396,12 +4413,25 @@ const transactionSlice = createSlice({
         state.loading = false;
         state.expenseTransactions = processTransactions(action.payload.transactions || []);
         state.pagination = action.payload.pagination || initialState.pagination;
+        // ✅ FIX: the backend already computes totals across ALL matching
+        // records via an aggregate query (not just this page) — store it
+        // instead of leaving summary cards to be reduced from the current
+        // page only.
+        state.summary = action.payload.summary || initialState.summary;
       })
       .addCase(fetchExpenseTransactions.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      
+
+      // FETCH AVAILABLE TRANSACTION MONTHS (dynamic month filter)
+      .addCase(fetchTransactionMonths.fulfilled, (state, action) => {
+        state.availableMonths = action.payload || [];
+      })
+      .addCase(fetchTransactionMonths.rejected, (state, action) => {
+        console.error('Failed to fetch available months:', action.payload);
+      })
+
       // FETCH TODAY'S TRANSACTIONS
       .addCase(fetchTodayTransactions.pending, (state) => {
         state.todayTransactions.loading = true;
@@ -4634,6 +4664,7 @@ export const selectExpenseTransactions = (state) => state.transaction.expenseTra
 export const selectTransactionSummary = (state) => state.transaction.summary;
 export const selectTransactionFilters = (state) => state.transaction.filters;
 export const selectTransactionPagination = (state) => state.transaction.pagination;
+export const selectAvailableMonths = (state) => state.transaction.availableMonths;
 export const selectTransactionLoading = (state) => state.transaction.loading;
 export const selectCurrentTransaction = (state) => state.transaction.currentTransaction;
 

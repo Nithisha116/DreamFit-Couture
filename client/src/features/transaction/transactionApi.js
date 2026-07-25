@@ -326,6 +326,19 @@ export const getTransactionStats = async () => {
   return response.data;
 };
 
+// Get distinct months that actually have transaction data — powers the
+// dynamic month filter dropdown (no hardcoded month list).
+export const getTransactionMonths = async (params = {}) => {
+  const queryParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== '' && value !== null && value !== undefined) {
+      queryParams.append(key, value);
+    }
+  });
+  const response = await API.get(`/transactions/months?${queryParams}`);
+  return response.data;
+};
+
 // ✅ NEW: Get daily revenue stats for charts
 export const getDailyRevenueStats = async (params = {}) => {
   const queryParams = new URLSearchParams();
