@@ -1746,6 +1746,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 import {
   Bell,
   Check,
@@ -1885,14 +1886,39 @@ const formatTimeAgo = (dateString) => {
       return `${days}d ago`;
     }
     
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
     });
-    
+
   } catch {
     return 'Invalid date';
+  }
+};
+
+// ============================================
+// ⏱️ WORKFLOW EVENT TIME (single source of truth)
+// ============================================
+// For stage-completion notifications, `scanTime` is the exact moment the
+// stage was completed (same DB value the Task Details page reads from
+// Work.assignments[].completedAt / workflowProgress — see
+// backend/controllers/{qr,workflow}.controller.js). Every notification
+// always has a scanTime (it defaults to the creation instant for
+// non-workflow types), so this is safe to use unconditionally; createdAt is
+// only a fallback for any notification written before scanTime existed.
+const getNotificationEventTime = (notification) => notification?.scanTime || notification?.createdAt;
+
+// Same format string as JobCardDocument.jsx's Stage History ("28 Jul 2026 19:33")
+// so the two pages are visually identical, not just numerically equal.
+const formatEventTimestamp = (dateString) => {
+  if (!dateString) return 'Unknown';
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Unknown';
+    return format(date, 'dd MMM yyyy • HH:mm');
+  } catch {
+    return 'Unknown';
   }
 };
 
@@ -2569,12 +2595,15 @@ export default function NotificationsPage() {
                             </p>
                             
                             <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs">
-                              <span className="text-gray-400 flex items-center gap-0.5 sm:gap-1">
+                              <span
+                                className="text-gray-400 flex items-center gap-0.5 sm:gap-1"
+                                title={formatTimeAgo(getNotificationEventTime(notification))}
+                              >
                                 <Clock size={10} className="sm:w-3 sm:h-3" />
-                                {formatTimeAgo(notification.createdAt)}
+                                {formatEventTimestamp(getNotificationEventTime(notification))}
                               </span>
-                              
-                              {(notification.reference?.orderId || 
+
+                              {(notification.reference?.orderId ||
                                 notification.reference?.workId || 
                                 notification.reference?.garmentId) && (
                                 <>
