@@ -2526,7 +2526,7 @@ export const exportCustomers = async (req, res) => {
         "Total Orders": orderStats.count,
         "Total Spent (₹)": orderStats.totalSpent,
         "Total Paid (₹)": totalPaid,
-        "Created At": cust.createdAt ? new Date(cust.createdAt).toLocaleDateString('en-IN') : ""
+        "Created At": cust.createdAt ? new Date(cust.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : ""
       };
     });
 

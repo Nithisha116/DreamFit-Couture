@@ -15,7 +15,7 @@ const customerSizeProfileSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: function() {
-      return `${this.garmentType || 'Size'} Profile - ${new Date().toLocaleDateString()}`;
+      return `${this.garmentType || 'Size'} Profile - ${new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}`;
     }
   },
 
@@ -237,7 +237,7 @@ customerSizeProfileSchema.pre('save', async function() {
 // Pre-save: Set default profile name if not provided
 customerSizeProfileSchema.pre('save', async function() {
   if (!this.profileName) {
-    this.profileName = `${this.garmentType} Profile - ${new Date().toLocaleDateString()}`;
+    this.profileName = `${this.garmentType} Profile - ${new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}`;
   }
 });
 

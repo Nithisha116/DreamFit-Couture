@@ -365,7 +365,9 @@ export const createPayment = async (req, res) => {
       paymentDate: paymentDate || new Date(),
       paymentTime:
         paymentTime ||
-        new Date().toLocaleTimeString('en-US', { hour12: false }),
+        // Explicit IST — without it this defaults to the server process's
+        // own OS timezone (UTC on most hosts), not India time.
+        new Date().toLocaleTimeString('en-US', { hour12: false, timeZone: 'Asia/Kolkata' }),
       notes: notes || '',
       receivedBy: userId,
     }], { session });

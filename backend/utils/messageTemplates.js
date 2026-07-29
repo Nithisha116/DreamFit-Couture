@@ -150,8 +150,8 @@ export const MESSAGES = {
 
 👤 *Customer:* ${customerName}
 📦 *Order ID:* ${order.orderId}
-📅 *Order Date:* ${new Date(order.orderDate).toLocaleDateString()}
-📅 *Delivery Date:* ${new Date(order.deliveryDate).toLocaleDateString()}
+📅 *Order Date:* ${new Date(order.orderDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
+📅 *Delivery Date:* ${new Date(order.deliveryDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
 
 👕 *Garment Details:*
 ${garmentList}
@@ -200,7 +200,7 @@ Thank you for choosing DreamFit! 🎉
 📦 *Order ID:* ${order.orderId}
 💵 *Amount:* ₹${payment.amount}
 💳 *Method:* ${paymentMethod}
-📅 *Date:* ${new Date(payment.date).toLocaleDateString()}
+📅 *Date:* ${new Date(payment.date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
 ${payment.referenceNumber ? `🔖 *Ref No:* ${payment.referenceNumber}` : ''}
 
 📊 *Payment Summary:*

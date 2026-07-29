@@ -995,7 +995,7 @@ httpServer.listen(PORT, () => {
   console.log(`📡 Server: http://localhost:${PORT}`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`💾 Database: MongoDB Connected`);
-  console.log(`⏰ Started: ${new Date().toLocaleString()}`);
+  console.log(`⏰ Started: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
   console.log("=".repeat(80));
   
   // ==================== COMPLETE ROUTES LIST ====================
