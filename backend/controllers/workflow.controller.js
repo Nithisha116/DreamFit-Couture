@@ -487,7 +487,10 @@ export const processQrScan = async (req, res) => {
     // CREATE NOTIFICATION
     try {
       const orderIdStr = work.order?.orderId || 'Unknown Order';
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      // Explicit IST timezone — without this it defaults to the server
+      // process's own OS timezone (UTC on most hosts), producing a message
+      // time that doesn't match the IST-formatted timestamp shown elsewhere.
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
       const completedAssignment = activeAssignmentIndex >= 0 ? assignments[activeAssignmentIndex] : null;
       await createNotification({
         type: 'work-status-update',

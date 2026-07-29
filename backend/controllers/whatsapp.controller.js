@@ -451,8 +451,11 @@ export const sendOrderConfirmation = async (orderId) => {
     const variables = {
       "1": customer.name || "Customer",
       "2": order.orderId,
-      "3": new Date(order.orderDate).toLocaleDateString(),
-      "4": new Date(order.deliveryDate).toLocaleDateString(),
+      // Explicit IST — without it these default to the server process's own
+      // OS timezone (UTC on most hosts), which can shift the displayed date
+      // by a day for a customer in India.
+      "3": new Date(order.orderDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      "4": new Date(order.deliveryDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
       "5": garmentList,
       "6": order.garments.length.toString(),
       "7": order.priceSummary?.totalMin?.toString() || "0",
@@ -501,7 +504,8 @@ export const sendPaymentReceived = async (orderId, payment) => {
       "2": order.orderId,
       "3": payment.amount?.toString() || "0",
       "4": payment.method || "Unknown",
-      "5": new Date(payment.date).toLocaleDateString(),
+      // Explicit IST — see note above.
+      "5": new Date(payment.date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
       "6": payment.referenceNumber || "-",
       "7": totalMin.toString(),
       "8": totalMax.toString(),

@@ -210,7 +210,9 @@ export const collectInvoicePaymentService = async (invoiceId, paymentData, userI
     if (!order) throw new Error("Order reference not found.");
 
     // 1. Create separate Payment entry
-    const timeStr = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" });
+    // Explicit IST — without it this defaults to the server process's own
+    // OS timezone (UTC on most hosts), not India time.
+    const timeStr = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
     const payment = new Payment({
       order: invoice.order,
       customer: invoice.customer,

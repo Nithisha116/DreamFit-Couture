@@ -88,7 +88,7 @@ export const createProfile = async (req, res) => {
     // Create profile
     const profile = new CustomerSizeProfile({
       customer: customerId,
-      profileName: profileName || `${garmentType} Profile - ${new Date().toLocaleDateString()}`,
+      profileName: profileName || `${garmentType} Profile - ${new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}`,
       template: templateId,
       garmentType: garmentType || 'general',
       measurements: measurements,

@@ -6536,8 +6536,8 @@ export const exportTransactions = async (req, res) => {
       'Order ID': t.order?.orderId || 'N/A',
       'Description': t.description || '',
       'Reference Number': t.referenceNumber || '',
-      'Date': new Date(t.transactionDate).toLocaleDateString('en-IN'),
-      'Time': new Date(t.transactionDate).toLocaleTimeString('en-IN'),
+      'Date': new Date(t.transactionDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      'Time': new Date(t.transactionDate).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }),
       'Created By': t.createdBy?.name || 'N/A',
       'Status': t.status
     }));
