@@ -28,7 +28,7 @@ function imageUrl(img) {
   if (!img) return null;
   const backendUrl = window.location.hostname === "localhost"
     ? "http://localhost:5000"
-    : "https://dreamfit-couture.onrender.com";
+    : import.meta.env.VITE_API_URL;
 
   if (typeof img === "string") {
     if (img.startsWith("http")) return img;

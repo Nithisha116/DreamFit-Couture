@@ -23,7 +23,7 @@ const ImageWithFallback = ({
   }
 
   // Determine final image URL
-  const envUrl = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? 'http://localhost:5000' : 'https://dreamfit-couture.onrender.com');
+  const envUrl = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? 'http://localhost:5000' : '');
   
   // Ensure we have both base and api URLs correctly formatted
   const baseUrl = envUrl.endsWith('/api') ? envUrl.replace('/api', '') : envUrl;

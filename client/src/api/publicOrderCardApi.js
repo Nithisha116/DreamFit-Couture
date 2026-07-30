@@ -1,7 +1,7 @@
 const API_URL =
   window.location.hostname === "localhost"
     ? "http://localhost:5000/api"
-    : "https://dreamfit-couture.onrender.com/api";
+    : `${import.meta.env.VITE_API_URL}/api`;
 
 /**
  * Fetch order card data for public view (no auth).

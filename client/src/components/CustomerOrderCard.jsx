@@ -13,7 +13,7 @@ const PRINT_STYLES = `
 
 function resolveImageUrl(img) {
   if (!img) return null;
-  const envUrl = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? "http://localhost:5000" : "https://dreamfit-couture.onrender.com");
+  const envUrl = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" ? "http://localhost:5000" : "");
   const baseUrl = envUrl.endsWith("/api") ? envUrl.replace("/api", "") : envUrl;
 
   if (typeof img === "string") {
