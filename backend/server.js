@@ -589,6 +589,7 @@ const allowedOrigins = [
   "https://dream-fitcouture.vercel.app",
   "https://dream-fit-couture.vercel.app",
   "https://dreamfit-couture.vercel.app",
+  "https://boutique-ware-11.vercel.app",
 ];
 
 app.use(
