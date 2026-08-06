@@ -404,8 +404,8 @@ const InvoiceDetails = () => {
               DREAMFIT COUTURE
             </h2>
             <p className="text-xs text-gray-400 font-semibold tracking-wider uppercase">Bespoke Tailoring & Bridal Wear Studio</p>
-            <p className="text-xs text-gray-500 mt-2">Studio 4B, Sky Towers, Bangalore, KA, IN</p>
-            <p className="text-xs text-gray-500">Contact: +91 98765 43210 | info@dreamfit.in</p>
+            <p className="text-xs text-gray-500 mt-2">Ground Floor, Karanai Pudhucheri Main Road, Urapakkam, TN, IN</p>
+            <p className="text-xs text-gray-500">Contact: +91 739 722 8655 | dreamfitcouture@gmail.com</p>
           </div>
           <div className="text-right space-y-1">
             <span className="px-3 py-1 rounded-full text-xs font-bold uppercase bg-indigo-50 border border-indigo-100 text-indigo-600 print:text-black print:bg-none print:border-none">
