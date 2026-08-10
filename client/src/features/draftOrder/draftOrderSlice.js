@@ -156,6 +156,28 @@ export const convertDraftToOrder = createAsyncThunk(
   }
 );
 
+// Persists newly-attached garment images to R2 immediately (instead of waiting
+// for final "Create Order"), so they survive an autosave + Resume cycle. Returns
+// the uploaded {url,key,uploadedAt} refs — callers merge these into local
+// garment state themselves; this thunk does not touch draftData.
+export const uploadDraftImage = createAsyncThunk(
+  "draftOrder/uploadImage",
+  async ({ draftId, garmentIndex, category, files }, { rejectWithValue }) => {
+    try {
+      const response = await draftOrderApi.uploadDraftImages(draftId, garmentIndex, category, files);
+      return response.images;
+    } catch (error) {
+      const status = error?.response?.status;
+      const code = error?.response?.data?.code;
+      return rejectWithValue({
+        message: errMsg(error, "Failed to upload image"),
+        status,
+        alreadyConverted: status === 409 && code === "DRAFT_ALREADY_CONVERTED",
+      });
+    }
+  }
+);
+
 const initialState = {
   drafts: [],
   pagination: { page: 1, limit: 20, total: 0, pages: 1 },
@@ -252,6 +274,13 @@ const draftOrderSlice = createSlice({
       })
 
       .addCase(convertDraftToOrder.rejected, (state, action) => {
+        if (action.payload?.alreadyConverted) {
+          state.autosaveStatus = "locked";
+          state.lockMessage = DRAFT_ALREADY_CONVERTED_MESSAGE;
+        }
+      })
+
+      .addCase(uploadDraftImage.rejected, (state, action) => {
         if (action.payload?.alreadyConverted) {
           state.autosaveStatus = "locked";
           state.lockMessage = DRAFT_ALREADY_CONVERTED_MESSAGE;

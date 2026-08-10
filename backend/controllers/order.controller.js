@@ -1,4 +1,5 @@
 // controllers/order.controller.js
+import mongoose from "mongoose";
 import Order from "../models/Order.js";
 import Garment from "../models/Garment.js";
 import Work from "../models/Work.js";
@@ -1477,8 +1478,103 @@ const draftNotEditableResponse = (res) =>
       "This draft has already been converted into an order and can no longer be edited as a draft. Please edit the created order instead.",
   });
 
+// Maps the client-facing category name to the garment image field name it will
+// eventually live under, and to the short R2 folder segment used elsewhere in
+// this file (orders/{orderId}/garment_{i}/reference|customer|cloth).
+const DRAFT_IMAGE_CATEGORIES = {
+  referenceImages: "reference",
+  customerImages: "customer",
+  customerClothImages: "cloth",
+};
+
+// Only accept plain {url,key} refs as "already persisted" — never trust a raw
+// File-shaped or malformed entry making it into draftData's Mixed blob.
+const isPersistedImageRef = (img) =>
+  Boolean(img) && typeof img === "object" && typeof img.url === "string" && typeof img.key === "string";
+
 // ============================================
-// ✅ 20. CREATE DRAFT
+// ✅ DRAFT IMAGE OWNERSHIP GUARD
+// Hard invariant enforced at every point draft image data is persisted: a
+// draft may only ever store image keys that live under its own
+// drafts/{thisDraftId}/ prefix. Any persisted-looking image ref that doesn't
+// match gets stripped (never silently kept/shared) and logged loudly, so
+// however such a foreign reference ends up in a payload — a client bug, a
+// stale request, anything — it can never be written into this draft's
+// document and corrupt another draft's or order's image ownership.
+// ============================================
+const belongsToDraft = (key, draftId) =>
+  typeof key === "string" && key.startsWith(`drafts/${draftId}/`);
+
+const enforceDraftImageOwnership = (draftData, draftId) => {
+  if (!draftData || !Array.isArray(draftData.garments)) return draftData;
+
+  draftData.garments.forEach((g, gi) => {
+    Object.keys(DRAFT_IMAGE_CATEGORIES).forEach((field) => {
+      if (!Array.isArray(g?.[field])) return;
+      const before = g[field];
+      const after = before.filter((img) => {
+        if (!isPersistedImageRef(img)) return true; // not a persisted ref — nothing to check ownership of
+        return belongsToDraft(img.key, draftId);
+      });
+      if (after.length !== before.length) {
+        const stripped = before.filter((img) => isPersistedImageRef(img) && !belongsToDraft(img.key, draftId));
+        console.warn(
+          `⚠️ [DRAFT IMAGE OWNERSHIP GUARD] Stripped ${stripped.length} foreign-owned image(s) from draft ${draftId} garments[${gi}].${field}:`,
+          stripped.map((img) => img.key)
+        );
+      }
+      g[field] = after;
+    });
+  });
+
+  return draftData;
+};
+
+// ============================================
+// ✅ 20. UPLOAD DRAFT GARMENT IMAGES
+// Persists images to R2 as soon as they're attached during draft creation/
+// editing, instead of only at final "Create Order" — this is what makes
+// images survive an autosave + Resume cycle. The draft's draftData JSON blob
+// itself is NOT touched here; the frontend merges the returned {url,key}
+// refs into its local state and includes them in its next autosave PUT.
+// ============================================
+export const uploadDraftImages = async (req, res) => {
+  try {
+    const draft = await Order.findById(req.params.id);
+    if (!draft) {
+      return res.status(404).json({ success: false, message: "Draft not found. It may have been deleted." });
+    }
+    if (!draft.isDraftOrder) {
+      return draftNotEditableResponse(res);
+    }
+
+    const { category, garmentIndex } = req.body;
+    const folder = DRAFT_IMAGE_CATEGORIES[category];
+    if (!folder) {
+      return res.status(400).json({ success: false, message: "Invalid image category" });
+    }
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: "No images provided" });
+    }
+
+    const safeIndex = Number.isFinite(Number(garmentIndex)) ? Number(garmentIndex) : 0;
+    const uploaded = await r2Service.uploadMultiple(
+      req.files,
+      `drafts/${draft._id}/garment_${safeIndex}/${folder}`
+    );
+    const images = uploaded.map((img) => ({ ...img, uploadedAt: new Date().toISOString() }));
+
+    res.status(201).json({ success: true, images });
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({ success: false, message: "Invalid draft ID" });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// ✅ 21. CREATE DRAFT
 // ============================================
 export const createDraft = async (req, res) => {
   try {
@@ -1500,10 +1596,14 @@ export const createDraft = async (req, res) => {
       return res.status(400).json({ success: false, message: "Draft requires at least some order details" });
     }
 
+    const newId = new mongoose.Types.ObjectId();
+    enforceDraftImageOwnership(draftData, newId.toString());
+
     const progressPercent = computeDraftProgress(draftData);
     const customerDisplayName = computeDraftDisplayName(draftData);
 
     const draft = await Order.create({
+      _id: newId,
       isDraftOrder: true,
       isActive: false,
       status: "draft",
@@ -1542,6 +1642,7 @@ export const updateDraft = async (req, res) => {
 
     const creatorId = req.user?._id || req.user?.id;
     const draftData = req.body?.draftData || {};
+    enforceDraftImageOwnership(draftData, id);
 
     draft.draftData = draftData;
     draft.markModified("draftData");
@@ -1635,7 +1736,10 @@ export const getDraftById = async (req, res) => {
 };
 
 // ============================================
-// ✅ 24. DELETE DRAFT (hard delete — a pure draft has no garments/payments/work/invoice to clean up)
+// ✅ 24. DELETE DRAFT (hard delete — a pure draft has no garments/payments/work/invoice to
+// clean up, EXCEPT any images it uploaded to R2 during editing, which we remove below.
+// Safe to hard-delete those: duplicateDraft always gives a duplicate independent R2 copies,
+// so a draft's images are never referenced by any other draft or by a converted order.)
 // ============================================
 export const deleteDraft = async (req, res) => {
   try {
@@ -1647,6 +1751,14 @@ export const deleteDraft = async (req, res) => {
     if (!draft.isDraftOrder) {
       return draftNotEditableResponse(res);
     }
+
+    const garments = Array.isArray(draft.draftData?.garments) ? draft.draftData.garments : [];
+    const keys = garments.flatMap((g) =>
+      Object.keys(DRAFT_IMAGE_CATEGORIES).flatMap((field) =>
+        (Array.isArray(g?.[field]) ? g[field] : []).filter(isPersistedImageRef).map((img) => img.key)
+      )
+    );
+    await Promise.all(keys.map((key) => r2Service.deleteFile(key).catch(() => {})));
 
     await Order.findByIdAndDelete(req.params.id);
 
@@ -1661,6 +1773,9 @@ export const deleteDraft = async (req, res) => {
 
 // ============================================
 // ✅ 25. DUPLICATE DRAFT
+// Images are copied to brand-new R2 objects (not just cloned URL/key JSON) so the
+// duplicate owns them independently — deleting/editing either draft's images can
+// never affect the other.
 // ============================================
 export const duplicateDraft = async (req, res) => {
   try {
@@ -1678,8 +1793,36 @@ export const duplicateDraft = async (req, res) => {
     }
 
     const draftData = JSON.parse(JSON.stringify(source.draftData || {}));
+    const newId = new mongoose.Types.ObjectId();
+
+    if (Array.isArray(draftData.garments)) {
+      for (let i = 0; i < draftData.garments.length; i++) {
+        const g = draftData.garments[i];
+        for (const [field, folder] of Object.entries(DRAFT_IMAGE_CATEGORIES)) {
+          const imgs = Array.isArray(g?.[field]) ? g[field] : [];
+          const copies = [];
+          for (const img of imgs) {
+            if (!isPersistedImageRef(img)) continue;
+            const result = await r2Service.copyFile(img.key, `drafts/${newId}/garment_${i}/${folder}`);
+            // Skip images that fail to copy rather than let the duplicate share
+            // the original's key — independence is the safety property that matters here.
+            if (result.success) {
+              copies.push({ ...img, url: result.url, key: result.key });
+            }
+          }
+          g[field] = copies;
+        }
+      }
+    }
+
+    // Belt-and-suspenders: even though every image above was just freshly
+    // copied under drafts/{newId}/, re-verify ownership before saving —
+    // guarantees the duplicate can never persist a foreign-owned key even if
+    // some other bug slipped one past the copy loop above.
+    enforceDraftImageOwnership(draftData, newId.toString());
 
     const duplicate = await Order.create({
+      _id: newId,
       isDraftOrder: true,
       isActive: false,
       status: "draft",
@@ -1713,11 +1856,22 @@ export const duplicateDraft = async (req, res) => {
 // ============================================
 export const convertDraft = async (req, res) => {
   try {
-    const draft = await Order.findById(req.params.id);
+    // Atomic pre-flight: flip isDraftOrder true->false as a single conditional
+    // write BEFORE doing any of the heavy lifting below. If two convert requests
+    // race, only one can match this filter — the loser gets 409 immediately
+    // instead of both proceeding to create duplicate Garment/Payment records.
+    // {new:false} returns the document as it looked right before the flip, so we
+    // still have the full draftData snapshot to build the order from.
+    const draft = await Order.findOneAndUpdate(
+      { _id: req.params.id, isDraftOrder: true },
+      { $set: { isDraftOrder: false } },
+      { new: false }
+    );
     if (!draft) {
-      return res.status(404).json({ success: false, message: "Draft not found. It may have been deleted." });
-    }
-    if (!draft.isDraftOrder) {
+      const exists = await Order.exists({ _id: req.params.id });
+      if (!exists) {
+        return res.status(404).json({ success: false, message: "Draft not found. It may have been deleted." });
+      }
       return draftNotEditableResponse(res);
     }
 
@@ -1904,16 +2058,32 @@ export const convertDraft = async (req, res) => {
         const g = garments[i];
         if (i > 0) await new Promise((resolve) => setTimeout(resolve, 50));
 
-        const uploadedImages = { referenceImages: [], customerImages: [], customerClothImages: [] };
+        // Start from any images already persisted to R2 during the draft phase
+        // (uploaded via POST /drafts/:id/images) — these arrive here as plain
+        // {url,key} JSON, not files, so they were never in req.files/fileGroups.
+        // Without this, images uploaded while the draft was being edited would be
+        // silently discarded at conversion instead of carried onto the real Garment.
+        // Ownership-checked against THIS draft's own id (req.params.id, unchanged
+        // by the isDraftOrder flip above) — a foreign-owned key can never be
+        // carried onto the resulting Garment either.
+        const ownedRef = (img) => isPersistedImageRef(img) && belongsToDraft(img.key, req.params.id);
+        const uploadedImages = {
+          referenceImages: (Array.isArray(g.referenceImages) ? g.referenceImages : []).filter(ownedRef),
+          customerImages: (Array.isArray(g.customerImages) ? g.customerImages : []).filter(ownedRef),
+          customerClothImages: (Array.isArray(g.customerClothImages) ? g.customerClothImages : []).filter(ownedRef),
+        };
 
         if (fileGroups[i]?.referenceImages?.length > 0) {
-          uploadedImages.referenceImages = await r2Service.uploadMultiple(fileGroups[i].referenceImages, `orders/${order._id}/garment_${i}/reference`);
+          const fresh = await r2Service.uploadMultiple(fileGroups[i].referenceImages, `orders/${order._id}/garment_${i}/reference`);
+          uploadedImages.referenceImages = uploadedImages.referenceImages.concat(fresh);
         }
         if (fileGroups[i]?.customerImages?.length > 0) {
-          uploadedImages.customerImages = await r2Service.uploadMultiple(fileGroups[i].customerImages, `orders/${order._id}/garment_${i}/customer`);
+          const fresh = await r2Service.uploadMultiple(fileGroups[i].customerImages, `orders/${order._id}/garment_${i}/customer`);
+          uploadedImages.customerImages = uploadedImages.customerImages.concat(fresh);
         }
         if (fileGroups[i]?.customerClothImages?.length > 0) {
-          uploadedImages.customerClothImages = await r2Service.uploadMultiple(fileGroups[i].customerClothImages, `orders/${order._id}/garment_${i}/cloth`);
+          const fresh = await r2Service.uploadMultiple(fileGroups[i].customerClothImages, `orders/${order._id}/garment_${i}/cloth`);
+          uploadedImages.customerClothImages = uploadedImages.customerClothImages.concat(fresh);
         }
 
         const garmentWorkflow = parseWorkflowStagesInput(

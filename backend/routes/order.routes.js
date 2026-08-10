@@ -324,6 +324,7 @@ import {
   deleteDraft,
   duplicateDraft,
   convertDraft,
+  uploadDraftImages,
 
 } from "../controllers/order.controller.js";
 import { protect, authorize } from "../middleware/auth.middleware.js";
@@ -486,6 +487,7 @@ router.put("/drafts/:id", authorize("ADMIN", "STORE_KEEPER"), updateDraft);
 router.delete("/drafts/:id", authorize("ADMIN", "STORE_KEEPER"), deleteDraft);
 router.post("/drafts/:id/duplicate", authorize("ADMIN", "STORE_KEEPER"), duplicateDraft);
 router.post("/drafts/:id/convert", authorize("ADMIN", "STORE_KEEPER"), upload.any(), convertDraft);
+router.post("/drafts/:id/images", authorize("ADMIN", "STORE_KEEPER"), upload.array("images", 10), uploadDraftImages);
 
 // ============================================
 // 🔍 SINGLE ORDER ROUTES

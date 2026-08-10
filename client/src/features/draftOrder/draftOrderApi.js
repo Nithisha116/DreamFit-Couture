@@ -49,3 +49,12 @@ export const convertDraft = async (id, orderData) => {
   const response = await axiosInstance.post(`${DRAFT_BASE}/${id}/convert`, orderData);
   return response.data;
 };
+
+export const uploadDraftImages = async (draftId, garmentIndex, category, files) => {
+  const fd = new FormData();
+  fd.append("garmentIndex", garmentIndex);
+  fd.append("category", category);
+  files.forEach((file) => fd.append("images", file));
+  const response = await axiosInstance.post(`${DRAFT_BASE}/${draftId}/images`, fd);
+  return response.data;
+};

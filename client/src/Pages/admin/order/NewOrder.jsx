@@ -3966,6 +3966,7 @@ import {
   updateDraftOrder,
   fetchDraftById,
   convertDraftToOrder,
+  uploadDraftImage,
   clearCurrentDraft,
   DRAFT_LOCK_MESSAGE,
 } from "../../../features/draftOrder/draftOrderSlice";
@@ -4142,71 +4143,103 @@ export default function NewOrder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftIdParam]);
 
+  // Garment image arrays should only ever contain persisted {url,key} refs by
+  // the time they reach a save — but if an upload is still in-flight when a save
+  // fires (e.g. an unrelated field changed while an image was mid-upload), any
+  // raw File left in the array isn't JSON-serializable. Drop those defensively;
+  // the forced save that follows upload completion will pick them up.
+  const stripUnuploadedFiles = (garmentList) =>
+    garmentList.map((garment) => ({
+      ...garment,
+      referenceImages: (garment.referenceImages || []).filter((img) => !(img instanceof File)),
+      customerImages: (garment.customerImages || []).filter((img) => !(img instanceof File)),
+      customerClothImages: (garment.customerClothImages || []).filter((img) => !(img instanceof File)),
+    }));
+
+  // Builds the JSON snapshot sent to the draft endpoints. Accepts an optional
+  // garments override so callers that already have a fresher array in hand
+  // (e.g. right after adding a garment, before the setGarments re-render has
+  // flowed through to garmentsRef) don't have to wait a tick for it.
+  const buildDraftSnapshot = useCallback((overrideGarments) => {
+    const fd = formDataRef.current;
+    const g = overrideGarments || garmentsRef.current;
+    const p = paymentsRef.current;
+
+    const hasMeaningfulData = Boolean(
+      fd.customer || fd.deliveryDate || String(fd.specialNotes || "").trim() || g.length > 0
+    );
+    if (!hasMeaningfulData) return null;
+
+    return {
+      customer: fd.customer,
+      customerName: selectedCustomerDisplayRef.current,
+      deliveryDate: fd.deliveryDate,
+      specialNotes: fd.specialNotes,
+      advancePayment: fd.advancePayment,
+      garments: stripUnuploadedFiles(g),
+      payments: p,
+    };
+  }, []);
+
+  // Immediate (non-debounced) draft save. Returns the saved draft (with _id) on
+  // success, or null if there was nothing meaningful to save / saving is
+  // currently suppressed. Used both as the tail of the debounced autosave and,
+  // synchronously, right before/after a garment image upload so an image is
+  // never left sitting in R2 without draftData pointing at it for longer than
+  // necessary.
+  const saveDraftNow = useCallback(
+    async (overrideGarments) => {
+      if (draftAutosaveStoppedRef.current || draftHydratingRef.current) return null;
+
+      const draftData = buildDraftSnapshot(overrideGarments);
+      if (!draftData) return null;
+
+      if (currentDraftIdRef.current) {
+        try {
+          return await dispatch(updateDraftOrder({ id: currentDraftIdRef.current, draftData })).unwrap();
+        } catch (err) {
+          if (err?.alreadyConverted) {
+            draftAutosaveStoppedRef.current = true;
+            showToast.error(DRAFT_LOCK_MESSAGE);
+          } else {
+            // Transient failure (e.g. network blip) — one soft retry.
+            setTimeout(() => {
+              if (!draftAutosaveStoppedRef.current && currentDraftIdRef.current) {
+                dispatch(updateDraftOrder({ id: currentDraftIdRef.current, draftData }));
+              }
+            }, 5000);
+          }
+          throw err;
+        }
+      }
+
+      const draft = await dispatch(createDraftOrder(draftData)).unwrap();
+      currentDraftIdRef.current = draft._id;
+      // Reflect the new draft id in the URL (no remount) so a refresh/back
+      // navigation resumes the same draft instead of starting a blank form.
+      window.history.replaceState(null, "", `${basePath}/orders/new/${draft._id}`);
+      return draft;
+    },
+    [dispatch, basePath, buildDraftSnapshot]
+  );
+
   // Debounced autosave — created once so rapid edits are properly coalesced;
-  // it always reads the *current* form state via refs (never a stale closure).
+  // saveDraftNow always reads the *current* form state via refs (never a stale closure).
   const debouncedSaveDraft = useMemo(
     () =>
       debounce(() => {
-        if (draftAutosaveStoppedRef.current || draftHydratingRef.current) return;
-
-        const fd = formDataRef.current;
-        const g = garmentsRef.current;
-        const p = paymentsRef.current;
-
-        const hasMeaningfulData = Boolean(
-          fd.customer || fd.deliveryDate || String(fd.specialNotes || "").trim() || g.length > 0
-        );
-        if (!hasMeaningfulData) return;
-
-        // Raw File objects (pending image uploads) aren't JSON-serializable —
-        // strip them from the autosaved snapshot; everything else restores exactly.
-        const snapshotGarments = g.map((garment) => {
-          const copy = { ...garment };
-          delete copy.referenceImages;
-          delete copy.customerImages;
-          delete copy.customerClothImages;
-          return copy;
+        saveDraftNow().catch((err) => {
+          // First-ever save (no draft id yet) failing is already surfaced via
+          // autosaveStatus="error" from the slice; retry on the next edit —
+          // matches the retry behavior for the update-existing-draft path above.
+          if (!err?.alreadyConverted && !currentDraftIdRef.current) {
+            setTimeout(() => {
+              if (!draftAutosaveStoppedRef.current) debouncedSaveDraft();
+            }, 5000);
+          }
         });
-
-        const draftData = {
-          customer: fd.customer,
-          customerName: selectedCustomerDisplayRef.current,
-          deliveryDate: fd.deliveryDate,
-          specialNotes: fd.specialNotes,
-          advancePayment: fd.advancePayment,
-          garments: snapshotGarments,
-          payments: p,
-        };
-
-        if (currentDraftIdRef.current) {
-          dispatch(updateDraftOrder({ id: currentDraftIdRef.current, draftData }))
-            .unwrap()
-            .catch((err) => {
-              if (err?.alreadyConverted) {
-                draftAutosaveStoppedRef.current = true;
-                showToast.error(DRAFT_LOCK_MESSAGE);
-              } else {
-                // Transient failure (e.g. network blip) — one soft retry.
-                setTimeout(() => {
-                  if (!draftAutosaveStoppedRef.current && currentDraftIdRef.current) {
-                    dispatch(updateDraftOrder({ id: currentDraftIdRef.current, draftData }));
-                  }
-                }, 5000);
-              }
-            });
-        } else {
-          dispatch(createDraftOrder(draftData))
-            .unwrap()
-            .then((draft) => {
-              currentDraftIdRef.current = draft._id;
-              // Reflect the new draft id in the URL (no remount) so a refresh/back
-              // navigation resumes the same draft instead of starting a blank form.
-              window.history.replaceState(null, "", `${basePath}/orders/new/${draft._id}`);
-            })
-            .catch(() => {});
-        }
       }, 1600),
-    [dispatch, basePath]
+    [saveDraftNow]
   );
 
   useEffect(() => () => debouncedSaveDraft.cancel(), [debouncedSaveDraft]);
@@ -4769,110 +4802,115 @@ const handleSavePayment = useCallback((paymentData) => {
     }
   }, [garments]);
 
-  // 🎯 ADD THIS MISSING FUNCTION - handleSaveGarment
-  const handleSaveGarment = useCallback((garmentData) => {
-    console.log("%c📥📥📥 HANDLE SAVE GARMENT CALLED 📥📥📥", "background: blue; color: white; font-size: 14px");
-    console.log("Type:", (garmentData && typeof garmentData.entries === 'function') ? "FormData" : "Object");
-    
+  // Builds the final garments array with a given garment placed/replaced by tempId.
+  const placeGarmentInList = useCallback(
+    (list, obj, editing) => {
+      if (editing) {
+        const index = list.findIndex((g) => g.tempId === editing.tempId);
+        if (index === -1) return list;
+        const next = [...list];
+        next[index] = obj;
+        return next;
+      }
+      return [...list, obj];
+    },
+    []
+  );
+
+  // 🎯 handleSaveGarment — parses the GarmentForm submission, uploads any newly
+  // attached image files to R2 immediately (so they survive draft autosave +
+  // Resume instead of only being uploaded at final "Create Order"), and merges
+  // them with whichever previously-persisted images the user chose to keep.
+  const handleSaveGarment = useCallback(async (garmentData) => {
+    const editing = editingGarment;
+    let garmentObj;
+    const newFilesByField = { referenceImages: [], customerImages: [], customerClothImages: [] };
+
     if (garmentData && typeof garmentData.entries === 'function' && garmentData.append) {
-      // Convert FormData to object
-      const garmentObj = {
-        tempId: editingGarment?.tempId || Date.now() + Math.random(),
+      garmentObj = {
+        tempId: editing?.tempId || Date.now() + Math.random(),
         referenceImages: [],
         customerImages: [],
         customerClothImages: []
       };
-      
-      console.log("📦 Processing FormData entries:");
-      for (let [key, value] of garmentData.entries()) {
+      const existingKeyLists = {};
+
+      for (const [key, value] of garmentData.entries()) {
         if (value instanceof File) {
-          console.log(`  📸 ${key}: File - ${value.name} (${value.type}, ${value.size} bytes)`);
-          
-          if (key === 'referenceImages') {
-            garmentObj.referenceImages.push(value);
-          } else if (key === 'customerImages') {
-            garmentObj.customerImages.push(value);
-          } else if (key === 'customerClothImages') {
-            garmentObj.customerClothImages.push(value);
-          }
+          if (newFilesByField[key]) newFilesByField[key].push(value);
+        } else if (key === 'existingReferenceImages' || key === 'existingCustomerImages' || key === 'existingClothImages') {
+          const field = { existingReferenceImages: 'referenceImages', existingCustomerImages: 'customerImages', existingClothImages: 'customerClothImages' }[key];
+          try { existingKeyLists[field] = JSON.parse(value); } catch { existingKeyLists[field] = []; }
+        } else if (key === 'measurements' || key === 'priceRange' || key === 'workflowStages' || key === 'stageKeys') {
+          try { garmentObj[key] = JSON.parse(value); } catch { garmentObj[key] = value; }
+        } else if (key === 'finalizedPrice') {
+          garmentObj[key] = value === "" || value === "null" || value === "undefined" ? null : Number(value);
         } else {
-          // Truncate long strings for display
-          const displayValue = value && value.length > 50 ? value.substring(0, 50) + '...' : value;
-          console.log(`  📝 ${key}: ${displayValue}`);
-          
-          if (key === 'measurements' || key === 'priceRange' || key === 'workflowStages' || key === 'stageKeys') {
-            try {
-              garmentObj[key] = JSON.parse(value);
-            } catch (e) {
-              garmentObj[key] = value;
-            }
-          } else if (key === 'finalizedPrice') {
-            garmentObj[key] = value === "" || value === "null" || value === "undefined" ? null : Number(value);
-          } else {
-            garmentObj[key] = value;
-          }
+          garmentObj[key] = value;
         }
       }
-      
-      // Verify images were captured
-      console.log("✅ Garment object created:", {
-        name: garmentObj.name,
-        category: garmentObj.category,
-        item: garmentObj.item,
-        referenceImages: garmentObj.referenceImages?.length || 0,
-        customerImages: garmentObj.customerImages?.length || 0,
-        customerClothImages: garmentObj.customerClothImages?.length || 0
-      });
-      
-      if (editingGarment) {
-        // Update existing garment
-        console.log("✏️ Updating existing garment, tempId:", editingGarment.tempId);
-        const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
-        console.log("Found at index:", index);
-        
-        if (index !== -1) {
-          const newGarments = [...garments];
-          newGarments[index] = garmentObj;
-          setGarments(newGarments);
-          showToast.success("Garment updated");
-          console.log("🔄 Updated garment at index:", index);
-          console.log("New garments array:", newGarments);
-        }
-      } else {
-        // Add new garment
-        console.log("➕ Adding new garment");
-        setGarments(prev => {
-          const updated = [...prev, garmentObj];
-          console.log("New garments array:", updated);
-          return updated;
-        });
-        showToast.success("Garment added");
-        console.log("➕ Added new garment, total garments:", garments.length + 1);
-      }
+
+      // Re-attach whichever previously-persisted images ({url,key} refs) the
+      // user kept — GarmentForm only sends back the surviving key list, not
+      // the full objects, so we look them up on the pre-edit garment.
+      const priorImages = editing || {};
+      const retainPersisted = (priorArr, keepList) => {
+        if (!keepList) return [];
+        const keepSet = new Set(keepList);
+        return (priorArr || []).filter((img) => img && (keepSet.has(img.key) || keepSet.has(img.url)));
+      };
+      garmentObj.referenceImages = retainPersisted(priorImages.referenceImages, existingKeyLists.referenceImages);
+      garmentObj.customerImages = retainPersisted(priorImages.customerImages, existingKeyLists.customerImages);
+      garmentObj.customerClothImages = retainPersisted(priorImages.customerClothImages, existingKeyLists.customerClothImages);
     } else {
-      // Handle regular object (no images)
-      console.log("📦 Received regular object:", garmentData);
-      
-      if (editingGarment) {
-        const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
-        if (index !== -1) {
-          const newGarments = [...garments];
-          newGarments[index] = { ...garmentData, tempId: editingGarment.tempId };
-          setGarments(newGarments);
-          showToast.success("Garment updated");
+      garmentObj = editing
+        ? { ...garmentData, tempId: editing.tempId }
+        : { ...garmentData, tempId: Date.now() + Math.random() };
+    }
+
+    const hasNewFiles = Object.values(newFilesByField).some((arr) => arr.length > 0);
+
+    if (hasNewFiles) {
+      try {
+        // Ensure a draft row exists (creating one if this is the very first
+        // garment) so the upload has somewhere to be scoped/referenced from.
+        const provisionalGarments = placeGarmentInList(garmentsRef.current, garmentObj, editing);
+        const draft = await saveDraftNow(provisionalGarments);
+        const draftId = draft?._id || currentDraftIdRef.current;
+        if (!draftId) throw new Error("No draft available to attach images to");
+
+        const garmentIndex = provisionalGarments.findIndex((g) => g.tempId === garmentObj.tempId);
+        for (const field of Object.keys(newFilesByField)) {
+          const files = newFilesByField[field];
+          if (files.length === 0) continue;
+          const category = field; // matches backend DRAFT_IMAGE_CATEGORIES keys
+          const uploaded = await dispatch(
+            uploadDraftImage({ draftId, garmentIndex, category, files })
+          ).unwrap();
+          garmentObj[field] = [...(garmentObj[field] || []), ...uploaded];
         }
-      } else {
-        const newGarment = {
-          ...garmentData,
-          tempId: Date.now() + Math.random()
-        };
-        setGarments([...garments, newGarment]);
-        showToast.success("Garment added");
+      } catch (err) {
+        // Couldn't persist to R2 right now (offline, draft already converted, etc.)
+        // — fall back to the pre-fix behavior: keep the raw Files in local state
+        // and let final "Create Order" upload them, same as before this change.
+        for (const field of Object.keys(newFilesByField)) {
+          garmentObj[field] = [...(garmentObj[field] || []), ...newFilesByField[field]];
+        }
+        if (!err?.alreadyConverted) {
+          showToast.error("Couldn't save images to the draft right now — they'll upload when you create the order.");
+        }
       }
     }
-    
+
+    const finalGarments = placeGarmentInList(garments, garmentObj, editing);
+    setGarments(finalGarments);
+    showToast.success(editing ? "Garment updated" : "Garment added");
     setShowGarmentModal(false);
-  }, [garments, editingGarment]);
+
+    // Persist the (now-uploaded) image refs into draftData right away rather
+    // than waiting for the next debounced autosave tick.
+    saveDraftNow(finalGarments).catch(() => {});
+  }, [garments, editingGarment, placeGarmentInList, saveDraftNow, dispatch]);
 
   // 🖼️ IMAGE PREVIEW HANDLERS
   const handleViewImages = useCallback((images, type) => {

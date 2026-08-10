@@ -1,5 +1,5 @@
 // backend/services/r2.service.js
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 
@@ -126,6 +126,34 @@ class R2Service {
     } catch (error) {
       console.error('❌ R2 multiple upload error:', error.message);
       throw error; // Propagate error to controller
+    }
+  }
+
+  /**
+   * ✅ Copy an existing object to a new key (used when duplicating a draft so the
+   * copy owns an independent R2 object — deleting/replacing one must never affect the other)
+   */
+  async copyFile(sourceKey, destFolder = 'misc') {
+    if (!sourceKey) return { success: false, error: "No source key provided" };
+    try {
+      const ext = sourceKey.split('.').pop();
+      const destKey = this.generateFileName(`copy.${ext}`, destFolder);
+
+      console.log(`\n📋 [COPY] ${sourceKey} -> ${destKey}`);
+
+      const command = new CopyObjectCommand({
+        Bucket: this.bucket,
+        CopySource: `${this.bucket}/${sourceKey.split('/').map(encodeURIComponent).join('/')}`,
+        Key: destKey,
+      });
+
+      await this.client.send(command);
+
+      console.log("✅ Copy Successful");
+      return { success: true, key: destKey, url: `${this.publicUrl}/${destKey}` };
+    } catch (error) {
+      console.error('❌ R2 copy error:', error.message);
+      return { success: false, error: error.message };
     }
   }
 
