@@ -2144,7 +2144,7 @@ import r2Service from "../services/r2.service.js";
 import mongoose from "mongoose";
 import { createNotification } from './notification.controller.js';
 import { updateOrderPaymentSummary } from "./order.controller.js";
-import { parseWorkflowStagesInput } from "../utils/workflowStages.util.js";
+import { parseWorkflowStagesInput, resolveWorkflowForGarment, reanchorCurrentStage } from "../utils/workflowStages.util.js";
 import { assertOrderNotLocked } from "../utils/orderLock.js";
 import { getGarmentBreakdown } from "../utils/pricingEngine.js";
 import AuditLog from "../models/AuditLog.js";
@@ -2190,7 +2190,9 @@ export const createGarment = async (req, res) => {
       additionalCharges,
       discount,
       discountType,
-      quantity
+      quantity,
+      workflowStages: workflowStagesRaw,
+      stageKeys: stageKeysRaw,
     } = req.body;
 
     console.log("📝 Creating garment with data:", {
@@ -2256,6 +2258,22 @@ export const createGarment = async (req, res) => {
       }
     }
 
+    // Parse workflow stages if provided — mirrors the bulk createOrder path
+    // (order.controller.js) so a garment added to an existing order persists
+    // its configured workflow the same way a garment created with a new
+    // order does.
+    let workflowStagesInput = workflowStagesRaw;
+    let stageKeysInput = stageKeysRaw;
+    if (typeof workflowStagesInput === "string") {
+      try { workflowStagesInput = JSON.parse(workflowStagesInput); } catch { /* keep as-is */ }
+    }
+    if (typeof stageKeysInput === "string") {
+      try { stageKeysInput = JSON.parse(stageKeysInput); } catch { /* keep as-is */ }
+    }
+    const garmentWorkflow = parseWorkflowStagesInput(
+      Array.isArray(stageKeysInput) && stageKeysInput.length ? stageKeysInput : workflowStagesInput,
+    );
+
     // Get the user ID - try multiple sources
     const userId = createdBy || req.body.createdBy || req.user?.id || req.user?._id;
 
@@ -2310,6 +2328,8 @@ export const createGarment = async (req, res) => {
       discount: discount ? Number(discount) : 0,
       discountType: discountType || "none",
       quantity: quantity ? Math.max(1, Number(quantity)) : 1,
+      stageKeys: garmentWorkflow.stageKeys,
+      workflowStages: garmentWorkflow.workflowStages,
     });
 
     // Write the immutable price breakdown snapshot based on the engine
@@ -2351,6 +2371,15 @@ export const createGarment = async (req, res) => {
     const garmentPrefix = garment.name?.substring(0, 4).toUpperCase() || 'WRK';
     const workId = `${garmentPrefix}-${day}${month}${year}-${sequential}`;
 
+    // Resolve the workflow to stamp onto the new Work doc — garment-level
+    // wins (what we just persisted above), falling back to the parent
+    // order's workflow, exactly like createWorksFromGarments does for the
+    // bulk order-creation path (order.controller.js).
+    const garmentWorkflowResolved = resolveWorkflowForGarment(garment, order);
+    const workStageKeys = garmentWorkflowResolved.stageKeys;
+    const workWorkflowStages = garmentWorkflowResolved.workflowStages;
+    const activeStage = workStageKeys[0] || order.currentStage || "cutting";
+
     // Create work (OPEN POOL)
     const workData = {
       workId,
@@ -2359,6 +2388,9 @@ export const createGarment = async (req, res) => {
       status: "pending",
       cuttingMaster: null,
       createdBy: userId,
+      currentStage: activeStage,
+      workflowStages: workWorkflowStages,
+      stageKeys: workStageKeys,
       estimatedDelivery: estimatedDelivery || new Date(Date.now() + 7*24*60*60*1000)
     };
 
@@ -2756,11 +2788,11 @@ if (hasCustUpdate) {
     if (workflowUpdateRequested && parsedWorkflow?.stageKeys?.length && garment.workId) {
       const work = await Work.findById(garment.workId);
       if (work) {
+        const oldStageKeys = Array.isArray(work.stageKeys) ? [...work.stageKeys] : [];
+        const oldCurrentStage = work.currentStage;
         work.stageKeys = parsedWorkflow.stageKeys;
         work.workflowStages = parsedWorkflow.workflowStages;
-        if (!parsedWorkflow.stageKeys.includes(work.currentStage)) {
-          work.currentStage = parsedWorkflow.stageKeys[0];
-        }
+        work.currentStage = reanchorCurrentStage(oldStageKeys, oldCurrentStage, parsedWorkflow.stageKeys);
         await work.save();
       }
     }
