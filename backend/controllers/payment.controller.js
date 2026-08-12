@@ -41,22 +41,11 @@ const createIncomeFromPayment = async (payment, order, userId, session = null) =
       }
       : null;
 
-    // Guard: skip if transaction already recorded for this payment
+    // Guard: skip if transaction already recorded for this payment.
+    // Keyed only on the payment's own identity — never on amount/order/method,
+    // since two separate legitimate payments can share the same amount.
     const existing = await Transaction.findOne({ 'metadata.paymentId': payment._id }).session(session);
     if (existing) return existing;
-
-    // Secondary duplicate guard (same order + category + amount + method)
-    if (payment.order) {
-      const dup = await Transaction.findOne({
-        order: payment.order,
-        type: 'income',
-        category,
-        amount: payment.amount,
-        paymentMethod: payment.method,
-        status: 'completed',
-      }).session(session);
-      if (dup) return dup;
-    }
 
     const transaction = await Transaction.create([{
       type: 'income',

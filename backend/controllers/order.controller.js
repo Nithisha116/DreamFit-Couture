@@ -133,9 +133,14 @@ const createIncomeFromPayment = async (payment, order, creatorId) => {
       transactionDate: payment.paymentDate || new Date(),
       referenceNumber: payment.referenceNumber || '',
       createdBy: creatorId,
-      status: 'completed'
+      status: 'completed',
+      metadata: {
+        paymentId: payment._id,
+        paymentType: payment.type,
+        paymentMethod: payment.method,
+      },
     });
-    
+
     console.log(`✅ Income created: ₹${payment.amount} (${category}) - ${accountType}`);
     return incomeTransaction;
   } catch (error) {

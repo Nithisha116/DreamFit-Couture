@@ -236,8 +236,22 @@ const transactionSchema = new mongoose.Schema({
     type: String, // stores employeeId string (tailorId, cuttingMasterId, etc.)
   },
 
-}, { 
-  timestamps: true 
+  // ── Stable link back to the Payment that produced this income row ───────
+  // Without this being a real schema path, Mongoose's default strict mode
+  // silently drops any `metadata` passed to create()/findOneAndUpdate(), so
+  // payment.controller.js's paymentId-based lookups never matched anything.
+  metadata: {
+    paymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Payment',
+      index: true,
+    },
+    paymentType: String,
+    paymentMethod: String,
+  },
+
+}, {
+  timestamps: true
 });
 
 // Virtual field for display category
