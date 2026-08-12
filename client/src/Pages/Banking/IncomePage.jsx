@@ -241,8 +241,16 @@ export default function IncomePage() {
 
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
-    // Implement search logic if needed
   };
+
+  // Debounce the customer search so it updates as the user types without
+  // firing a request on every keystroke.
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      dispatch(setFilters({ search: searchQuery.trim(), page: 1 }));
+    }, 400);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, dispatch]);
 
   const handlePageChange = (newPage) => {
     dispatch(setFilters({ page: newPage }));
