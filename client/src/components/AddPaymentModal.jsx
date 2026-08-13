@@ -226,7 +226,11 @@ export default function AddPaymentModal({
       order: orderId,
       customer: customerId,
       amount: parsedAmount,
-      type: derivedType,
+      // BUG FIX: When editing an existing payment, preserve the existing payment type
+      // (loaded from initialData into formData.type). Only auto-derive type for NEW payments.
+      // Previously, derivedType was always used, which caused changing Cash → UPI
+      // to also change Advance → Full Payment / Final Settlement.
+      type: initialData ? formData.type : derivedType,
       method: formData.method,
       referenceNumber: formData.referenceNumber?.trim() || '',
       paymentDate: formData.paymentDate,
@@ -333,17 +337,22 @@ export default function AddPaymentModal({
           {/* Payment Type Display */}
           <div>
             <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-              Payment Type (Auto-detected)
+              Payment Type {initialData ? '(Current)' : '(Auto-detected)'}
             </label>
             {allowedTypes.length === 0 ? (
               <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 text-emerald-800 font-bold text-sm">
                 Paid Completely ✅
               </div>
-            ) : (
-              <div className={`p-3 rounded-xl border ${derivedType === 'full' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-blue-50 border-blue-200 text-blue-700'} font-bold`}>
-                {derivedType === 'full' ? 'Full Payment / Final Settlement' : 'Advance / Partial Payment'}
-              </div>
-            )}
+            ) : (() => {
+              // When editing, show the actual existing type; when creating, show derivedType
+              const displayType = initialData ? formData.type : derivedType;
+              const isFull = displayType === 'full' || displayType === 'final-settlement';
+              return (
+                <div className={`p-3 rounded-xl border ${isFull ? 'bg-green-50 border-green-200 text-green-700' : 'bg-blue-50 border-blue-200 text-blue-700'} font-bold`}>
+                  {displayType === 'full' ? 'Full Payment / Final Settlement' : displayType === 'final-settlement' ? 'Final Settlement' : 'Advance / Partial Payment'}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Payment Method */}
