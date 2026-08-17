@@ -1493,14 +1493,16 @@ import {
   ChevronRight, Bookmark, ChevronDown, ChevronUp, Scissors,
   Menu, Ban, ShieldAlert, History
 } from "lucide-react";
-import { 
-  fetchCustomerById, 
-  updateCustomer, 
+import {
+  fetchCustomerById,
+  updateCustomer,
   deleteCustomer,
   fetchCustomerPayments,
-  fetchCustomerOrders,
-  fetchCustomerTemplates
+  fetchCustomerOrders
 } from "../../../features/customer/customerSlice";
+// Measurement profiles come from the same source the Measurement Profiles page
+// uses (GET /customer-size/customer/:id) so both screens always agree.
+import { fetchCustomerProfiles } from "../../../features/customerSize/customerSizeSlice";
 import showToast from "../../../utils/toast";
 import { exportPaymentsToExcel } from "../../../utils/exportHelpers";
 import MeasurementPreviewModal from "../../../components/MeasurementPreviewModal";
@@ -1513,17 +1515,23 @@ export default function CustomerDetails() {
   // 🚀 FIXED: Track first load to prevent "Not Found" flicker
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   
-  // State selectors with customerTemplates
-  const { currentCustomer, customerPayments, customerOrders, customerTemplates, loading } = useSelector((state) => {
-    console.log("🔍 Customer state:", state.customer);
+  // State selectors
+  const { currentCustomer, customerPayments, customerOrders, loading } = useSelector((state) => {
     return {
       currentCustomer: state.customer?.currentCustomer || null,
       customerPayments: state.customer?.customerPayments || [],
       customerOrders: state.customer?.customerOrders || [],
-      customerTemplates: state.customer?.customerTemplates || [],
       loading: state.customer?.loading || false
     };
   });
+
+  // Saved measurement profiles — read from the customerSize slice so this tab
+  // shows exactly what the Measurement Profiles page shows.
+  const measurementProfiles = useSelector((state) => state.customerSize?.profiles || []);
+  const profilesLoading = useSelector((state) => state.customerSize?.isLoading || false);
+  const profilesError = useSelector((state) =>
+    state.customerSize?.isError ? state.customerSize?.message || "Could not load measurement profiles." : null
+  );
   
   const { user } = useSelector((state) => state.auth);
 
@@ -1579,13 +1587,22 @@ export default function CustomerDetails() {
         dispatch(fetchCustomerById(id)),
         dispatch(fetchCustomerPayments(id)),
         dispatch(fetchCustomerOrders(id)),
-        dispatch(fetchCustomerTemplates(id))
+        dispatch(fetchCustomerProfiles(id))
       ]).finally(() => {
         // Mark as loaded after all requests complete
         setHasLoadedOnce(true);
       });
     }
   }, [id, dispatch]);
+
+  // Refresh profiles whenever the Measurements tab is opened, so profiles
+  // created or deleted on the Measurement Profiles page show up on return
+  // without a reload.
+  useEffect(() => {
+    if (id && activeTab === "measurements") {
+      dispatch(fetchCustomerProfiles(id));
+    }
+  }, [activeTab, id, dispatch]);
 
   // Load customer data into form
   useEffect(() => {
@@ -1645,16 +1662,34 @@ export default function CustomerDetails() {
   const orderEndIndex = orderStartIndex + itemsPerPage;
   const currentOrders = customerOrders?.slice(orderStartIndex, orderEndIndex) || [];
 
-  // Pagination for templates
-  const totalTemplatePages = Math.ceil((customerTemplates?.length || 0) / itemsPerPage);
+  // Pagination for measurement profiles
+  const totalTemplatePages = Math.ceil((measurementProfiles?.length || 0) / itemsPerPage);
   const templateStartIndex = (templatesPage - 1) * itemsPerPage;
   const templateEndIndex = templateStartIndex + itemsPerPage;
-  const currentTemplates = customerTemplates?.slice(templateStartIndex, templateEndIndex) || [];
+  const currentProfiles = measurementProfiles?.slice(templateStartIndex, templateEndIndex) || [];
+
+  // A size profile stores measurements as an array of
+  // { fieldName, fieldDisplayName, value, unit }. Flatten it to the
+  // { label: value } shape the cards and the preview modal expect.
+  const normalizeMeasurements = (profile) => {
+    const raw = profile?.measurements;
+    if (Array.isArray(raw)) {
+      return raw.reduce((acc, m) => {
+        if (!m) return acc;
+        const label = m.fieldDisplayName || m.fieldId?.displayName || m.fieldName || m.fieldId?.name;
+        if (!label || m.value === undefined || m.value === null || m.value === "") return acc;
+        acc[label] = m.unit ? `${m.value} ${m.unit}` : `${m.value}`;
+        return acc;
+      }, {});
+    }
+    // Older/alternate documents already store a plain object.
+    return raw || profile?.measurements_object || {};
+  };
 
   // Handler for preview measurements
-  const handlePreviewMeasurements = (template) => {
-    setPreviewMeasurements(template.measurements);
-    setPreviewTemplateName(template.name);
+  const handlePreviewMeasurements = (profile) => {
+    setPreviewMeasurements(normalizeMeasurements(profile));
+    setPreviewTemplateName(profile.profileName || profile.name || "Measurement Profile");
     setShowMeasurementPreview(true);
   };
 
@@ -2351,7 +2386,7 @@ export default function CustomerDetails() {
                     }`}
                   >
                     <Ruler size={16} className="inline mr-1 sm:mr-2" />
-                    Measurements ({customerTemplates?.length || 0})
+                    Measurements ({measurementProfiles?.length || 0})
                   </button>
                   <button
                     onClick={() => setActiveTab("history")}
@@ -2783,7 +2818,35 @@ export default function CustomerDetails() {
                 {/* MEASUREMENTS TAB */}
                 {activeTab === "measurements" && (
                   <div>
-                    {customerTemplates?.length === 0 ? (
+                    {profilesLoading && measurementProfiles?.length === 0 ? (
+                      /* Loading skeleton */
+                      <div className="space-y-3 sm:space-y-4" aria-busy="true" aria-label="Loading measurement profiles">
+                        {[0, 1, 2].map((i) => (
+                          <div key={i} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                            <div className="p-3 sm:p-4 bg-slate-50 flex items-center gap-3">
+                              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-200 rounded-lg animate-pulse flex-shrink-0" />
+                              <div className="flex-1 space-y-2">
+                                <div className="h-3.5 bg-slate-200 rounded animate-pulse w-1/3" />
+                                <div className="h-2.5 bg-slate-100 rounded animate-pulse w-1/2" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : profilesError ? (
+                      /* Error state */
+                      <div className="text-center py-8 sm:py-12 bg-red-50 rounded-xl px-4 border border-red-100">
+                        <Ruler size={40} className="text-red-300 mx-auto mb-3 sm:mb-4" />
+                        <p className="text-base sm:text-lg font-black text-red-500">Couldn't load measurement profiles</p>
+                        <p className="text-xs sm:text-sm text-red-400 mt-2 break-words">{profilesError}</p>
+                        <button
+                          onClick={() => dispatch(fetchCustomerProfiles(id))}
+                          className="mt-4 bg-red-100 text-red-700 hover:bg-red-200 px-6 py-2.5 rounded-xl font-bold transition-colors"
+                        >
+                          Try Again
+                        </button>
+                      </div>
+                    ) : measurementProfiles?.length === 0 ? (
                       <div className="text-center py-8 sm:py-12 bg-slate-50 rounded-xl px-4">
                         <Ruler size={40} className="text-slate-300 mx-auto mb-3 sm:mb-4" />
                         <p className="text-base sm:text-lg font-black text-slate-400">No Saved Profiles</p>
@@ -2799,45 +2862,62 @@ export default function CustomerDetails() {
                       </div>
                     ) : (
                       <>
+                        <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
+                          <p className="text-xs sm:text-sm text-slate-500">
+                            {measurementProfiles.length} saved {measurementProfiles.length === 1 ? "profile" : "profiles"}
+                          </p>
+                          <button
+                            onClick={handleViewMeasurements}
+                            className="bg-purple-100 text-purple-700 hover:bg-purple-200 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-colors flex-shrink-0"
+                          >
+                            Manage Measurement Profiles
+                          </button>
+                        </div>
                         <div className="space-y-3 sm:space-y-4">
-                          {currentTemplates.map((template) => (
+                          {currentProfiles.map((profile) => (
                             <div
-                              key={template._id}
+                              key={profile._id}
                               className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-all"
                             >
-                              {/* Template Header */}
+                              {/* Profile Header */}
                               <div className="p-3 sm:p-4 bg-gradient-to-r from-purple-50 to-indigo-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
                                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-600 rounded-lg flex items-center justify-center text-white flex-shrink-0">
                                     <Bookmark size={14} />
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <h4 className="font-bold text-sm sm:text-base text-slate-800 truncate">{template.name}</h4>
+                                    <h4 className="font-bold text-sm sm:text-base text-slate-800 truncate">{profile.profileName}</h4>
                                     <div className="flex flex-wrap items-center gap-2 text-[10px] sm:text-xs text-slate-500">
-                                      <span>Used {template.usageCount || 1} times</span>
+                                      {profile.garmentType && (
+                                        <>
+                                          <span className="truncate">{profile.garmentType}</span>
+                                          <span className="hidden xs:inline">•</span>
+                                        </>
+                                      )}
+                                      <span>Used {profile.usageCount || 0} times</span>
                                       <span className="hidden xs:inline">•</span>
-                                      <span className="truncate">Last used: {formatDate(template.lastUsed || template.createdAt)}</span>
+                                      <span className="truncate">Updated: {formatDate(profile.lastUsed || profile.updatedAt || profile.createdAt)}</span>
                                     </div>
                                   </div>
                                 </div>
-                                
+
                                 <div className="flex items-center gap-2 self-end sm:self-center">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handlePreviewMeasurements(template);
+                                      handlePreviewMeasurements(profile);
                                     }}
                                     className="p-1.5 sm:p-2 bg-white hover:bg-purple-100 text-purple-600 rounded-lg transition-all shadow-sm"
                                     title="Preview Measurements"
                                   >
                                     <Eye size={14} />
                                   </button>
-                                  
+
                                   <button
-                                    onClick={() => toggleTemplate(template._id)}
+                                    onClick={() => toggleTemplate(profile._id)}
                                     className="p-1.5 sm:p-2 bg-white hover:bg-purple-100 text-purple-600 rounded-lg transition-all shadow-sm"
                                   >
-                                    {expandedTemplate === template._id ? (
+                                    {expandedTemplate === profile._id ? (
                                       <ChevronUp size={14} />
                                     ) : (
                                       <ChevronDown size={14} />
@@ -2846,34 +2926,36 @@ export default function CustomerDetails() {
                                 </div>
                               </div>
 
-                              {/* Template Details - Expandable */}
-                              {expandedTemplate === template._id && (
+                              {/* Profile Details - Expandable */}
+                              {expandedTemplate === profile._id && (
                                 <div className="p-3 sm:p-4 border-t border-slate-200 bg-slate-50">
                                   <h5 className="text-xs sm:text-sm font-bold text-slate-700 mb-2 sm:mb-3 flex items-center gap-2">
                                     <Scissors size={12} className="text-purple-600" />
                                     Measurements
                                   </h5>
                                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
-                                    {template.measurements && Object.entries(template.measurements).map(([key, value]) => (
-                                      <div key={key} className="bg-white p-2 sm:p-3 rounded-lg border border-slate-200">
-                                        <p className="text-[10px] text-slate-500 capitalize mb-1 break-words">{key}</p>
-                                        <p className="text-xs sm:text-sm font-bold text-purple-700 break-words">
-                                          {value} <span className="text-[8px] sm:text-xs font-normal text-slate-400">inches</span>
-                                        </p>
+                                    {Object.entries(normalizeMeasurements(profile)).map(([label, value]) => (
+                                      <div key={label} className="bg-white p-2 sm:p-3 rounded-lg border border-slate-200">
+                                        <p className="text-[10px] text-slate-500 capitalize mb-1 break-words">{label}</p>
+                                        <p className="text-xs sm:text-sm font-bold text-purple-700 break-words">{value}</p>
                                       </div>
                                     ))}
                                   </div>
-                                  
-                                  {template.notes && (
+
+                                  {Object.keys(normalizeMeasurements(profile)).length === 0 && (
+                                    <p className="text-xs text-slate-400 italic">No measurement values recorded on this profile.</p>
+                                  )}
+
+                                  {profile.notes && (
                                     <div className="mt-3 sm:mt-4 p-2 sm:p-3 bg-amber-50 rounded-lg">
                                       <p className="text-[10px] text-amber-600 font-bold mb-1">Notes</p>
-                                      <p className="text-xs sm:text-sm text-amber-800 italic break-words">"{template.notes}"</p>
+                                      <p className="text-xs sm:text-sm text-amber-800 italic break-words">"{profile.notes}"</p>
                                     </div>
                                   )}
 
-                                  {template.garmentReference && (
+                                  {profile.version > 1 && (
                                     <div className="mt-2 text-[10px] sm:text-xs text-purple-600 break-words">
-                                      <span className="font-medium">From garment:</span> {template.garmentReference}
+                                      <span className="font-medium">Version:</span> v{profile.version}
                                     </div>
                                   )}
                                 </div>
@@ -2882,11 +2964,11 @@ export default function CustomerDetails() {
                           ))}
                         </div>
 
-                        {/* Pagination for Templates - Responsive */}
+                        {/* Pagination for Profiles - Responsive */}
                         {totalTemplatePages > 1 && (
                           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-200">
                             <p className="text-[10px] sm:text-xs text-slate-500 order-2 sm:order-1">
-                              Showing {templateStartIndex + 1} to {Math.min(templateEndIndex, customerTemplates.length)} of {customerTemplates.length} templates
+                              Showing {templateStartIndex + 1} to {Math.min(templateEndIndex, measurementProfiles.length)} of {measurementProfiles.length} profiles
                             </p>
                             <div className="flex gap-2 order-1 sm:order-2">
                               <button
