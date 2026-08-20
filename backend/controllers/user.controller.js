@@ -8,6 +8,9 @@ import AariWorker from "../models/AariWorker.js";
 import EmbroideryWorker from "../models/EmbroideryWorker.js";
 import Helper from "../models/Helper.js";
 import { logDeletion } from "../utils/auditLogger.js";
+// protect() caches the authenticated identity for 30s. These mutations must
+// take effect immediately rather than waiting out the TTL.
+import { invalidateUserCache } from "../middleware/auth.middleware.js";
 
 // ========== PROFILE ROUTES (Any logged in user) ==========
 
@@ -225,6 +228,9 @@ export const updateUser = async (req, res) => {
       { new: true, runValidators: true }
     ).select("-password");
 
+    // Role or details may have changed — drop any cached identity for this id.
+    invalidateUserCache(id);
+
     res.status(200).json({
       message: "User updated successfully",
       user: updatedUser
@@ -271,6 +277,13 @@ export const deleteUser = async (req, res) => {
       await Helper.findByIdAndUpdate(user.helperId, { isActive: false });
     }
 
+    // Deactivation must revoke access now, not up to 30s later. The linked
+    // staff record carries its own _id, so clear that key as well.
+    invalidateUserCache(user._id);
+    const linkedId = user.storeKeeperId || user.cuttingMasterId || user.tailorId
+      || user.aariWorkerId || user.embroideryWorkerId || user.helperId;
+    if (linkedId) invalidateUserCache(linkedId);
+
     res.status(200).json({ 
       message: "User deactivated successfully",
       deactivatedUser: {
@@ -303,6 +316,9 @@ export const toggleUserStatus = async (req, res) => {
     // Toggle status
     user.isActive = !user.isActive;
     await user.save();
+
+    // Activation/deactivation takes effect on the very next request.
+    invalidateUserCache(user._id);
 
     res.status(200).json({ 
       message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`,
