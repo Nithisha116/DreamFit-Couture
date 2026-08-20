@@ -28,7 +28,13 @@ import { isWorkAssigned, checkOrderAssignment } from "../utils/orderAssignment.j
 const enrichOrdersWithAssignedStatus = async (orders) => {
   if (!orders || orders.length === 0) return [];
   const orderIds = orders.map(o => o._id);
-  const works = await Work.find({ order: { $in: orderIds } });
+  // isWorkAssigned() only inspects .status and .assignments[].workerId, so the
+  // rest of the Work document (the largest average document in the database at
+  // ~2.7 KB) never needs to leave MongoDB. Batched $in, as before — not N+1.
+  const works = await Work.find(
+    { order: { $in: orderIds } },
+    { order: 1, status: 1, 'assignments.workerId': 1 }
+  ).lean();
   
   const worksByOrder = {};
   works.forEach(w => {
@@ -783,15 +789,17 @@ export const getAllOrders = async (req, res) => {
     let query = { isActive: true };
 
     if (search) {
-      const customerIds = await Customer.find({
-        $or: [
-          { name: { $regex: search, $options: 'i' } },
-          { customerId: { $regex: search, $options: 'i' } },
-          { phone: { $regex: search, $options: 'i' } }
-        ]
-      }).distinct('_id');
-      
-      const garmentIds = await Garment.find({ name: { $regex: search, $options: 'i' } }).distinct('_id');
+      // Independent lookups — run concurrently rather than back to back.
+      const [customerIds, garmentIds] = await Promise.all([
+        Customer.find({
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { customerId: { $regex: search, $options: 'i' } },
+            { phone: { $regex: search, $options: 'i' } }
+          ]
+        }).distinct('_id'),
+        Garment.find({ name: { $regex: search, $options: 'i' } }).distinct('_id')
+      ]);
 
       query.$or = [
         { orderId: { $regex: search, $options: 'i' } },
@@ -840,14 +848,24 @@ export const getAllOrders = async (req, res) => {
       query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
 
-    const total = await Order.countDocuments(query);
-    const orders = await Order.find(query)
-      .populate('customer', 'name phone customerId')
-      .populate("garments")
-      .populate("createdBy", "name")
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+    // The count and the page fetch are independent — one wave, not two.
+    //
+    // populate("garments") previously pulled entire garment documents
+    // (measurements, pricing, workflow stages and all). The orders table only
+    // renders the garment count, name, itemName and the first available image,
+    // so only those fields are fetched. The Order document itself is NOT
+    // projected: other consumers read fields such as order.metadata, and
+    // narrowing the parent document is a separate, riskier change.
+    const [total, orders] = await Promise.all([
+      Order.countDocuments(query),
+      Order.find(query)
+        .populate('customer', 'name phone customerId')
+        .populate('garments', 'name itemName referenceImages customerImages customerClothImages')
+        .populate('createdBy', 'name')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(parseInt(limit))
+    ]);
 
     const enrichedOrders = await enrichOrdersWithAssignedStatus(orders);
     res.json({ success: true, orders: enrichedOrders, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } });
@@ -1234,13 +1252,52 @@ export const getDashboardData = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayOrders = await Order.find({ createdAt: { $gte: today }, isActive: true }).populate('customer', 'name');
-    const pendingDeliveries = await Order.find({ deliveryDate: { $lt: new Date() }, status: { $nin: ['delivered', 'cancelled'] }, isActive: true }).populate('customer', 'name phone');
-    const readyForDelivery = await Order.find({ status: 'ready-to-deliver', isActive: true }).populate('customer', 'name phone');
-    const recentOrders = await Order.find({ isActive: true }).populate('customer', 'name').sort({ createdAt: -1 }).limit(10);
-    const todayPayments = await Payment.find({ paymentDate: { $gte: today }, isDeleted: false });
-    const todayCollection = todayPayments.reduce((sum, p) => sum + p.amount, 0);
-    const todayIncome = await Transaction.find({ transactionDate: { $gte: today }, type: 'income', status: 'completed' });
+    // ------------------------------------------------------------------
+    // These six reads are mutually independent, so they run concurrently
+    // instead of as six sequential awaits.
+    //
+    // The payment and transaction reads previously loaded every matching
+    // document purely to sum them in JavaScript — neither array appears in
+    // the response, only the derived totals. They are now $group
+    // aggregations that return the totals themselves, so the documents never
+    // cross the wire.
+    //
+    // NOTE: the 'ready-to-deliver' status value below is preserved exactly as
+    // it was. It does not match the schema enum ('ready-to-delivery') and so
+    // returns nothing — see the accompanying report. Changing it here would
+    // alter the response, which is out of scope for a performance change.
+    // ------------------------------------------------------------------
+    const [
+      todayOrders,
+      pendingDeliveries,
+      readyForDelivery,
+      recentOrders,
+      paymentAgg,
+      incomeAgg
+    ] = await Promise.all([
+      Order.find({ createdAt: { $gte: today }, isActive: true }).populate('customer', 'name'),
+      Order.find({ deliveryDate: { $lt: new Date() }, status: { $nin: ['delivered', 'cancelled'] }, isActive: true }).populate('customer', 'name phone'),
+      Order.find({ status: 'ready-to-deliver', isActive: true }).populate('customer', 'name phone'),
+      Order.find({ isActive: true }).populate('customer', 'name').sort({ createdAt: -1 }).limit(10),
+      Payment.aggregate([
+        { $match: { paymentDate: { $gte: today }, isDeleted: false } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]),
+      Transaction.aggregate([
+        { $match: { transactionDate: { $gte: today }, type: 'income', status: 'completed' } },
+        { $group: { _id: '$accountType', total: { $sum: '$amount' } } }
+      ])
+    ]);
+
+    const todayCollection = paymentAgg[0]?.total || 0;
+
+    // Summing every bucket reproduces the previous "sum of all matching
+    // transactions" exactly, including any accountType beyond the two named.
+    const incomeByAccount = incomeAgg.reduce((acc, row) => {
+      acc[row._id] = row.total;
+      return acc;
+    }, {});
+    const totalIncomeToday = incomeAgg.reduce((sum, row) => sum + row.total, 0);
 
     res.json({
       success: true,
@@ -1250,10 +1307,10 @@ export const getDashboardData = async (req, res) => {
         readyForDelivery: { count: readyForDelivery.length, orders: readyForDelivery },
         recentOrders,
         todayCollection,
-        totalIncomeToday: todayIncome.reduce((sum, t) => sum + t.amount, 0),
+        totalIncomeToday,
         incomeBreakdown: {
-          handCash: todayIncome.filter(t => t.accountType === 'hand-cash').reduce((sum, t) => sum + t.amount, 0),
-          bank: todayIncome.filter(t => t.accountType === 'bank').reduce((sum, t) => sum + t.amount, 0)
+          handCash: incomeByAccount['hand-cash'] || 0,
+          bank: incomeByAccount['bank'] || 0
         }
       }
     });
