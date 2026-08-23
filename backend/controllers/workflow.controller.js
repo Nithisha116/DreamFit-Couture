@@ -195,20 +195,32 @@ export function buildStagesFromWork(work, stageKeys) {
 // @access  Private
 export const getWorkflowJobs = async (req, res) => {
   try {
+    // Perf/memory fix (DF-001 / Exit 134): this endpoint previously fetched every
+    // field of every active Work document — including scanLogs[] and history[],
+    // which grow unboundedly over a work item's life and are never read below —
+    // plus entire Order and Garment documents, all as fully hydrated Mongoose
+    // documents. The .select()s below list exactly the fields this function and
+    // its helpers (resolveOrderedStageKeys, buildStagesFromWork) read; .lean()
+    // returns plain objects instead of Mongoose documents. Neither changes what
+    // is computed or returned — the API response is unchanged.
     const works = await Work.find({ isActive: true })
+      .select('workId order garment estimatedDelivery status stageKeys workflowStages currentStage overallStatus workflowProgress assignments cuttingNotes tailorNotes')
       .populate({
         path: 'order',
+        select: 'orderId customer deliveryDate stageKeys workflowStages',
         populate: { path: 'customer', select: 'name' },
       })
       .populate({
         path: 'garment',
+        select: 'name garmentId category categoryName item itemName measurementTemplate measurementSource measurements additionalInfo priority stageKeys workflowStages',
         populate: [
           { path: 'category',            select: 'name categoryName' },
           { path: 'item',                select: 'name itemName'     },
           { path: 'measurementTemplate', select: 'name'              },
         ],
       })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     const jobs = works.map(work => {
       const garment    = work.garment;
