@@ -116,6 +116,11 @@ export const getJobByQrCode = async (req, res) => {
 export const processScanByQrCode = async (req, res) => {
   try {
     const { qrCode } = req.params;
+    // Which stage the scanner believed it was completing, taken from the
+    // job data the page was rendered with. Optional: an older cached page
+    // sends nothing, and still gets the stale-read and completed-pipeline
+    // protection below.
+    const { expectedStage } = req.body || {};
 
     const query = {
       $or: [
@@ -123,7 +128,7 @@ export const processScanByQrCode = async (req, res) => {
         { workId: qrCode }
       ]
     };
-    
+
     if (mongoose.isValidObjectId(qrCode)) {
       query.$or.push({ _id: qrCode });
     }
@@ -132,6 +137,17 @@ export const processScanByQrCode = async (req, res) => {
 
     if (!work) {
       return res.status(404).json({ success: false, message: 'Job not found for this QR code.' });
+    }
+
+    // The whole pipeline is already finished. Without this, every further
+    // scan re-completes the final stage and appends another scanLog/history
+    // entry forever.
+    if (work.overallStatus === 'completed') {
+      return res.status(409).json({
+        success: false,
+        message: 'This job is already complete.',
+        code: 'ALREADY_COMPLETED',
+      });
     }
 
     const stageKeys = resolveOrderedStageKeys(work);
@@ -149,6 +165,22 @@ export const processScanByQrCode = async (req, res) => {
     const activeIndex = stageKeys.indexOf(activeKey);
     if (activeIndex < 0) {
       return res.status(400).json({ success: false, message: `Active stage "${activeKey}" not in pipeline` });
+    }
+
+    // One QR serves every stage of a job, so a replayed scan and a genuine
+    // next-stage scan are otherwise identical requests. The client tells us
+    // which stage it was looking at; if the job has already moved past it,
+    // this is a replay and must not advance anything.
+    if (expectedStage) {
+      const expectedKey = normalizeStageKey(expectedStage);
+      if (expectedKey !== activeKey) {
+        return res.status(409).json({
+          success: false,
+          message: `This stage has already been completed. ${stageLabel(activeKey)} is now active.`,
+          code: 'STAGE_ALREADY_COMPLETED',
+          currentStage: activeKey,
+        });
+      }
     }
 
     const now = new Date();
@@ -199,14 +231,31 @@ export const processScanByQrCode = async (req, res) => {
       actorName: completedWorkerName,
     };
 
+    // Conditional on the stage we actually read. Two scans landing together
+    // both see the same currentStage; whichever writes first moves it on, and
+    // the loser matches zero documents instead of advancing a second stage.
+    // Normalised to null because Mongoose strips undefined from a filter,
+    // which would silently drop the condition. null also matches a missing
+    // field, which is the same state we read.
+    const observedCurrentStage = work.currentStage ?? null;
+
     const updatedWork = await Work.findOneAndUpdate(
-      { _id: work._id },
+      { _id: work._id, currentStage: observedCurrentStage },
       updateDoc,
       { new: true, runValidators: false }
     );
 
+    // Nothing matched: another scan for this job committed first. Return
+    // before any order sync, notification or socket emit, so a losing request
+    // has no workflow side effect at all.
     if (!updatedWork) {
-      return res.status(500).json({ success: false, message: 'Database update failed' });
+      const fresh = await Work.findById(work._id).select('currentStage').lean();
+      return res.status(409).json({
+        success: false,
+        message: 'This stage has already been completed by another scan.',
+        code: 'STAGE_ALREADY_COMPLETED',
+        currentStage: fresh ? normalizeStageKey(fresh.currentStage) : null,
+      });
     }
 
     if (work.order?._id) {
