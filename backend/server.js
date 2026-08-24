@@ -621,7 +621,18 @@ app.use(helmet({
 app.use(compression());
 
 // Logging
-if (process.env.NODE_ENV === "development") {
+// LOAD_TEST_LOGGING lets a benchmark run pick its logging mode explicitly
+// without touching NODE_ENV (which also controls rate limiting).
+//   "true"  -> verbose timing format, for diagnostic benchmark runs
+//   "false" -> Morgan disabled entirely, for clean throughput runs
+//   unset   -> normal behaviour, unchanged
+const loadTestLogging = process.env.LOAD_TEST_LOGGING;
+if (loadTestLogging === "false") {
+  console.log("Morgan disabled (LOAD_TEST_LOGGING=false)");
+} else if (loadTestLogging === "true") {
+  app.use(morgan(":method :url :status :response-time ms :res[content-length]"));
+  console.log("Morgan benchmark logging enabled (LOAD_TEST_LOGGING=true)");
+} else if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 } else {
   app.use(morgan("combined"));

@@ -59,7 +59,12 @@ const QrWorkflowPage = () => {
     if (!job || job.lifecycleStatus === "completed") return;
     try {
       setUpdating(true);
-      const res = await axios.post(`${API_BASE_URL}/api/qr/${qrCode}/scan`);
+      // Tell the server which stage this page was showing. One QR covers every
+      // stage of the job, so without this a re-submitted scan is
+      // indistinguishable from a genuine scan of the next stage.
+      const res = await axios.post(`${API_BASE_URL}/api/qr/${qrCode}/scan`, {
+        expectedStage: job.currentStageKey,
+      });
       if (res.data.success) {
         setModalMode('success');
         showToast.success("Workflow updated successfully");
@@ -71,7 +76,16 @@ const QrWorkflowPage = () => {
       }
     } catch (err) {
       setModalMode(null);
-      showToast.error(err.response?.data?.message || "An error occurred.");
+      // 409 means this stage was already completed - by a double tap, a stale
+      // page, or someone else scanning the same card. That is not an error the
+      // worker caused, so say so plainly and resync rather than showing a
+      // generic failure.
+      if (err.response?.status === 409) {
+        showToast.info(err.response.data.message || "This stage is already complete.");
+        fetchJobDetails();
+      } else {
+        showToast.error(err.response?.data?.message || "An error occurred.");
+      }
     } finally {
       setUpdating(false);
     }

@@ -29,6 +29,9 @@ import User from "../models/User.js";
 import CuttingMaster from "../models/CuttingMaster.js";
 import StoreKeeper from "../models/StoreKeeper.js";
 import Tailor from "../models/Tailor.js";
+import Helper from "../models/Helper.js";
+import EmbroideryWorker from "../models/EmbroideryWorker.js";
+import AariWorker from "../models/AariWorker.js";
 import { attachAuditLogging } from "./auditMiddleware.js";
 
 // ---------------------------------------------------------------------------
@@ -68,17 +71,60 @@ export const invalidateUserCache = (id, role) => {
 
 export const clearUserCache = () => userCache.clear();
 
+// The collection that owns a given role's *operational* record.
+const MODEL_FOR_ROLE = {
+  CUTTING_MASTER: CuttingMaster,
+  STORE_KEEPER: StoreKeeper,
+  TAILOR: Tailor,
+  HELPER: Helper,
+  EMBROIDERY_WORKER: EmbroideryWorker,
+  AARI_WORKER: AariWorker,
+};
+
+// Store Keeper and Cutting Master keep their existing flow: loginUser matches
+// them in their own collections, so that is the cheapest place to look first.
+// Every other role - including all worker roles - authenticates through the
+// single User login, so User is tried first for them.
+const OWN_COLLECTION_FIRST = new Set([
+  'CUTTING_MASTER',
+  'STORE_KEEPER',
+]);
+
+// ---------------------------------------------------------------------------
+// Resolve the account behind a token.
+//
+// The subtlety: the token's `id` is whichever document loginUser matched, and
+// that is NOT determined by the role alone. loginUser checks the User
+// collection FIRST, then CuttingMaster, StoreKeeper, Tailor. So the same role
+// can arrive with an id from either place:
+//
+//   - Helper/EmbroideryWorker/AariWorker have no branch in loginUser at all.
+//     Their accounts are created as a User (role: "HELPER", hashed password)
+//     alongside a separate operational record, so their token id is a User._id.
+//   - TAILOR can go either way: a tailor with a User document logs in through
+//     the User branch and carries a User._id, while one without carries a
+//     Tailor._id.
+//
+// Resolving purely by role therefore 401s any account whose login collection
+// differs from the role's own collection. We try both, ordered so the common
+// case costs a single query, and return whichever holds the id. An id can only
+// exist in one collection, so the order affects cost, never correctness.
+// ---------------------------------------------------------------------------
 const loadUserByRole = async (id, role) => {
-  switch (role) {
-    case 'CUTTING_MASTER':
-      return await CuttingMaster.findById(id).select('-password').lean();
-    case 'STORE_KEEPER':
-      return await StoreKeeper.findById(id).select('-password').lean();
-    case 'TAILOR':
-      return await Tailor.findById(id).select('-password').lean();
-    default:
-      return await User.findById(id).select('-password').lean();
+  const roleModel = MODEL_FOR_ROLE[role] || null;
+
+  const candidates = OWN_COLLECTION_FIRST.has(role)
+    ? [roleModel, User]
+    : [User, roleModel];
+
+  for (const Model of candidates) {
+    if (!Model) continue;
+    const doc = await Model.findById(id).select('-password').lean();
+    if (doc) return doc;
   }
+
+  // Genuinely no such account - callers treat this as "not authorized".
+  return null;
 };
 
 // Helper to find user based on role and ID (cached, see note above)
