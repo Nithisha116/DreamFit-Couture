@@ -13,7 +13,9 @@ export const getPublicInvoiceByOrderId = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Order ID is required' });
     }
 
-    const order = await Order.findOne({ orderId: rawId, isActive: { $ne: false } })
+    // DF-004: gate public access on the unguessable publicToken, never the
+    // sequential, human-readable orderId.
+    const order = await Order.findOne({ publicToken: rawId, isActive: { $ne: false } })
       .populate('customer', 'name phone customerId email address addressLine1 addressLine2 city state pincode')
       .populate({
         path: 'garments',

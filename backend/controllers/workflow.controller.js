@@ -204,7 +204,7 @@ export const getWorkflowJobs = async (req, res) => {
     // returns plain objects instead of Mongoose documents. Neither changes what
     // is computed or returned — the API response is unchanged.
     const works = await Work.find({ isActive: true })
-      .select('workId order garment estimatedDelivery status stageKeys workflowStages currentStage overallStatus workflowProgress assignments cuttingNotes tailorNotes')
+      .select('workId qrCode order garment estimatedDelivery status stageKeys workflowStages currentStage overallStatus workflowProgress assignments cuttingNotes tailorNotes')
       .populate({
         path: 'order',
         select: 'orderId customer deliveryDate stageKeys workflowStages',
@@ -253,6 +253,7 @@ export const getWorkflowJobs = async (req, res) => {
         workflowTrackingId:  work.workId,
         workMongoId:         String(work._id),
         workCode:            work.workId,
+        qrCode:              work.qrCode || null,
         orderId:             work.order?.orderId            || '',
         orderMongoId:        String(work.order?._id || ''),
         customerName:        work.order?.customer?.name    || 'Customer',

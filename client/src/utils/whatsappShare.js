@@ -62,25 +62,36 @@ function getPublicAppBase() {
   ).replace(/\/$/, "");
 }
 
+/**
+ * DF-004: both public URLs are keyed by Order.publicToken (an unguessable
+ * crypto.randomUUID()), never by the sequential, human-readable orderId — the
+ * order ID stays visible in the message body, but must not double as the access
+ * credential for the link itself.
+ *
+ * Existing orders (created before this field existed) intentionally have no
+ * publicToken and no backfill is run automatically — see DF-004 remediation plan.
+ * For those, these helpers return null and the caller (buildOrderWhatsAppMessage)
+ * simply omits that link from the share message rather than sending a dead one.
+ */
 export function getPublicInvoiceUrl(order) {
-  const businessOrderId = order?.orderId;
-  if (!businessOrderId) return null;
+  const publicToken = order?.publicToken;
+  if (!publicToken) return null;
 
   const base = getPublicAppBase();
   if (!base) return null;
 
-  const path = `/invoice/view/${encodeURIComponent(String(businessOrderId).trim())}`;
+  const path = `/invoice/view/${encodeURIComponent(String(publicToken).trim())}`;
   return `${base}${path}`;
 }
 
 export function getPublicOrderCardUrl(order) {
-  const businessOrderId = order?.orderId;
-  if (!businessOrderId) return null;
+  const publicToken = order?.publicToken;
+  if (!publicToken) return null;
 
   const base = getPublicAppBase();
   if (!base) return null;
 
-  const path = `/order-card/view/${encodeURIComponent(String(businessOrderId).trim())}`;
+  const path = `/order-card/view/${encodeURIComponent(String(publicToken).trim())}`;
   return `${base}${path}`;
 }
 

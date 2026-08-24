@@ -1,4 +1,3 @@
-import mongoose from 'mongoose';
 import Work from '../models/Work.js';
 import Order from '../models/Order.js';
 import {
@@ -18,17 +17,9 @@ export const getJobByQrCode = async (req, res) => {
   try {
     const { qrCode } = req.params;
 
-    const query = {
-      $or: [
-        { qrCode: qrCode },
-        { workId: qrCode }
-      ]
-    };
-    if (mongoose.isValidObjectId(qrCode)) {
-      query.$or.push({ _id: qrCode });
-    }
-
-    const work = await Work.findOne(query)
+    // DF-004: match only the cryptographically random qrCode — never workId or _id,
+    // which are low-entropy/guessable and must not function as public credentials.
+    const work = await Work.findOne({ qrCode })
       .populate({
         path: 'order',
         select: 'orderId customer',
@@ -117,18 +108,8 @@ export const processScanByQrCode = async (req, res) => {
   try {
     const { qrCode } = req.params;
 
-    const query = {
-      $or: [
-        { qrCode: qrCode },
-        { workId: qrCode }
-      ]
-    };
-    
-    if (mongoose.isValidObjectId(qrCode)) {
-      query.$or.push({ _id: qrCode });
-    }
-
-    const work = await Work.findOne(query).populate('order').lean();
+    // DF-004: match only the cryptographically random qrCode — never workId or _id.
+    const work = await Work.findOne({ qrCode }).populate('order').lean();
 
     if (!work) {
       return res.status(404).json({ success: false, message: 'Job not found for this QR code.' });

@@ -83,8 +83,11 @@ export default function JobCardDocument({ job, work = null, showQr = true }) {
 
   const qrUrl = useMemo(() => {
     if (!job || !showQr) return "";
-    const qrToken = job.qrCode || job.workMongoId || job.workflowTrackingId;
-    const scanUrl = `${window.location.origin}/qr-workflow/${qrToken}`;
+    // DF-004: only the real, unguessable Work.qrCode may be encoded into a public
+    // scannable QR — never fall back to workMongoId/workflowTrackingId, which are
+    // low-entropy internal identifiers and must never function as access credentials.
+    if (!job.qrCode) return "";
+    const scanUrl = `${window.location.origin}/qr-workflow/${job.qrCode}`;
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(scanUrl)}`;
   }, [job, showQr]);
 
@@ -184,6 +187,13 @@ console.log("ALL", allImages);
                 className="w-[120px] h-[120px] rounded-lg border border-slate-200"
               />
               <p className="text-[9px] text-slate-500 mt-1 max-w-[120px]">Scan to advance</p>
+            </div>
+          )}
+          {showQr && !qrUrl && job && (
+            <div className="jc-qr text-center shrink-0 w-[120px]">
+              <div className="w-[120px] h-[120px] rounded-lg border border-dashed border-slate-300 flex items-center justify-center">
+                <p className="text-[9px] text-slate-400 px-2">QR unavailable</p>
+              </div>
             </div>
           )}
         </div>

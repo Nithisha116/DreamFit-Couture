@@ -167,11 +167,12 @@ export default function PublicInvoiceView() {
     return (
       <div className="min-h-screen bg-neutral-300 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
-          <p className="text-lg font-bold text-slate-800">Invoice unavailable</p>
-          <p className="text-sm text-slate-500 mt-2">{error}</p>
-          {orderId && (
-            <p className="text-xs text-slate-400 mt-4 font-mono">Order #{orderId}</p>
-          )}
+          <p className="text-lg font-bold text-slate-800">
+            {payload?.order ? "Invoice unavailable" : "Link no longer valid"}
+          </p>
+          <p className="text-sm text-slate-500 mt-2">
+            {payload?.order ? error : "Please contact DreamFit Couture for an updated link."}
+          </p>
           {payload?.order && (
             <button
               type="button"

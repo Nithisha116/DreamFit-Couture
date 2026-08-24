@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import crypto from "crypto";
 
 // ✅ PRICE SUMMARY SCHEMA
 const priceSummarySchema = new mongoose.Schema({
@@ -37,6 +38,10 @@ const orderSchema = new mongoose.Schema({
     required: function () { return !this.isDraftOrder; },
   },
   orderId: { type: String, unique: true },
+  // DF-004: unguessable public access token (crypto.randomUUID()), separate from the
+  // sequential, human-readable orderId. Gates the public order-card/invoice endpoints.
+  // Set only at creation (see pre-save hook) — never backfilled onto existing orders.
+  publicToken: { type: String, unique: true, sparse: true, index: true },
   orderDate: { type: Date, default: Date.now },
   deliveryDate: { type: Date, required: function () { return !this.isDraftOrder; } },
   status: {
@@ -131,6 +136,13 @@ orderSchema.pre('save', async function() {
       const date = new Date();
       const dateStr = `${String(date.getDate()).padStart(2, '0')}${String(date.getMonth() + 1).padStart(2, '0')}${date.getFullYear()}`;
       this.orderId = `${dateStr}-${Date.now().toString().slice(-4)}`;
+    }
+
+    // DF-004: assign a public token only at creation. Guarded by isNew so an existing
+    // order being saved later (status update, payment, etc.) is never written to —
+    // existing orders intentionally do not receive a publicToken via this hook.
+    if (this.isNew && !this.publicToken) {
+      this.publicToken = crypto.randomUUID();
     }
 
     // Backward compatibility self-healing for legacy fixed prices
