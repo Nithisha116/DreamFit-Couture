@@ -217,7 +217,7 @@ export const updateOrderPaymentSummary = async (orderId) => {
 // ============================================
 // ✅ HELPER: CREATE WORKS FROM EXISTING GARMENTS (UPDATED WITH DYNAMIC COPIED WORKFLOW)
 // ============================================
-const createWorksFromGarments = async (orderId, garmentIds, creatorId) => {
+const createWorksFromGarments = async (orderId, garmentIds, creatorId, session = null) => {
   console.log("\n🚀 ===== CREATE WORKS FROM GARMENTS =====");
   console.log(`📦 Order ID: ${orderId}`);
   console.log(`👕 Garment IDs:`, garmentIds);
@@ -229,7 +229,7 @@ const createWorksFromGarments = async (orderId, garmentIds, creatorId) => {
       return { success: true, works: [] };
     }
     
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId).session(session);
     if (!order) {
       console.log("❌ Order not found!");
       return { success: false, error: 'Order not found' };
@@ -241,7 +241,7 @@ const createWorksFromGarments = async (orderId, garmentIds, creatorId) => {
     const existingWorks = await Work.find({ 
       garment: { $in: garmentIds },
       isActive: true 
-    });
+    }).session(session);
     
     if (existingWorks.length > 0) {
       console.log(`⚠️ Works already exist for ${existingWorks.length} garments, skipping creation`);
@@ -249,13 +249,13 @@ const createWorksFromGarments = async (orderId, garmentIds, creatorId) => {
     }
     
     console.log("📦 Fetching garment documents...");
-    const garmentDocs = await Garment.find({ _id: { $in: garmentIds } }).lean();
+    const garmentDocs = await Garment.find({ _id: { $in: garmentIds } }).session(session).lean();
     console.log(`📦 Found ${garmentDocs.length} garments in database`);
     
     const createdWorks = [];
 
     for (const garment of garmentDocs) {
-      const workCount = await Work.countDocuments({ order: orderId, isActive: true });
+      const workCount = await Work.countDocuments({ order: orderId, isActive: true }).session(session);
       const sequence = workCount + 1;
       const seqStr = sequence < 100 ? String(sequence).padStart(2, "0") : String(sequence);
       const workId = `${order.orderId}.${seqStr}`;
@@ -271,7 +271,7 @@ const createWorksFromGarments = async (orderId, garmentIds, creatorId) => {
       const workflowStages = garmentWorkflow.workflowStages;
       const activeStage = stageKeys[0] || order.currentStage || "cutting";
 
-      const work = await Work.create({
+      const [work] = await Work.create([{
         workId,
         order: orderId,
         garment: garment._id,
@@ -282,11 +282,11 @@ const createWorksFromGarments = async (orderId, garmentIds, creatorId) => {
         workflowStages,
         stageKeys,
         estimatedDelivery: garment.estimatedDelivery || new Date(Date.now() + 7*24*60*60*1000)
-      });
+      }], { session });
       
       createdWorks.push(work);
       
-      await Garment.findByIdAndUpdate(garment._id, { workId: work._id });
+      await Garment.findByIdAndUpdate(garment._id, { workId: work._id }, { session });
       console.log(`✅ Created work: ${work._id} (${work.workId})`);
     }
     
@@ -603,7 +603,49 @@ export const createOrder = async (req, res) => {
     const allPayments = [...payments];
     const totalInitialPaid = allPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-    const order = await Order.create({
+    // ── Pre-transaction ───────────────────────────────────────────────
+    // The Order _id is generated here rather than by the insert, so image
+    // uploads can use the final key path (orders/<id>/...) while still
+    // running OUTSIDE the transaction. R2 writes cannot be rolled back and
+    // are slow, so keeping them out bounds how long the transaction holds
+    // locks. If the transaction later aborts the uploaded objects are
+    // orphaned in R2 - a storage cost, never a data-integrity problem.
+    const orderObjectId = new mongoose.Types.ObjectId();
+    const fileGroups = extractGarmentFiles(req);
+
+    const uploadedByIndex = [];
+    if (garments && garments.length > 0) {
+      for (let i = 0; i < garments.length; i++) {
+        const up = { referenceImages: [], customerImages: [], customerClothImages: [] };
+        if (fileGroups[i]?.referenceImages?.length > 0) {
+          up.referenceImages = await r2Service.uploadMultiple(fileGroups[i].referenceImages, `orders/${orderObjectId}/garment_${i}/reference`);
+        }
+        if (fileGroups[i]?.customerImages?.length > 0) {
+          up.customerImages = await r2Service.uploadMultiple(fileGroups[i].customerImages, `orders/${orderObjectId}/garment_${i}/customer`);
+        }
+        if (fileGroups[i]?.customerClothImages?.length > 0) {
+          up.customerClothImages = await r2Service.uploadMultiple(fileGroups[i].customerClothImages, `orders/${orderObjectId}/garment_${i}/cloth`);
+        }
+        uploadedByIndex.push(up);
+      }
+    }
+
+    // ── Transaction ───────────────────────────────────────────────────
+    // Order + Payments + Garments + Works now commit together or not at
+    // all. Previously these were four independent writes, so a failure
+    // partway left a committed order carrying payments but no garments.
+    const createdPayments = [];
+    const createdGarmentIds = [];
+    let order;
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        // Reset per attempt: withTransaction may retry this callback.
+        createdPayments.length = 0;
+        createdGarmentIds.length = 0;
+
+        const [createdOrder] = await Order.create([{
+      _id: orderObjectId,
       orderId,
       customer,
       deliveryDate,
@@ -638,13 +680,11 @@ export const createOrder = async (req, res) => {
         requestId: requestId || null,
         createdAt: new Date()
       }
-    });
-
-    const fileGroups = extractGarmentFiles(req);
-    const createdPayments = [];
+    }], { session });
+        order = createdOrder;
 
     if (allPayments.length > 0) {
-      const existingPayments = await Payment.find({ order: order._id });
+      const existingPayments = await Payment.find({ order: order._id }).session(session);
       if (existingPayments.length === 0) {
         let runningPaid = 0;
         for (const paymentData of allPayments) {
@@ -656,7 +696,7 @@ export const createOrder = async (req, res) => {
           
           await new Promise(resolve => setTimeout(resolve, 10));
           
-          const payment = await Payment.create({
+          const [payment] = await Payment.create([{
             order: order._id,
             customer: order.customer,
             amount: safeAmount,
@@ -670,33 +710,24 @@ export const createOrder = async (req, res) => {
             balanceMinAfterPayment: runningPaid >= totalMin ? 0 : Math.max(0, totalMin - runningPaid),
             balanceMaxAfterPayment: runningPaid >= totalMin ? 0 : Math.max(0, totalMax - runningPaid),
             metadata: { requestId: requestId }
-          });
+          }], { session });
           
-          await createIncomeFromPayment(payment, order, creatorId);
+          await createIncomeFromPayment(payment, order, creatorId, session);
           createdPayments.push(payment);
         }
       }
     }
 
-    const createdGarmentIds = [];
     if (garments && garments.length > 0) {
-      const existingGarments = await Garment.find({ order: order._id });
+      const existingGarments = await Garment.find({ order: order._id }).session(session);
       if (existingGarments.length === 0) {
         for (let i = 0; i < garments.length; i++) {
           const g = garments[i];
           if (i > 0) await new Promise(resolve => setTimeout(resolve, 50));
 
-          const uploadedImages = { referenceImages: [], customerImages: [], customerClothImages: [] };
-
-          if (fileGroups[i]?.referenceImages?.length > 0) {
-            uploadedImages.referenceImages = await r2Service.uploadMultiple(fileGroups[i].referenceImages, `orders/${order._id}/garment_${i}/reference`);
-          }
-          if (fileGroups[i]?.customerImages?.length > 0) {
-            uploadedImages.customerImages = await r2Service.uploadMultiple(fileGroups[i].customerImages, `orders/${order._id}/garment_${i}/customer`);
-          }
-          if (fileGroups[i]?.customerClothImages?.length > 0) {
-            uploadedImages.customerClothImages = await r2Service.uploadMultiple(fileGroups[i].customerClothImages, `orders/${order._id}/garment_${i}/cloth`);
-          }
+          // Already uploaded before the transaction opened.
+          const uploadedImages = uploadedByIndex[i]
+            || { referenceImages: [], customerImages: [], customerClothImages: [] };
 
           const garmentWorkflow = parseWorkflowStagesInput(
             g.stageKeys?.length ? g.stageKeys : g.workflowStages,
@@ -737,21 +768,28 @@ export const createOrder = async (req, res) => {
             metadata: { requestId: requestId, sequence: i + 1 }
           };
 
-          const garment = await Garment.create(garmentData);
+          const [garment] = await Garment.create([garmentData], { session });
           createdGarmentIds.push(garment._id);
         }
         
         order.garments = createdGarmentIds;
         // Automatically move to in-progress since job cards/works are generated
         order.status = "in-progress";
-        await order.save();
+        await order.save({ session });
         
         if (createdGarmentIds.length > 0) {
-          await createWorksFromGarments(order._id, createdGarmentIds, creatorId);
+          await createWorksFromGarments(order._id, createdGarmentIds, creatorId, session);
         }
       }
     }
+      });
+    } finally {
+      await session.endSession();
+    }
 
+    // Post-commit. Deliberately outside the transaction: WhatsApp is an
+    // external call, and syncOrderInvoice opens a transaction of its own
+    // (invoice.service.js), which cannot be nested inside this one.
     await order.populate('customer', 'name phone customerId');
 
     try {
@@ -771,11 +809,28 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Validation failed", errors });
     }
     
+    // Lost the race on the requestId unique index: a concurrent submit with
+    // the same requestId committed first. The pre-flight check above cannot
+    // catch this - both requests pass the find before either writes - so the
+    // index is what actually enforces it, and this returns the order that won
+    // rather than surfacing a database error to the user.
+    if (error.code === 11000 && error.keyPattern?.['metadata.requestId']) {
+      const winner = await Order.findOne({ 'metadata.requestId': req.body?.requestId });
+      if (winner) {
+        return res.status(200).json({
+          success: true,
+          message: "Order already exists",
+          order: winner,
+          duplicate: true
+        });
+      }
+    }
+
     if ((error.code === 11000 && error.keyPattern?.orderId) || (error.message && error.message.includes('Order ID already exists'))) {
       req._orderRetryCount = (req._orderRetryCount || 0) + 1;
       if (req._orderRetryCount <= 5) return createOrder(req, res);
     }
-    
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -2077,7 +2132,9 @@ export const convertDraft = async (req, res) => {
     draft.orderDate = orderDate || draft.orderDate || new Date();
     draft.isDraftOrder = false;
     draft.isActive = true;
-    draft.draftData = undefined;
+    // draftData is deliberately NOT cleared here. It is the only snapshot
+    // that can rebuild this order, and payments, uploads, garments and
+    // works all still have to run below. It is cleared once they succeed.
 
     await draft.save();
     const order = draft;
@@ -2199,6 +2256,10 @@ export const convertDraft = async (req, res) => {
       }
     }
 
+    // Conversion is complete. Only now is the draft snapshot safe to drop.
+    order.draftData = undefined;
+    await order.save();
+
     await order.populate("customer", "name phone customerId");
 
     try {
@@ -2213,6 +2274,19 @@ export const convertDraft = async (req, res) => {
 
     res.status(201).json({ success: true, message: "Order created successfully", order });
   } catch (error) {
+    // The isDraftOrder claim was committed before any of this ran, so an
+    // abort here would otherwise strand the record: not a draft any more,
+    // not a finished order either. Hand it back so it reappears in the
+    // drafts list with draftData still intact. Best effort - failing to
+    // restore must not mask the original error.
+    try {
+      if (req.params?.id) {
+        await Order.updateOne({ _id: req.params.id }, { $set: { isDraftOrder: true } });
+      }
+    } catch (restoreErr) {
+      console.error("Draft claim restore failed:", restoreErr.message);
+    }
+
     if (error.name === "CastError") {
       return res.status(400).json({ success: false, message: "Invalid draft ID" });
     }

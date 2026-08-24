@@ -367,8 +367,14 @@ garmentSchema.pre('save', async function() {
       
       const candidateId = `GRM${dateStr}-${timestamp}-${random}`;
 
-      // 🔍 Check collision in DB
-      const existing = await mongoose.model("Garment").findOne({ garmentId: candidateId });
+      // 🔍 Check collision in DB.
+      // Runs on the caller's transaction session when there is one. Without
+      // this the probe reads outside the transaction and cannot see garments
+      // created earlier in the same order, so two garments in one order could
+      // be handed the same id.
+      const existing = await mongoose.model("Garment")
+        .findOne({ garmentId: candidateId })
+        .session(this.$session() ?? null);
       if (!existing) {
         this.garmentId = candidateId;
         isUnique = true;
