@@ -112,6 +112,22 @@ stageKeys: {
     lastEditedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   cancelReason: { type: String, default: "" },
+
+  /**
+   * Duplicate-submit protection.
+   *
+   * The client already generates a requestId per order attempt and sends it,
+   * and createOrder already looks up 'metadata.requestId' and writes it back.
+   * That whole mechanism was inert because this path was never declared:
+   * under strict mode Mongoose dropped the field before every write, so the
+   * lookup could never match and a double-tap created a second real order.
+   *
+   * No default value on requestId - see the partial index below.
+   */
+  metadata: {
+    requestId: { type: String },
+    createdAt: { type: Date },
+  },
 }, { timestamps: true });
 
 // ============================================
@@ -381,6 +397,24 @@ orderSchema.index({ minPrice: 1 });
 orderSchema.index({ maxPrice: 1 });
 orderSchema.index({ balanceMax: 1 });
 orderSchema.index({ isDraftOrder: 1, updatedAt: -1 });
+
+// Makes the duplicate-submit guard safe under concurrency. A find-then-create
+// alone cannot hold: two simultaneous submits both pass the find, so the
+// database has to be the one enforcing uniqueness.
+//
+// PARTIAL, not sparse, and deliberately so: createOrder writes
+// `requestId: requestId || null`, and a sparse unique index still indexes
+// null - the second order submitted without a requestId would collide with
+// the first. Restricting the index to actual strings leaves those rows, and
+// all pre-existing orders, entirely out of it.
+orderSchema.index(
+  { 'metadata.requestId': 1 },
+  {
+    unique: true,
+    partialFilterExpression: { 'metadata.requestId': { $type: 'string' } },
+    name: 'metadata_requestId_unique',
+  }
+);
 
 // ============================================
 // ✅ EXPORT MODEL

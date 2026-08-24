@@ -1,0 +1,6 @@
+
+# Load test artifacts
+load-test-results/
+server.js.pre-loadtest.bak
+scripts/load-test/.token
+controllers/*.bak
