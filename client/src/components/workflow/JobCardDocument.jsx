@@ -350,6 +350,7 @@ console.log("ALL", allImages);
                     className="h-full w-full object-cover"
                     useProxy={true}
                     crossOrigin="anonymous"
+                    loading="eager"
                   />
                 </div>
               ))}

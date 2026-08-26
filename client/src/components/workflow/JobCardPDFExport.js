@@ -17,42 +17,88 @@ const CONTENT_W = A4_W_PT - MARGIN * 2;
 const CONTENT_H = A4_H_PT - MARGIN * 2;
 
 /**
+ * Wait for an <img> element to be fully decoded and paintable.
+ * Prefers the Image Decoding API (guarantees the frame is ready to
+ * paint, unlike the "load" event which can fire before decode
+ * completes) and falls back to onload/onerror for older browsers.
+ */
+function waitForImageReady(img) {
+  if (typeof img.decode === "function") {
+    return img.decode().catch(() => {});
+  }
+  if (img.complete) return Promise.resolve();
+  return new Promise((resolve) => {
+    img.onload = resolve;
+    img.onerror = resolve;
+  });
+}
+
+/**
  * Pre-convert all <img> elements to base64 data URIs to avoid
  * CORS tainting when html2canvas draws them onto the canvas.
+ *
+ * IMPORTANT: native `loading="lazy"` images that have never scrolled
+ * into view are marked "deferred" by the browser, and that deferred
+ * state persists even after this function reassigns `img.src` — the
+ * browser will silently withhold the repaint until the element nears
+ * the viewport. Since the job card is captured off-screen sections at
+ * a time, that produced an intermittent bug where reference images
+ * rendered as a blank/spinner frame depending on scroll position. Force
+ * every image to eager here so capture never depends on scroll state.
  */
 function preConvertImages(container) {
-  const images = container.querySelectorAll("img");
+  const images = Array.from(container.querySelectorAll("img"));
+  images.forEach((img) => {
+    img.loading = "eager";
+  });
 
   return Promise.all(
-    Array.from(images).map(
-      (img) =>
-        new Promise((resolve) => {
-          const src = img.src;
-          if (!src || src.startsWith("data:")) return resolve();
+    images.map(async (img) => {
+      const src = img.src;
+      if (!src || src.startsWith("data:")) {
+        await waitForImageReady(img);
+        return;
+      }
 
-          const probe = new Image();
-          probe.crossOrigin = "Anonymous";
-          probe.src = src + (src.includes("?") ? `&_cb=${Date.now()}` : `?_cb=${Date.now()}`);
+      await new Promise((resolve) => {
+        const probe = new Image();
+        probe.crossOrigin = "Anonymous";
+        probe.src = src + (src.includes("?") ? `&_cb=${Date.now()}` : `?_cb=${Date.now()}`);
 
-          probe.onload = () => {
-            try {
-              const c = document.createElement("canvas");
-              c.width = probe.width;
-              c.height = probe.height;
-              c.getContext("2d").drawImage(probe, 0, 0);
-              img.src = c.toDataURL("image/png");
-              img.onload = () => resolve();
-              img.onerror = () => resolve();
-            } catch {
-              resolve();
-            }
-          };
-          probe.onerror = () => resolve();
+        const finish = async () => {
+          try {
+            const c = document.createElement("canvas");
+            c.width = probe.naturalWidth || probe.width;
+            c.height = probe.naturalHeight || probe.height;
+            c.getContext("2d").drawImage(probe, 0, 0);
+            img.src = c.toDataURL("image/png");
+            await waitForImageReady(img);
+          } catch {
+            // Leave img.src as-is; html2canvas's own useCORS fetch is the fallback.
+          }
+          resolve();
+        };
 
-          // Safety timeout
-          setTimeout(resolve, 6000);
-        }),
-    ),
+        if (typeof probe.decode === "function") {
+          probe
+            .decode()
+            .then(finish)
+            .catch(resolve);
+        } else {
+          probe.onload = finish;
+          probe.onerror = resolve;
+        }
+
+        // Safety timeout so one stuck/slow image can't hang the whole export.
+        setTimeout(resolve, 6000);
+      });
+
+      // Defeat the on-screen loading-spinner fade so a mid-transition
+      // frame (or a frozen spinner if React's state flip hasn't
+      // re-rendered yet) never ends up baked into the capture.
+      img.style.opacity = "1";
+      img.style.transition = "none";
+    }),
   );
 }
 
@@ -67,11 +113,36 @@ export async function exportJobCardToPdf(job, elementId = "job-card-print") {
   const el = document.getElementById(elementId);
   if (!el) throw new Error("Job card element not found");
 
-  // 1. Convert external images to base64 first
+  // 0. Make sure web fonts have finished loading/swapping — capturing while
+  // a font is still mid-swap (FOUT/FOIT) changes text metrics and produces
+  // inconsistent layout between runs. Guarded with a timeout in case the
+  // Font Loading API is unavailable or never settles.
+  if (document.fonts?.ready) {
+    await Promise.race([
+      document.fonts.ready,
+      new Promise((r) => setTimeout(r, 3000)),
+    ]);
+  }
+
+  // 1. Convert external images to base64 first (also forces eager loading,
+  // see preConvertImages for why that matters)
   await preConvertImages(el);
 
-  // Small settle delay for layout reflow
-  await new Promise((r) => setTimeout(r, 300));
+  // Any residual loading-spinner overlays (e.g. a React state flip that
+  // hasn't re-rendered yet) shouldn't be captured — they're purely a
+  // loading-state affordance, not job-card content.
+  el.querySelectorAll(".animate-spin").forEach((spinner) => {
+    spinner.style.display = "none";
+  });
+
+  // Let the browser actually paint the image/opacity/spinner mutations
+  // above before we start reading the DOM. Two rAFs guarantee at least one
+  // full layout+paint cycle has completed, which is a far more reliable
+  // signal than a flat timeout.
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  // Small settle delay as an extra safety net for slower devices.
+  await new Promise((r) => setTimeout(r, 150));
 
   // 2. Build PDF with precise section-based pagination
   const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });

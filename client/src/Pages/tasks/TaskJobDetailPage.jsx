@@ -62,7 +62,16 @@ export default function TaskJobDetailPage() {
     }
   }, [job, workRecord, location.search, navigate]);
 
+  // True while the work record (measurements/images) is still being fetched
+  // for a job that has one — printing/exporting during this window captures
+  // an incomplete job card.
+  const isJobDataLoading = Boolean(loading && job?.workMongoId && !workRecord);
+
   const handlePrint = () => {
+    if (isJobDataLoading) {
+      showToast.error("Still loading job data — please wait a moment and try again");
+      return;
+    }
     const el = document.getElementById("job-card-print");
     if (!el) return;
 
@@ -143,6 +152,10 @@ export default function TaskJobDetailPage() {
 
   const handlePdf = async () => {
     if (!job) return;
+    if (isJobDataLoading) {
+      showToast.error("Still loading job data — please wait a moment and try again");
+      return;
+    }
     const loadingToastId = showToast.loading("Preparing PDF...");
     try {
       await exportJobCardToPdf(job);
@@ -205,14 +218,18 @@ export default function TaskJobDetailPage() {
               <button
                 type="button"
                 onClick={handlePrint}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white ring-1 ring-white/20 hover:bg-white/20"
+                disabled={isJobDataLoading}
+                title={isJobDataLoading ? "Loading job data…" : undefined}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white ring-1 ring-white/20 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Printer className="h-4 w-4" /> Print
               </button>
               <button
                 type="button"
                 onClick={handlePdf}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600/90 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-600"
+                disabled={isJobDataLoading}
+                title={isJobDataLoading ? "Loading job data…" : undefined}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600/90 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Download className="h-4 w-4" /> PDF
               </button>
