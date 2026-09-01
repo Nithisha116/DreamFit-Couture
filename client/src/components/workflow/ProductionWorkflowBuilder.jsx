@@ -39,8 +39,8 @@ const PRESETS = [
     id: "aari",
     label: "Aari",
     stages: [
-      "marking",
       "purchase",
+      "marking",
       "aari_started",
       "aari_completed",
       "cutting",
