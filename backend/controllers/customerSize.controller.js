@@ -142,6 +142,10 @@ export const updateMeasurements = async (req, res) => {
       profile.profileName = profileName;
     }
 
+    if (notes !== undefined) {
+      profile.notes = notes;
+    }
+
     // Update measurements with history tracking
     await profile.updateMeasurements(
       measurements,
