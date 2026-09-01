@@ -6064,12 +6064,12 @@ const renderDayContents = useCallback((day, date) => {
                                         <button
                                           key={`ref-full-${idx}`}
                                           onClick={() => handleViewImages(garment.referenceImages, 'reference')}
-                                          className="relative group aspect-square"
+                                          className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden"
                                         >
                                           <img
                                             src={imgUrl}
                                             alt={`Reference ${idx + 1}`}
-                                            className="w-full h-full object-cover rounded-lg border-2 border-indigo-200 hover:border-indigo-400"
+                                            className="w-full h-full object-contain rounded-lg border-2 border-indigo-200 hover:border-indigo-400"
                                           />
                                         </button>
                                       );
@@ -6094,12 +6094,12 @@ const renderDayContents = useCallback((day, date) => {
                                         <button
                                           key={`cust-full-${idx}`}
                                           onClick={() => handleViewImages(garment.customerImages, 'customer')}
-                                          className="relative group aspect-square"
+                                          className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden"
                                         >
                                           <img
                                             src={imgUrl}
                                             alt={`Customer ${idx + 1}`}
-                                            className="w-full h-full object-cover rounded-lg border-2 border-green-200 hover:border-green-400"
+                                            className="w-full h-full object-contain rounded-lg border-2 border-green-200 hover:border-green-400"
                                           />
                                         </button>
                                       );
@@ -6124,12 +6124,12 @@ const renderDayContents = useCallback((day, date) => {
                                         <button
                                           key={`cloth-full-${idx}`}
                                           onClick={() => handleViewImages(garment.customerClothImages, 'cloth')}
-                                          className="relative group aspect-square"
+                                          className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden"
                                         >
                                           <img
                                             src={imgUrl}
                                             alt={`Cloth ${idx + 1}`}
-                                            className="w-full h-full object-cover rounded-lg border-2 border-orange-200 hover:border-orange-400"
+                                            className="w-full h-full object-contain rounded-lg border-2 border-orange-200 hover:border-orange-400"
                                           />
                                         </button>
                                       );

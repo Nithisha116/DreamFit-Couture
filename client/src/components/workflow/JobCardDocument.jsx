@@ -347,7 +347,8 @@ console.log("ALL", allImages);
                   <ImageWithFallback
                     src={src}
                     alt=""
-                    className="h-full w-full object-cover"
+                    className="h-full w-full"
+                    fit="contain"
                     useProxy={true}
                     crossOrigin="anonymous"
                     loading="eager"

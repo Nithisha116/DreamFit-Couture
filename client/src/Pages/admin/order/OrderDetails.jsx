@@ -3395,12 +3395,12 @@ const handleSavePayment = async (paymentData) => {
                                       <button
                                         key={`ref-full-${idx}`}
                                         onClick={() => handleViewImage(img, 'reference')}
-                                        className="relative group aspect-square"
+                                        className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden"
                                       >
                                         <img
                                           src={imgUrl}
                                           alt={`Ref ${idx + 1}`}
-                                          className="w-full h-full object-cover rounded-lg"
+                                          className="w-full h-full object-contain rounded-lg"
                                         />
                                       </button>
                                     ) : null;
@@ -3424,12 +3424,12 @@ const handleSavePayment = async (paymentData) => {
                                       <button
                                         key={`cust-full-${idx}`}
                                         onClick={() => handleViewImage(img, 'customer')}
-                                        className="relative group aspect-square"
+                                        className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden"
                                       >
                                         <img
                                           src={imgUrl}
                                           alt={`Cust ${idx + 1}`}
-                                          className="w-full h-full object-cover rounded-lg"
+                                          className="w-full h-full object-contain rounded-lg"
                                         />
                                       </button>
                                     ) : null;
@@ -3453,12 +3453,12 @@ const handleSavePayment = async (paymentData) => {
                                       <button
                                         key={`cloth-full-${idx}`}
                                         onClick={() => handleViewImage(img, 'cloth')}
-                                        className="relative group aspect-square"
+                                        className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden"
                                       >
                                         <img
                                           src={imgUrl}
                                           alt={`Cloth ${idx + 1}`}
-                                          className="w-full h-full object-cover rounded-lg"
+                                          className="w-full h-full object-contain rounded-lg"
                                         />
                                       </button>
                                     ) : null;

@@ -798,7 +798,7 @@ export default function EditOrder() {
                                       <p className="text-xs font-bold text-slate-500 mb-1">Reference Images</p>
                                       <div className="grid grid-cols-3 gap-2">
                                         {garment.referenceImages.map((img, idx) => (
-                                          <img key={idx} src={img.url || img} alt={`Ref ${idx + 1}`} className="w-full h-20 object-cover rounded-lg border border-slate-200"
+                                          <img key={idx} src={img.url || img} alt={`Ref ${idx + 1}`} className="w-full h-20 object-contain bg-slate-100 rounded-lg border border-slate-200"
                                             onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Not+Found"; }} />
                                         ))}
                                       </div>
@@ -809,7 +809,7 @@ export default function EditOrder() {
                                       <p className="text-xs font-bold text-slate-500 mb-1">Customer Images</p>
                                       <div className="grid grid-cols-3 gap-2">
                                         {garment.customerImages.map((img, idx) => (
-                                          <img key={idx} src={img.url || img} alt={`Customer ${idx + 1}`} className="w-full h-20 object-cover rounded-lg border border-slate-200"
+                                          <img key={idx} src={img.url || img} alt={`Customer ${idx + 1}`} className="w-full h-20 object-contain bg-slate-100 rounded-lg border border-slate-200"
                                             onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Not+Found"; }} />
                                         ))}
                                       </div>

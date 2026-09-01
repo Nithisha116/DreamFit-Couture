@@ -127,17 +127,21 @@ export const createProfile = async (req, res) => {
 export const updateMeasurements = async (req, res) => {
   try {
     const { id } = req.params;
-    const { measurements, reason, notes } = req.body;
-    
+    const { profileName, measurements, reason, notes } = req.body;
+
     const profile = await CustomerSizeProfile.findById(id);
-    
+
     if (!profile) {
       return res.status(404).json({
         success: false,
         message: "Profile not found"
       });
     }
-    
+
+    if (profileName !== undefined) {
+      profile.profileName = profileName;
+    }
+
     // Update measurements with history tracking
     await profile.updateMeasurements(
       measurements,

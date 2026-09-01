@@ -133,6 +133,7 @@ export default function CustomerSizeModal({ isOpen, onClose, profileToEdit, cust
       if (profileToEdit) {
         await dispatch(updateCustomerProfile({
           id: profileToEdit._id,
+          profileName: payload.profileName,
           measurements: payload.measurements,
           notes: payload.notes
         })).unwrap();

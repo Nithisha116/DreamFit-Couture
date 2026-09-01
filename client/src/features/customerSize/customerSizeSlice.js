@@ -40,9 +40,10 @@ export const createCustomerProfile = createAsyncThunk(
 // Update measurements
 export const updateCustomerProfile = createAsyncThunk(
   "customerSize/update",
-  async ({ id, measurements, reason, notes }, thunkAPI) => {
+  async ({ id, profileName, measurements, reason, notes }, thunkAPI) => {
     try {
       const response = await API.put(API_URL + id + "/measurements", {
+        profileName,
         measurements,
         reason,
         notes

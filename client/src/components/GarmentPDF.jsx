@@ -249,7 +249,7 @@ const GarmentPDF = forwardRef(({ garment, order, job }, ref) => {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
                 {allImages.map((url, idx) => (
                   <div key={idx} style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden", backgroundColor: "#f8fafc", height: "190px" }}>
-                    <img src={url} alt={`Attachment ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} crossOrigin="anonymous" />
+                    <img src={url} alt={`Attachment ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} crossOrigin="anonymous" />
                   </div>
                 ))}
               </div>

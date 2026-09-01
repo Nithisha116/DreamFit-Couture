@@ -861,13 +861,13 @@ export default function GarmentDetails() {
                   {currentGarment.referenceImages.slice(0, 2).map((img, index) => (
                     <div
                       key={index}
-                      className="relative group cursor-pointer aspect-square"
+                      className="relative group cursor-pointer aspect-square bg-slate-100 rounded-lg overflow-hidden"
                       onClick={() => handleImageClick('reference')}
                     >
                       <img
                         src={img.url}
                         alt={`Reference ${index + 1}`}
-                        className="w-full h-full object-cover rounded-lg border border-slate-200 group-hover:border-blue-500 transition-all"
+                        className="w-full h-full object-contain rounded-lg border border-slate-200 group-hover:border-blue-500 transition-all"
                         onError={(e) => {
                           e.target.onerror = null;
                           e.target.src = 'https://placehold.co/200x200/cccccc/ffffff?text=No+Image';
@@ -878,7 +878,7 @@ export default function GarmentDetails() {
                   ))}
                   {currentGarment.referenceImages.length > 2 && (
                     <div 
-                      className="relative group cursor-pointer aspect-square bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center"
+                      className="relative group cursor-pointer aspect-square bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center"
                       onClick={() => handleImageClick('reference')}
                     >
                       <span className="text-slate-500 font-bold text-lg">
@@ -907,13 +907,13 @@ export default function GarmentDetails() {
                   {currentGarment.customerImages.slice(0, 2).map((img, index) => (
                     <div
                       key={index}
-                      className="relative group cursor-pointer aspect-square"
+                      className="relative group cursor-pointer aspect-square bg-slate-100 rounded-lg overflow-hidden"
                       onClick={() => handleImageClick('customer')}
                     >
                       <img
                         src={img.url}
                         alt={`Customer ${index + 1}`}
-                        className="w-full h-full object-cover rounded-lg border border-slate-200 group-hover:border-blue-500 transition-all"
+                        className="w-full h-full object-contain rounded-lg border border-slate-200 group-hover:border-blue-500 transition-all"
                         onError={(e) => {
                           e.target.onerror = null;
                           e.target.src = 'https://placehold.co/200x200/cccccc/ffffff?text=No+Image';
@@ -924,7 +924,7 @@ export default function GarmentDetails() {
                   ))}
                   {currentGarment.customerImages.length > 2 && (
                     <div 
-                      className="relative group cursor-pointer aspect-square bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center"
+                      className="relative group cursor-pointer aspect-square bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center"
                       onClick={() => handleImageClick('customer')}
                     >
                       <span className="text-slate-500 font-bold text-lg">

@@ -1,14 +1,20 @@
 import React, { useState } from 'react';
 import { ImageIcon, AlertCircle } from 'lucide-react';
 
-const ImageWithFallback = ({ 
-  src, 
-  alt, 
-  className, 
+const ImageWithFallback = ({
+  src,
+  alt,
+  className,
   useProxy = false,
   crossOrigin = undefined,
-  loading = "lazy"
+  loading = "lazy",
+  // "cover" (default, unchanged) crops to fill the frame — used everywhere
+  // that already relies on today's behavior. Pass fit="contain" to instead
+  // show the complete image, letterboxed, with no cropping/stretching.
+  fit = "cover",
 }) => {
+  const fitClass = fit === "contain" ? "object-contain" : "object-cover";
+
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -60,7 +66,7 @@ const ImageWithFallback = ({
         <img
           src={finalSrc}
           alt={alt || "Image"}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+          className={`w-full h-full ${fitClass} transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
           onLoad={() => setIsLoading(false)}
           onError={(e) => {
             console.error(`❌ Failed to load image: ${finalSrc}`);
