@@ -1,12 +1,14 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { ArrowLeft, Download, Printer, QrCode, ScanLine } from "lucide-react";
 import JobCardDocument from "../../components/workflow/JobCardDocument";
 import { exportJobCardToPdf } from "../../components/workflow/JobCardPDFExport";
 import WorkflowStageTimeline from "../../components/workflow/WorkflowStageTimeline";
+import StageActionModal from "../../components/common/StageActionModal";
 import useWorkflowJobs from "../../hooks/useWorkflowJobs";
-import { advanceStageByTrackingId } from "../../workflow/workflowEngine";
+import { advanceStageByTrackingId, getActiveStageKey } from "../../workflow/workflowEngine";
+import { extractOrderedStageKeys, getStageLabelFromDef } from "../../workflow/workflowConstants";
 import { findWorkflowJob } from "../../workflow/workflowStorage";
 import { fetchWorkById } from "../../features/work/workSlice";
 import showToast from "../../utils/toast";
@@ -168,19 +170,66 @@ export default function TaskJobDetailPage() {
     }
   };
 
-  const handleAdvance = async () => {
-    const res = await advanceStageByTrackingId(trackingId, "manual");
-    if (res.ok) {
-      await refresh();
-      showToast.success(
-        res.nextKey
-          ? `Stage completed — ${res.nextKey} is now active`
-          : "Workflow completed — packed / ready",
-      );
-    } else {
-      showToast.error(res.error || "Could not advance");
+  // ── Confirmation modal state ──────────────────────────
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isAdvancing, setIsAdvancing] = useState(false);
+  const advancingRef = useRef(false); // guard against duplicate requests
+
+  const handleOpenConfirm = useCallback(() => {
+    if (advancingRef.current) return; // already in-flight
+    setShowConfirmModal(true);
+  }, []);
+
+  const handleCloseConfirm = useCallback(() => {
+    if (isAdvancing) return; // don't close while request is in-flight
+    setShowConfirmModal(false);
+  }, [isAdvancing]);
+
+  const handleConfirmAdvance = useCallback(async () => {
+    if (advancingRef.current) return; // prevent duplicate
+    advancingRef.current = true;
+    setIsAdvancing(true);
+
+    try {
+      const res = await advanceStageByTrackingId(trackingId, "manual");
+      if (res.ok) {
+        setShowConfirmModal(false);
+        await refresh();
+        const completedLabel = stageContext?.currentStageLabel || "Stage";
+        showToast.success(
+          res.nextKey
+            ? `${completedLabel} stage completed successfully`
+            : "Workflow completed — packed / ready",
+        );
+      } else {
+        showToast.error(res.error || "Unable to complete the stage. Please try again.");
+      }
+    } catch {
+      showToast.error("Unable to complete the stage. Please try again.");
+    } finally {
+      setIsAdvancing(false);
+      advancingRef.current = false;
     }
-  };
+  }, [trackingId, refresh]);
+
+  // ── Derive stage context for the modal ────────────────
+  const stageContext = useMemo(() => {
+    if (!job) return null;
+    const keys = extractOrderedStageKeys(job);
+    const activeKey = getActiveStageKey(job);
+    const activeIdx = keys.indexOf(activeKey);
+    const nextKey = activeIdx >= 0 && activeIdx < keys.length - 1 ? keys[activeIdx + 1] : null;
+    return {
+      jobName: job.garmentName || "Job",
+      workCode: job.workCode || job.workflowTrackingId || "",
+      currentStageLabel: activeKey
+        ? getStageLabelFromDef(activeKey, job.workflowStages)
+        : "Current",
+      nextStageLabel: nextKey
+        ? getStageLabelFromDef(nextKey, job.workflowStages)
+        : null,
+    };
+  }, [job]);
 
   if (!job) {
     return (
@@ -235,8 +284,9 @@ export default function TaskJobDetailPage() {
               </button>
               <button
                 type="button"
-                onClick={handleAdvance}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-violet-500 px-3 py-2 text-xs font-bold text-white hover:bg-violet-400"
+                onClick={handleOpenConfirm}
+                disabled={isAdvancing}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-violet-500 px-3 py-2 text-xs font-bold text-white hover:bg-violet-400 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
               >
                 <ScanLine className="h-4 w-4" /> Complete stage
               </button>
@@ -258,6 +308,16 @@ export default function TaskJobDetailPage() {
           </div>
           <JobCardDocument job={job} work={workRecord} />
         </div>
+
+        {/* Stage completion confirmation modal */}
+        <StageActionModal
+          isOpen={showConfirmModal}
+          mode="confirm"
+          onClose={handleCloseConfirm}
+          onConfirm={handleConfirmAdvance}
+          isUpdating={isAdvancing}
+          stageContext={stageContext}
+        />
       </div>
     </div>
   );
