@@ -9399,12 +9399,17 @@ export const fetchOrderById = createAsyncThunk(
       const result = {
         order: response.order || response.data || response,
         payments: response.payments || [],
-        works: response.works || []
+        works: response.works || [],
+        // Top-level production pipeline calculated by the API. This thunk
+        // whitelists what it forwards, so it has to be listed explicitly —
+        // otherwise the reducer never sees it.
+        pipeline: response.pipeline || null
       };
-      
+
       console.log('🔍 [Thunk] Order found:', result.order?._id);
       console.log('🔍 [Thunk] Payments:', result.payments.length);
       console.log('🔍 [Thunk] Works:', result.works.length);
+      console.log('🔍 [Thunk] Pipeline stages:', result.pipeline?.stages?.length ?? 0);
       console.log("========== ✅ [Thunk] fetchOrderById END ==========\n");
       return result;
     } catch (error) {
@@ -9586,6 +9591,7 @@ const initialState = {
   currentOrder: null,
   currentPayments: [],
   currentWorks: [],
+  currentPipeline: null,
   
   // Customer-specific orders
   customerOrders: {}, // Store orders by customer ID
@@ -9681,6 +9687,7 @@ const orderSlice = createSlice({
       state.currentOrder = null;
       state.currentPayments = [];
       state.currentWorks = [];
+      state.currentPipeline = null;
     },
     clearCustomerOrders: (state, action) => {
       const { customerId } = action.payload || {};
@@ -9971,6 +9978,10 @@ const orderSlice = createSlice({
         state.currentOrder = action.payload.order;
         state.currentPayments = action.payload.payments || [];
         state.currentWorks = action.payload.works || [];
+        // Calculated backend-side by utils/orderPipeline.util.js and returned
+        // top-level on the Order Detail response. The API response is the only
+        // source for the current order pipeline; nothing recomputes it here.
+        state.currentPipeline = action.payload.pipeline || null;
       })
       .addCase(fetchOrderById.rejected, (state, action) => {
         console.error('❌ [Reducer] fetchOrderById rejected:', action.payload);
@@ -10149,6 +10160,7 @@ const orderSlice = createSlice({
           state.currentOrder = null;
           state.currentPayments = [];
           state.currentWorks = [];
+          state.currentPipeline = null;
         }
         
         // Update stats

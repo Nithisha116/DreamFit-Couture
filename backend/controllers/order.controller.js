@@ -16,6 +16,7 @@ import r2Service from "../services/r2.service.js";
 import crypto from "crypto";
 import multer from "multer";
 import { buildOrderPricingSummary } from "../utils/pricingEngine.js";
+import { calculateRangeTotals } from "../utils/rangeUtils.js";
 import { assertOrderNotLocked } from "../utils/orderLock.js";
 import {
   parseWorkflowStagesInput,
@@ -24,6 +25,7 @@ import {
 } from "../utils/workflowStages.util.js";
 import { computeDraftProgress, computeDraftDisplayName } from "../utils/draftProgress.util.js";
 import { isWorkAssigned, checkOrderAssignment } from "../utils/orderAssignment.js";
+import { buildOrderPipeline } from "../utils/orderPipeline.util.js";
 
 const enrichOrdersWithAssignedStatus = async (orders) => {
   if (!orders || orders.length === 0) return [];
@@ -158,20 +160,23 @@ const createIncomeFromPayment = async (payment, order, creatorId) => {
 // ============================================
 // ✅ HELPER: UPDATE ORDER PAYMENT SUMMARY
 // ============================================
-export const updateOrderPaymentSummary = async (orderId) => {
+// session is optional and defaults to null, so the existing callers that pass
+// nothing behave exactly as before. It is supplied by the cancellation flow so
+// the recompute commits inside the same transaction as the payment reversal.
+export const updateOrderPaymentSummary = async (orderId, session = null) => {
   console.log(`\n💰 Updating payment summary for order: ${orderId}`);
-  
+
   try {
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId).session(session);
     if (!order) return;
 
-    const payments = await Payment.find({ 
-      order: orderId, 
+    const payments = await Payment.find({
+      order: orderId,
       isDeleted: false,
       type: { $in: ['advance', 'full', 'final-settlement'] }
-    });
+    }).session(session);
 
-    const garments = await Garment.find({ order: orderId, isActive: true });
+    const garments = await Garment.find({ order: orderId, isActive: true }).session(session);
     
     const summary = buildOrderPricingSummary(garments, payments);
     
@@ -204,9 +209,9 @@ export const updateOrderPaymentSummary = async (orderId) => {
       paymentStatus: summary.paymentStatus
     };
     
-    await order.save();
+    await order.save({ session });
     console.log(`✅ Payment summary updated: Paid: ₹${summary.totalPaid}, Status: ${summary.paymentStatus}`);
-    
+
     return { success: true, totalPaid: summary.totalPaid, paymentStatus: summary.paymentStatus };
   } catch (error) {
     console.error("❌ Error updating payment summary:", error);
@@ -953,10 +958,23 @@ export const getOrderById = async (req, res) => {
       .populate('receivedBy', 'name')
       .sort('-paymentDate -paymentTime');
 
-    const works = await Work.find({ order: order._id, isActive: true }).populate('garment', 'name item category');
+    // Single query for every Work on this order (Work.order is indexed) — the
+    // production pipeline below is computed from exactly these records, so no
+    // per-garment, per-work or per-stage query is ever issued.
+    // .select() lists only the fields buildOrderPipeline() and the Order Detail
+    // UI read; it drops scanLogs[]/history[], which grow unboundedly and were
+    // previously serialized into every Order Detail response.
+    const works = await Work.find({ order: order._id, isActive: true })
+      .select('workId order garment status currentStage overallStatus stageKeys workflowStages workflowProgress assignments estimatedDelivery isActive')
+      .populate('garment', 'name item category stageKeys workflowStages')
+      .lean();
+
+    // Calculated projection, not persisted state. Kept top-level alongside
+    // works/payments rather than folded into the Order document.
+    const pipeline = buildOrderPipeline(order, works);
 
     const enrichedOrder = await enrichSingleOrder(order);
-    res.json({ success: true, order: enrichedOrder, payments, works });
+    res.json({ success: true, order: enrichedOrder, payments, works, pipeline });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -1123,17 +1141,96 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     if (status === 'cancelled') {
-      // Only stop active work; preserve completed and delivered work records
-      await Work.updateMany(
-        { order: order._id, status: { $nin: ['ready-to-deliver', 'delivered'] } },
-        { status: 'cancelled', isActive: false }
-      );
-      // Cancel only pending transactions — do NOT touch completed transactions (financial history)
-      await Transaction.updateMany(
-        { order: order._id, status: 'pending' },
-        { status: 'cancelled' }
-      );
-      // NOTE: Payments are NOT deleted or modified. They are permanent financial records.
+      // Whether the order ever reached a real worker decides the financial
+      // outcome. assignments[] is the source of truth — not work.status (no
+      // enum, 20 distinct values in practice) and not assignments.length,
+      // because the QR scan path fabricates a placeholder entry with
+      // role:'qr-scanner' and no workerId when a stage has no assignment.
+      // One query covers every work on the order, so a single assigned work
+      // makes the whole order "assigned".
+      const cancelSession = await mongoose.startSession();
+      try {
+        await cancelSession.withTransaction(async () => {
+          // $elemMatch, NOT {'assignments.workerId': {$ne: null}}. On an EMPTY
+          // assignments array that shorthand is vacuously true — there is no
+          // element equal to null, so $ne matches — which would misread every
+          // unassigned work as assigned (254 of 687 works in this database).
+          // $elemMatch demands an actual element carrying a real workerId.
+          const hasRealWorker = await Work.exists({
+            order: order._id,
+            assignments: { $elemMatch: { workerId: { $exists: true, $ne: null } } }
+          }).session(cancelSession);
+
+          // Only stop active work; preserve completed and delivered work records
+          await Work.updateMany(
+            { order: order._id, status: { $nin: ['ready-to-deliver', 'delivered'] } },
+            { status: 'cancelled', isActive: false },
+            { session: cancelSession }
+          );
+          // Cancel only pending transactions — do NOT touch completed transactions (financial history)
+          await Transaction.updateMany(
+            { order: order._id, status: 'pending' },
+            { status: 'cancelled' },
+            { session: cancelSession }
+          );
+
+          if (hasRealWorker) {
+            // Work was already assigned: payments stay exactly as they are.
+            // NOTE: Payments are NOT deleted or modified. They are permanent
+            // financial records.
+            return;
+          }
+
+          // Cancelled before any worker was assigned. The money never bought
+          // any work, so it is removed from the ACTIVE financial state only.
+          // Nothing is refunded and nothing is destroyed: the payment rows,
+          // their amounts and dates, the ledger rows, the garments and the
+          // order's own minPrice/maxPrice/priceSummary all survive untouched.
+          const activePayments = await Payment.find(
+            { order: order._id, isDeleted: false },
+            { _id: 1 }
+          ).session(cancelSession);
+
+          if (activePayments.length > 0) {
+            const paymentIds = activePayments.map((p) => p._id);
+
+            // Soft delete, mirroring deletePayment. updateOrderPaymentSummary
+            // filters isDeleted:false, so this is what drops them from totals.
+            await Payment.updateMany(
+              { _id: { $in: paymentIds } },
+              { isDeleted: true },
+              { session: cancelSession }
+            );
+
+            // Revenue reads Transaction (type income, status completed), not
+            // Payment, so the ledger rows for exactly these payments must be
+            // cancelled too or the amount keeps showing up in revenue.
+            // Matched via metadata.paymentId, the link createIncomeFromPayment
+            // writes, so no unrelated ledger row can be caught.
+            await Transaction.updateMany(
+              { 'metadata.paymentId': { $in: paymentIds }, status: 'completed' },
+              { status: 'cancelled' },
+              { session: cancelSession }
+            );
+          }
+
+          // Recompute from the surviving (now zero) active payments.
+          await updateOrderPaymentSummary(order._id, cancelSession);
+
+          // buildOrderPricingSummary is not status-aware: with no payments it
+          // returns balanceDue = full order value, which would leave a
+          // cancelled order still demanding money. Clear the active balance
+          // explicitly. minPrice/maxPrice/priceSummary are deliberately left
+          // alone so the order still records what it was worth.
+          await Order.updateOne(
+            { _id: order._id },
+            { $set: { balanceAmount: 0, dueAmount: 0, balanceMin: 0, balanceMax: 0 } },
+            { session: cancelSession }
+          );
+        });
+      } finally {
+        await cancelSession.endSession();
+      }
     } else if (['in-progress', 'cutting', 'stitching', 'trial', 'finishing'].includes(status)) {
       const targetStage = status === 'in-progress' ? (order.stageKeys?.[0] || 'cutting') : status;
 
@@ -1246,8 +1343,21 @@ export const addPaymentToOrder = async (req, res) => {
     const order = await Order.findById(id).populate('customer');
     
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    // A cancelled order must not take further payments. Beyond being wrong on
+    // its own terms, accepting one here would call updateOrderPaymentSummary
+    // and recompute a live balance over the zeroed financial state that
+    // cancellation produced. Checked before any Payment or Transaction is
+    // written so a rejected attempt leaves nothing behind.
+    if (order.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot add a payment to a cancelled order."
+      });
+    }
+
     const creatorId = req.user?._id || req.user?.id;
-    
+
     const existingPayments = await Payment.find({ order: order._id, isDeleted: false });
     const totalPaidBefore = existingPayments.reduce((sum, p) => sum + p.amount, 0);
     const newTotalPaid = totalPaidBefore + Number(paymentData.amount);

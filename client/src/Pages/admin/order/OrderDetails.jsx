@@ -1742,6 +1742,8 @@ import CancelOrderModal from "../../../components/orders/CancelOrderModal";
 import { calculatePaymentSummary } from "../../../utils/paymentUtils";
 import RangeBadge from "../../../components/RangeBadge";
 import WhatsAppShareButton from "../../../components/WhatsAppShareButton";
+import OrderProductionPipeline from "../../../components/orders/OrderProductionPipeline";
+import { getSocket } from "../../../utils/socket";
 import {
   buildOrderWhatsAppMessage,
   getPublicInvoiceUrl,
@@ -1868,6 +1870,7 @@ export default function OrderDetails() {
     currentOrder,
     currentPayments,
     currentWorks,
+    currentPipeline,
     loading,
     error
   } = useSelector((state) => {
@@ -1878,6 +1881,7 @@ export default function OrderDetails() {
       currentOrder: state.order?.currentOrder || null,
       currentPayments: state.order?.currentPayments || [],
       currentWorks: state.order?.currentWorks || [],
+      currentPipeline: state.order?.currentPipeline || null,
       loading: state.order?.loading || false,
       error: state.order?.error || null
     };
@@ -2019,6 +2023,24 @@ export default function OrderDetails() {
       dispatch(clearCurrentOrder());
       dispatch(clearPayments());
     };
+  }, [dispatch, id]);
+
+  // Production stages change outside this page (Tasks assignment, QR scan).
+  // GlobalSocketListener already refreshes the lists on workflow:updated but
+  // has no notion of which order is open, so Order Detail went stale until a
+  // manual reload. Same per-page subscribe pattern as QrWorkflowPage.
+  useEffect(() => {
+    if (!id) return;
+    const socket = getSocket();
+
+    const handleWorkflowUpdated = (data) => {
+      if (String(data?.orderId || "") !== String(id)) return;
+      console.log("📡 [OrderDetails] workflow:updated for this order — refetching");
+      dispatch(fetchOrderById(id));
+    };
+
+    socket.on("workflow:updated", handleWorkflowUpdated);
+    return () => socket.off("workflow:updated", handleWorkflowUpdated);
   }, [dispatch, id]);
 
   // Log state changes
@@ -3153,6 +3175,11 @@ const handleSavePayment = async (paymentData) => {
                 )}
               </div>
             </div>
+
+            {/* Production Pipeline — order-level aggregation of the order's Work
+                records. Calculated backend-side (utils/orderPipeline.util.js)
+                and consumed as-is; nothing is derived in this page. */}
+            <OrderProductionPipeline pipeline={currentPipeline} basePath={basePath} />
 
             {/* Tailor Assignments Information */}
             {currentWorks?.length > 0 && currentWorks.some(w => w.assignments?.some(a => a.workerId)) && (

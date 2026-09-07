@@ -3943,7 +3943,11 @@ import {
   Ban,
   ShieldAlert
 } from "lucide-react";
-import { createNewOrder } from "../../../features/order/orderSlice";
+// fetchOrderById was already undefined here, but sat inside the success handler
+// of the broken dispatch, so it could never run. Fixing addPayment makes that
+// line reachable for the first time — without this import a successful payment
+// would throw in .then() and report "Failed to add payment".
+import { createNewOrder, addPayment, fetchOrderById } from "../../../features/order/orderSlice";
 import { createGarment } from "../../../features/garment/garmentSlice";
 import { fetchAllCustomers } from "../../../features/customer/customerSlice";
 import { fetchDeliveryDates, selectDeliveryDates, selectDeliveryCalendarLoading } from "../../../features/order/orderSlice";
@@ -4053,6 +4057,10 @@ export default function NewOrder() {
   
   // ⏳ Form submission states
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Guards the Add Payment button while an addPayment request is in flight.
+  // isSubmitting already covers order submission, but it resets in the submit
+  // handler's finally, so it does not cover a payment saved afterwards.
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
   const [serverErrors, setServerErrors] = useState(null);
 
   // 📅 Calendar states
@@ -4746,21 +4754,27 @@ const handleSavePayment = useCallback((paymentData) => {
     
     console.log("📤 Payment payload:", paymentPayload);
     
-    // Call API to add payment (you need to implement this in Redux)
-    dispatch(addPaymentToOrder({
+    // addPayment is the Redux thunk in orderSlice. The API-layer function is
+    // separately named addPaymentToOrder, and calling that name here referenced
+    // nothing — it threw before dispatch ran, so the .then/.catch below never
+    // attached and the loading toast was never dismissed.
+    setIsSavingPayment(true);
+    dispatch(addPayment({
       orderId: currentOrderId,
       paymentData: paymentPayload
     })).then((result) => {
       console.log("✅ Payment added via API:", result);
       showToast.dismiss(toastId);
       showToast.success("Payment added successfully!");
-      
+
       // Refresh order data to show updated payments
       dispatch(fetchOrderById(currentOrderId));
     }).catch((error) => {
       console.error("❌ Error adding payment:", error);
       showToast.dismiss(toastId);
       showToast.error(error.response?.data?.message || "Failed to add payment");
+    }).finally(() => {
+      setIsSavingPayment(false);
     });
   }
   
@@ -6284,7 +6298,10 @@ const renderDayContents = useCallback((day, date) => {
                   <button
                     type="button"
                     onClick={handleAddPayment}
-                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1"
+                    disabled={isSubmitting || isSavingPayment}
+                    className={`bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 ${
+                      isSubmitting || isSavingPayment ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   >
                     <Plus size={14} />
                     Add Payment
