@@ -1,6 +1,34 @@
+# Dependencies
 node_modules/
-*.env
+
+# Environment / secrets — never commit real credentials.
+# Covers .env, .env.local, .env.production, backend/.env, client/.env, etc.
 .env
-backend/.env
-.DS_Store
+*.env
+.env.*
+*.env.*
+
+# ...but the placeholder templates SHOULD be committed:
+!.env.example
+!*.env.example
+!.env.*.example
+
+# Credential-bearing files
+*.pem
+*.key
+*.p12
+*.pfx
+serviceAccount*.json
+
+# Build output
 dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db

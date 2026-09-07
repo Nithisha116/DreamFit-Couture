@@ -72,7 +72,13 @@ import {
   RadialBarChart,
   RadialBar
 } from 'recharts';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+// getDateParams' last-week / last-month / quarter / year branches call six more
+// date-fns helpers than were imported here, so those branches threw on the
+// undefined name. No UI currently selects them, but the code paths exist.
+import {
+  format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
+  subWeeks, subMonths, startOfQuarter, endOfQuarter, startOfYear, endOfYear
+} from 'date-fns';
 
 // IMPORT from orderSlice
 import { 
