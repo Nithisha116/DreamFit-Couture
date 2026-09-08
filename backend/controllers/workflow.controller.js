@@ -32,6 +32,95 @@ export {
 };
 
 
+// Field list + populates the job projection below reads. Shared by the list
+// endpoint and the single-job read after a scan so the two shapes cannot drift.
+export const WORKFLOW_JOB_SELECT =
+  'workId qrCode order garment estimatedDelivery status stageKeys workflowStages currentStage overallStatus workflowProgress assignments cuttingNotes tailorNotes';
+
+export const WORKFLOW_JOB_POPULATE = [
+  {
+    path: 'order',
+    select: 'orderId customer deliveryDate stageKeys workflowStages',
+    populate: { path: 'customer', select: 'name' },
+  },
+  {
+    path: 'garment',
+    select: 'name garmentId category categoryName item itemName measurementTemplate measurementSource measurements additionalInfo priority stageKeys workflowStages',
+    populate: [
+      { path: 'category',            select: 'name categoryName' },
+      { path: 'item',                select: 'name itemName'     },
+      { path: 'measurementTemplate', select: 'name'              },
+    ],
+  },
+];
+
+/**
+ * Project one populated Work document into the workflow job shape the Tasks /
+ * Dashboard / Job Card UIs consume. Extracted from getWorkflowJobs so a scan can
+ * return the updated job directly instead of forcing the client to refetch the
+ * entire job list.
+ */
+export function buildWorkflowJob(work) {
+  const garment    = work.garment;
+  const stageKeys  = resolveOrderedStageKeys(work);
+
+  const workflowStages = stageKeys.map((key, index) => ({
+    key,
+    label: stageLabel(key),
+    order: index + 1,
+  }));
+
+  const stages = buildStagesFromWork(work, stageKeys);
+
+  const activeKey       = stageKeys.find(k => stages[k]?.state === 'active') ||
+                          stageKeys.find(k => stages[k]?.state === 'pending') ||
+                          stageKeys[stageKeys.length - 1] ||
+                          null;
+  const lifecycleStatus = stageKeys.every(k => stages[k]?.state === 'completed')
+    ? 'completed'
+    : 'open';
+
+  const currentStageLabel = activeKey ? stageLabel(activeKey) : 'In progress';
+  const assignmentStatus  = stages[activeKey]?.assignedTo?.name ? 'assigned' : 'unassigned';
+
+  return {
+    id:                  String(work._id),
+    workflowTrackingId:  work.workId,
+    workMongoId:         String(work._id),
+    workCode:            work.workId,
+    qrCode:              work.qrCode || null,
+    orderId:             work.order?.orderId            || '',
+    orderMongoId:        String(work.order?._id || ''),
+    customerName:        work.order?.customer?.name    || 'Customer',
+    garmentName:         garment?.name                 || work.garmentName || 'Garment',
+    garmentId:           garment?.garmentId            || '',
+    categoryName:        garment?.categoryName         || garment?.category?.name || '',
+    itemName:            garment?.itemName             || garment?.item?.name     || '',
+    dueDate:             work.estimatedDelivery        || work.order?.deliveryDate || null,
+    workStatus:          work.status                   || 'pending',
+    stageKeys,
+    stages,
+    currentStageKey:     activeKey,
+    currentStageLabel,
+    priority:            garment?.priority || work.priority || 'normal',
+    assignmentStatus,
+    lifecycleStatus,
+    workflowStages,
+    measurements:        garment?.measurements         || [],
+    measurementSource:   garment?.measurementSource    || 'template',
+    measurementTemplate: garment?.measurementTemplate  || null,
+    measurementTemplateName:
+      typeof garment?.measurementTemplate === 'object'
+        ? garment.measurementTemplate?.name
+        : null,
+    additionalInfo:      garment?.additionalInfo       || '',
+    cuttingNotes:        work.cuttingNotes             || '',
+    tailorNotes:         work.tailorNotes              || '',
+    assignments:         work.assignments              || [],
+  };
+}
+
+
 // @desc    Get all synthesized workflow jobs
 // @route   GET /api/workflow/jobs
 // @access  Private
@@ -46,86 +135,12 @@ export const getWorkflowJobs = async (req, res) => {
     // returns plain objects instead of Mongoose documents. Neither changes what
     // is computed or returned — the API response is unchanged.
     const works = await Work.find({ isActive: true })
-      .select('workId qrCode order garment estimatedDelivery status stageKeys workflowStages currentStage overallStatus workflowProgress assignments cuttingNotes tailorNotes')
-      .populate({
-        path: 'order',
-        select: 'orderId customer deliveryDate stageKeys workflowStages',
-        populate: { path: 'customer', select: 'name' },
-      })
-      .populate({
-        path: 'garment',
-        select: 'name garmentId category categoryName item itemName measurementTemplate measurementSource measurements additionalInfo priority stageKeys workflowStages',
-        populate: [
-          { path: 'category',            select: 'name categoryName' },
-          { path: 'item',                select: 'name itemName'     },
-          { path: 'measurementTemplate', select: 'name'              },
-        ],
-      })
+      .select(WORKFLOW_JOB_SELECT)
+      .populate(WORKFLOW_JOB_POPULATE)
       .sort({ createdAt: -1 })
       .lean();
 
-    const jobs = works.map(work => {
-      const garment    = work.garment;
-      const stageKeys  = resolveOrderedStageKeys(work);
-
-      // ✅ Build workflowStages array (for UI label lookup)
-      const workflowStages = stageKeys.map((key, index) => ({
-        key,
-        label: stageLabel(key),
-        order: index + 1,
-      }));
-
-      // ✅ Build stages map — state derived from work.currentStage (MongoDB ground truth)
-      const stages = buildStagesFromWork(work, stageKeys);
-
-      // Derive active key and lifecycle
-      const activeKey       = stageKeys.find(k => stages[k]?.state === 'active') ||
-                              stageKeys.find(k => stages[k]?.state === 'pending') ||
-                              stageKeys[stageKeys.length - 1] ||
-                              null;
-      const lifecycleStatus = stageKeys.every(k => stages[k]?.state === 'completed')
-        ? 'completed'
-        : 'open';
-
-      const currentStageLabel = activeKey ? stageLabel(activeKey) : 'In progress';
-      const assignmentStatus  = stages[activeKey]?.assignedTo?.name ? 'assigned' : 'unassigned';
-
-      return {
-        id:                  String(work._id),
-        workflowTrackingId:  work.workId,
-        workMongoId:         String(work._id),
-        workCode:            work.workId,
-        qrCode:              work.qrCode || null,
-        orderId:             work.order?.orderId            || '',
-        orderMongoId:        String(work.order?._id || ''),
-        customerName:        work.order?.customer?.name    || 'Customer',
-        garmentName:         garment?.name                 || work.garmentName || 'Garment',
-        garmentId:           garment?.garmentId            || '',
-        categoryName:        garment?.categoryName         || garment?.category?.name || '',
-        itemName:            garment?.itemName             || garment?.item?.name     || '',
-        dueDate:             work.estimatedDelivery        || work.order?.deliveryDate || null,
-        workStatus:          work.status                   || 'pending',
-        stageKeys,
-        stages,
-        currentStageKey:     activeKey,
-        currentStageLabel,
-        priority:            garment?.priority || work.priority || 'normal',
-        assignmentStatus,
-        lifecycleStatus,
-        workflowStages,
-        measurements:        garment?.measurements         || [],
-        measurementSource:   garment?.measurementSource    || 'template',
-        measurementTemplate: garment?.measurementTemplate  || null,
-        measurementTemplateName:
-          typeof garment?.measurementTemplate === 'object'
-            ? garment.measurementTemplate?.name
-            : null,
-        additionalInfo:      garment?.additionalInfo       || '',
-        cuttingNotes:        work.cuttingNotes             || '',
-        tailorNotes:         work.tailorNotes              || '',
-        assignments:         work.assignments              || [],
-      };
-    });
+    const jobs = works.map(buildWorkflowJob);
 
     res.json({ success: true, data: jobs });
   } catch (error) {
@@ -387,10 +402,27 @@ export const processQrScan = async (req, res) => {
       ? `${stageLabel(activeKey)} completed. ${nextLabel} is now active.`
       : `${stageLabel(activeKey)} completed. Garment is ready for delivery.`;
 
+    // Additive: return the updated job in the same shape as one element of
+    // GET /api/workflow/jobs. Without it a client that just advanced one stage
+    // has to refetch the entire job list (every active Work, ~8-12s) purely to
+    // learn this one job's new stage. One populated single-doc read instead.
+    // Best-effort: a failure here must not fail the scan, which already committed.
+    let job = null;
+    try {
+      const populated = await Work.findById(updatedWork._id)
+        .select(WORKFLOW_JOB_SELECT)
+        .populate(WORKFLOW_JOB_POPULATE)
+        .lean();
+      if (populated) job = buildWorkflowJob(populated);
+    } catch (projectionErr) {
+      console.error('Job projection after scan failed (non-fatal):', projectionErr.message);
+    }
+
     res.json({
       success:    true,
       message,
       data:       updatedWork,
+      job,
       activeKey,
       nextStage:  nextStageKey,
       stageKeys,

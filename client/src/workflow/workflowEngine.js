@@ -14,6 +14,8 @@ import {
   loadWorkflowJobs,
 } from "./workflowStorage";
 import * as workApi from "../features/work/workApi";
+import { store } from "../app/store";
+import { workflowScanStarted, workflowScanSettled } from "../features/work/workSlice";
 import { sanitizeWorkflowJob } from "./workflowSanitize";
 import {
   applyWorkStatusToStages,
@@ -387,9 +389,21 @@ export async function advanceStageByTrackingId(trackingId, completedBy = "qr") {
   const activeIdx = keys.indexOf(activeKey);
   if (activeIdx < 0) return { ok: false, error: "No active stage" };
 
+  // The server emits workflow:updated before it responds, so mark this work as
+  // ours-in-flight first; the socket listener uses it to recognise the echo of
+  // this very scan and skip a full job-list refetch it does not need.
+  store.dispatch(workflowScanStarted(workId));
+
   try {
     const response = await workApi.completeWorkflowStage(workId);
-    emitWorkflowChanged();
+    // When the scan returned the updated job, the caller can patch it straight
+    // into the store, so listeners must not refetch the whole job list off this
+    // event. Views that reload only themselves (WorkflowScanPage) still react.
+    emitWorkflowChanged({
+      workId,
+      source: "stage-advance",
+      handledLocally: !!response?.job,
+    });
 
     const nextKey = response?.nextStage ?? keys[activeIdx + 1] ?? null;
     const completedActiveKey = response?.activeKey ?? activeKey;
@@ -399,6 +413,10 @@ export async function advanceStageByTrackingId(trackingId, completedBy = "qr") {
     return {
       ok: true,
       job: findWorkflowJob(trackingId) || job,
+      // The updated job as the server projected it, same shape as one element of
+      // GET /api/workflow/jobs. Callers can patch this straight into the store
+      // instead of refetching the whole list. Null on an older backend.
+      serverJob: response?.job || null,
       suggestedWorkStatus,
       activeKey: completedActiveKey,
       nextKey,
@@ -409,6 +427,8 @@ export async function advanceStageByTrackingId(trackingId, completedBy = "qr") {
       ok: false,
       error: err?.response?.data?.message || err?.message || "Failed to advance stage",
     };
+  } finally {
+    store.dispatch(workflowScanSettled(workId));
   }
 }
 

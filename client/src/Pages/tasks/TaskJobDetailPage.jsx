@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { ArrowLeft, Download, Printer, QrCode, ScanLine } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Printer, QrCode, ScanLine } from "lucide-react";
 import JobCardDocument from "../../components/workflow/JobCardDocument";
 import { exportJobCardToPdf } from "../../components/workflow/JobCardPDFExport";
 import WorkflowStageTimeline from "../../components/workflow/WorkflowStageTimeline";
@@ -10,7 +10,7 @@ import useWorkflowJobs from "../../hooks/useWorkflowJobs";
 import { advanceStageByTrackingId, getActiveStageKey } from "../../workflow/workflowEngine";
 import { extractOrderedStageKeys, getStageLabelFromDef } from "../../workflow/workflowConstants";
 import { findWorkflowJob } from "../../workflow/workflowStorage";
-import { fetchWorkById } from "../../features/work/workSlice";
+import { fetchWorkById, workflowJobUpserted } from "../../features/work/workSlice";
 import showToast from "../../utils/toast";
 
 
@@ -189,12 +189,27 @@ export default function TaskJobDetailPage() {
     if (advancingRef.current) return; // prevent duplicate
     advancingRef.current = true;
     setIsAdvancing(true);
+    // Close the dialog the moment the user confirms, so the header button's
+    // loader is what covers the whole operation — the completion request AND
+    // the job refetch after it. Closing only on success (as this did before)
+    // left the refetch with no visible loader at all, which is the window that
+    // looked like nothing was happening.
+    setShowConfirmModal(false);
 
     try {
       const res = await advanceStageByTrackingId(trackingId, "manual");
       if (res.ok) {
-        setShowConfirmModal(false);
-        await refresh();
+        // The scan already returned this job's new state, so patch that one job
+        // into the store rather than awaiting a refetch of every active work
+        // (GET /api/workflow/jobs is ~8-12s). The timeline is updated by the
+        // time the overlay comes down either way; this just makes it immediate.
+        // The background refresh triggered by emitWorkflowChanged / the
+        // workflow:updated socket still reconciles the rest of the list.
+        if (res.serverJob) {
+          dispatch(workflowJobUpserted(res.serverJob));
+        } else {
+          await refresh(); // older backend without the job projection
+        }
         const completedLabel = stageContext?.currentStageLabel || "Stage";
         showToast.success(
           res.nextKey
@@ -210,7 +225,7 @@ export default function TaskJobDetailPage() {
       setIsAdvancing(false);
       advancingRef.current = false;
     }
-  }, [trackingId, refresh]);
+  }, [trackingId, refresh, dispatch]);
 
   // ── Derive stage context for the modal ────────────────
   const stageContext = useMemo(() => {
@@ -246,6 +261,34 @@ export default function TaskJobDetailPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/90">
+      {/* Full-page blocking overlay for the whole complete-stage operation:
+          the completion request AND the job refetch that follows. It goes up
+          the moment the user confirms and only comes down once the timeline
+          below is already showing the next stage. Backdrop and card styling
+          match StageActionModal so it reads as the same dialog family. */}
+      {isAdvancing && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          role="alertdialog"
+          aria-busy="true"
+          aria-live="assertive"
+          aria-label="Updating stage"
+        >
+          <div className="bg-white rounded-2xl shadow-xl px-8 py-7 text-center max-w-xs w-full">
+            <Loader2 className="h-10 w-10 text-violet-600 animate-spin mx-auto mb-4" />
+            <p className="text-base font-bold text-slate-900">Updating stage…</p>
+            <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+              {stageContext?.nextStageLabel
+                ? `Completing ${stageContext.currentStageLabel} and moving to ${stageContext.nextStageLabel}.`
+                : "Completing the final stage."}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-3 uppercase tracking-widest font-bold">
+              Please wait
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 lg:py-8">
         <button
           type="button"
