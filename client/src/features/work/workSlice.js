@@ -593,7 +593,19 @@ const initialState = {
   recentWorks: [],
   workflowJobs: [],
   workflowJobsLoading: false,
-  
+  // Locally-applied job updates (from a stage scan), keyed by workMongoId, with
+  // the time they were applied. GET /api/workflow/jobs takes several seconds, so
+  // a response whose request was already in flight when a scan committed carries
+  // pre-scan data; these let fulfilled() ignore that stale copy for that job.
+  workflowJobPatches: {},
+  // When each in-flight fetchWorkflowJobs request started, keyed by requestId.
+  workflowJobsRequests: {},
+  // Works whose stage-completion request is in flight from THIS client, keyed by
+  // workMongoId. The server emits workflow:updated before it responds, so the
+  // echo of our own scan arrives before the patch above exists; this is what
+  // lets the socket listener recognise it without resorting to a timer.
+  workflowScanInFlight: {},
+
   statusBreakdown: {
     breakdown: [],
     pieData: [],
@@ -1008,6 +1020,33 @@ const workSlice = createSlice({
       state.dashboardStats = initialState.dashboardStats;
       state.recentWorks = [];
       state.statusBreakdown = initialState.statusBreakdown;
+    },
+    /**
+     * Replace a single workflow job in place, from the job the scan endpoint
+     * returns. Lets a stage advance update the UI immediately instead of
+     * refetching every active work just to learn one job's new stage.
+     * The background fetchWorkflowJobs still reconciles the rest of the list.
+     */
+    workflowJobUpserted: (state, action) => {
+      const incoming = sanitizeWorkflowJob(action.payload);
+      if (!incoming) return;
+      const idx = state.workflowJobs.findIndex(
+        (j) => String(j.workMongoId) === String(incoming.workMongoId),
+      );
+      if (idx >= 0) state.workflowJobs[idx] = incoming;
+      else state.workflowJobs.unshift(incoming);
+      state.workflowJobPatches[String(incoming.workMongoId)] = {
+        job: incoming,
+        at: Date.now(),
+      };
+    },
+    /** This client started a stage completion for a work. */
+    workflowScanStarted: (state, action) => {
+      state.workflowScanInFlight[String(action.payload)] = true;
+    },
+    /** That completion finished (either outcome). */
+    workflowScanSettled: (state, action) => {
+      delete state.workflowScanInFlight[String(action.payload)];
     }
   },
   extraReducers: (builder) => {
@@ -1146,17 +1185,38 @@ const workSlice = createSlice({
       })
 
       // Workflow jobs (backend-synthesized)
-      .addCase(fetchWorkflowJobs.pending, (state) => {
+      .addCase(fetchWorkflowJobs.pending, (state, action) => {
         state.workflowJobsLoading = true;
+        state.workflowJobsRequests[action.meta.requestId] = Date.now();
       })
       .addCase(fetchWorkflowJobs.fulfilled, (state, action) => {
         state.workflowJobsLoading = false;
-        state.workflowJobs = (action.payload || [])
+        const startedAt = state.workflowJobsRequests[action.meta.requestId] || 0;
+        delete state.workflowJobsRequests[action.meta.requestId];
+
+        const list = (action.payload || [])
           .map((j) => sanitizeWorkflowJob(j))
           .filter(Boolean);
+
+        // This response was produced by a request that started at `startedAt`.
+        // Any stage advance applied locally after that is newer than what this
+        // response can possibly contain, so keep the local copy for that job —
+        // otherwise a slow in-flight fetch reverts the timeline to the old stage.
+        state.workflowJobs = list.map((j) => {
+          const patch = state.workflowJobPatches[String(j.workMongoId)];
+          return patch && patch.at > startedAt ? patch.job : j;
+        });
+
+        // Responses newer than a patch mean the server has caught up — drop it.
+        Object.keys(state.workflowJobPatches).forEach((id) => {
+          if (state.workflowJobPatches[id].at <= startedAt) {
+            delete state.workflowJobPatches[id];
+          }
+        });
       })
-      .addCase(fetchWorkflowJobs.rejected, (state) => {
+      .addCase(fetchWorkflowJobs.rejected, (state, action) => {
         state.workflowJobsLoading = false;
+        delete state.workflowJobsRequests[action.meta.requestId];
       });
   }
 });
@@ -1168,7 +1228,10 @@ export const {
   setFilters, 
   resetFilters, 
   clearCurrentWork,
-  clearDashboardData 
+  clearDashboardData,
+  workflowJobUpserted,
+  workflowScanStarted,
+  workflowScanSettled
 } = workSlice.actions;
 
 // ============================================
@@ -1186,6 +1249,12 @@ export const selectDashboardStats = (state) => state.work.dashboardStats;
 export const selectRecentWorks = (state) => state.work.recentWorks;
 export const selectWorkStatusBreakdown = (state) => state.work.statusBreakdown;
 export const selectWorkflowJobs = (state) => state.work.workflowJobs || [];
+/** Local (not-yet-reconciled) patch for one job, keyed by workMongoId. */
+export const selectWorkflowJobPatch = (state, workMongoId) =>
+  state.work.workflowJobPatches?.[String(workMongoId)] || null;
+/** True while THIS client has a stage completion in flight for that work. */
+export const selectWorkflowScanInFlight = (state, workMongoId) =>
+  !!state.work.workflowScanInFlight?.[String(workMongoId)];
 export const selectWorkflowJobsLoading = (state) => state.work.workflowJobsLoading;
 
 export default workSlice.reducer;

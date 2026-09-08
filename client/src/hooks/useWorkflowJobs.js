@@ -36,7 +36,11 @@ export function useWorkflowJobs() {
   }, [refresh]);
 
   useEffect(() => {
-    const onChange = () => {
+    const onChange = (event) => {
+      // A change the caller already applied locally (the scan response carries
+      // the updated job, patched in via workflowJobUpserted) needs no refetch —
+      // GET /api/workflow/jobs returns every active work and costs seconds.
+      if (event?.detail?.handledLocally) return;
       dispatch(fetchWorkflowJobs());
     };
     window.addEventListener(WORKFLOW_CHANGED_EVENT, onChange);

@@ -25,8 +25,15 @@ export function saveWorkflowJobs(jobs) {
   return (jobs || []).map((j) => sanitizeWorkflowJob(j)).filter(Boolean);
 }
 
-export function emitWorkflowChanged() {
-  window.dispatchEvent(new CustomEvent(WORKFLOW_CHANGED_EVENT));
+/**
+ * Announce that workflow data changed.
+ *
+ * `detail.handledLocally` marks a change whose updated job the caller already
+ * holds (the scan response now returns it), so listeners can skip refetching the
+ * whole job list. Listeners that only reload their own view still react.
+ */
+export function emitWorkflowChanged(detail) {
+  window.dispatchEvent(new CustomEvent(WORKFLOW_CHANGED_EVENT, { detail: detail || null }));
 }
 
 function searchJobs(jobs, needle) {
