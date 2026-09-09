@@ -67,6 +67,79 @@ export function buildPipelineViewModelFromJob(job) {
   };
 }
 
+// DELAYED is its own status — a stage the order hasn't finished AND is
+// already overdue on. That is NOT the same thing as "the current stage in
+// progress" (a not-yet-started stage like Delivered can be DELAYED too, once
+// the order is overdue). Collapsing it into "active" made every remaining
+// stage of an overdue order — including ones not yet reached — pulse as if
+// it were the current stage. Order Details already renders DELAYED with its
+// own distinct (red/warning) treatment; the Dashboard card now does too.
+const ORDER_STAGE_STATUS_TO_STATE = {
+  COMPLETED: "completed",
+  IN_PROGRESS: "active",
+  DELAYED: "delayed",
+  NOT_STARTED: "pending",
+};
+
+// Cards show at most this many assignee chips regardless of garment count —
+// an order-level card aggregates every garment's assignments, so without a
+// cap a multi-garment order's chip column can grow far taller than the
+// single line of customer/due-date text next to it.
+const MAX_VISIBLE_ASSIGNEES = 3;
+
+/** Same worker can be assigned on more than one garment/stage within an
+ * order; keep the first occurrence of each worker only. */
+function dedupeAssignmentsByWorker(assignments) {
+  const seen = new Set();
+  const out = [];
+  for (const a of assignments || []) {
+    const name = a?.workerName;
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push(a);
+  }
+  return out;
+}
+
+/** Pipeline row from the order-level Delivery Pipeline API (GET /api/workflow/orders-pipeline) */
+export function buildOrderPipelineViewModel(entry) {
+  const stages = (entry.stages || []).map((s) => ({
+    key: s.key,
+    label: s.label || getStageLabelFromDef(s.key),
+    shortLabel: getStageShortLabel(s.key),
+    state: ORDER_STAGE_STATUS_TO_STATE[s.status] || "pending",
+  }));
+
+  const garmentNames = entry.garmentNames || [];
+  const productName =
+    garmentNames.length > 0 && garmentNames.length <= 2
+      ? garmentNames.join(" & ")
+      : garmentNames.length > 2
+        ? `${garmentNames.length} garments`
+        : "Garment";
+
+  const dedupedAssignments = dedupeAssignmentsByWorker(entry.assignments);
+  const visibleAssignments = dedupedAssignments.slice(0, MAX_VISIBLE_ASSIGNEES);
+  const assignmentsOverflowCount = Math.max(0, dedupedAssignments.length - visibleAssignments.length);
+
+  return {
+    orderMongoId: entry.orderMongoId,
+    orderId: entry.orderId || "—",
+    customerName: entry.customerName || "Customer",
+    productName,
+    garmentCount: entry.garmentCount || garmentNames.length || 1,
+    deliveryDate: entry.dueDate || null,
+    category: entry.category,
+    overdue: entry.category === "overdue",
+    delayDays: entry.delayDays || 0,
+    isHighPriority: !!entry.isHighPriority,
+    currentStageLabel: entry.currentStageLabel || "In progress",
+    stages,
+    assignments: visibleAssignments,
+    assignmentsOverflowCount,
+  };
+}
+
 /** @deprecated Legacy fallback — prefer buildPipelineViewModelFromJob */
 function collectWorkSearchText(work) {
   const g = work?.garment;

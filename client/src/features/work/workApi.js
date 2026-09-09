@@ -213,6 +213,12 @@ export const getWorkflowJobs = async () => {
   return response.data;
 };
 
+// Get order-level Delivery Pipeline (Dashboard) — one entry per Order
+export const getOrdersPipeline = async () => {
+  const response = await API.get('/workflow/orders-pipeline');
+  return response.data;
+};
+
 /** Complete active stage and advance pipeline (same as QR scan) */
 export const completeWorkflowStage = async (workId) => {
   const response = await API.post(`/workflow/works/${workId}/scan`, {});

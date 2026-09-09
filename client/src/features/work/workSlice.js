@@ -606,6 +606,8 @@ const initialState = {
   // lets the socket listener recognise it without resorting to a timer.
   workflowScanInFlight: {},
 
+  ordersPipeline: [],
+  ordersPipelineLoading: false,
   statusBreakdown: {
     breakdown: [],
     pieData: [],
@@ -774,6 +776,21 @@ export const fetchWorkflowJobs = createAsyncThunk(
     } catch (error) {
       console.error('❌ [fetchWorkflowJobs] error:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch workflow jobs');
+    }
+  }
+);
+
+// Fetch order-level Delivery Pipeline (Dashboard) — one entry per Order
+export const fetchOrdersPipeline = createAsyncThunk(
+  'work/fetchOrdersPipeline',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await workApi.getOrdersPipeline();
+      const list = response?.data ?? response ?? [];
+      return Array.isArray(list) ? list : [];
+    } catch (error) {
+      console.error('❌ [fetchOrdersPipeline] error:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch orders pipeline');
     }
   }
 );
@@ -1217,6 +1234,18 @@ const workSlice = createSlice({
       .addCase(fetchWorkflowJobs.rejected, (state, action) => {
         state.workflowJobsLoading = false;
         delete state.workflowJobsRequests[action.meta.requestId];
+      })
+
+      // Orders pipeline (order-level Delivery Pipeline)
+      .addCase(fetchOrdersPipeline.pending, (state) => {
+        state.ordersPipelineLoading = true;
+      })
+      .addCase(fetchOrdersPipeline.fulfilled, (state, action) => {
+        state.ordersPipelineLoading = false;
+        state.ordersPipeline = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(fetchOrdersPipeline.rejected, (state) => {
+        state.ordersPipelineLoading = false;
       });
   }
 });
@@ -1256,5 +1285,7 @@ export const selectWorkflowJobPatch = (state, workMongoId) =>
 export const selectWorkflowScanInFlight = (state, workMongoId) =>
   !!state.work.workflowScanInFlight?.[String(workMongoId)];
 export const selectWorkflowJobsLoading = (state) => state.work.workflowJobsLoading;
+export const selectOrdersPipeline = (state) => state.work.ordersPipeline || [];
+export const selectOrdersPipelineLoading = (state) => state.work.ordersPipelineLoading;
 
 export default workSlice.reducer;

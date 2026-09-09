@@ -9,6 +9,7 @@ import User from '../models/User.js';
 import { syncOrderFromWork } from '../services/workflowSync.service.js';
 import { getIO } from '../utils/socket.js';
 import { createNotification } from './notification.controller.js';
+import { buildOrderPipeline } from '../utils/orderPipeline.util.js';
 
 // Canonical pipeline helpers now live in utils/workflowPipeline.util.js so the
 // order-level aggregation (utils/orderPipeline.util.js) shares one definition of
@@ -145,6 +146,139 @@ export const getWorkflowJobs = async (req, res) => {
     res.json({ success: true, data: jobs });
   } catch (error) {
     console.error('Error fetching workflow jobs:', error);
+    res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+  }
+};
+
+
+// @desc    Order-level Delivery Pipeline for the Dashboard — one entry per
+//          Order (never one per garment/Work), bucketed into 'upcoming'
+//          (Order.deliveryDate within the next 3 days) or 'overdue'
+//          (Order.deliveryDate already passed). Read-only; no writes.
+// @route   GET /api/workflow/orders-pipeline
+// @access  Private
+export const getOrdersPipeline = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcomingEnd = new Date(today);
+    upcomingEnd.setDate(upcomingEnd.getDate() + 3);
+
+    // This is a delivery-date feature, not a production-assignment filter:
+    // any active, non-delivered/non-cancelled order with a deliveryDate
+    // qualifies for Overdue/Upcoming purely on that date — regardless of
+    // whether production has started, Work documents exist, or anyone is
+    // assigned. Query Order directly so an order with zero Works still
+    // appears when it qualifies.
+    const candidateOrders = await Order.find({
+      isActive: true,
+      status: { $nin: ['delivered', 'cancelled'] },
+      deliveryDate: { $ne: null },
+    })
+      .select('orderId customer deliveryDate status garments')
+      .populate({ path: 'customer', select: 'name' })
+      .lean();
+
+    const entries = [];
+    const qualifying = [];
+
+    for (const order of candidateOrders) {
+      const d = new Date(order.deliveryDate);
+      if (Number.isNaN(d.getTime())) continue;
+      d.setHours(0, 0, 0, 0);
+
+      let category = null;
+      let delayDays = 0;
+      if (d < today) {
+        category = 'overdue';
+        delayDays = Math.max(1, Math.ceil((today - d) / (1000 * 60 * 60 * 24)));
+      } else if (d <= upcomingEnd) {
+        category = 'upcoming';
+      }
+      if (!category) continue; // due beyond the 3-day window and not overdue — not shown
+
+      qualifying.push({ order, category, delayDays });
+    }
+
+    // Works for the already-qualified orders only — used purely to render
+    // each order's stage stepper / assignee chips when production exists.
+    // buildOrderPipeline already degrades gracefully to empty stages for an
+    // order with no Works, so an order with none still appears (per the
+    // requirement above), just with no production stepper yet.
+    const orderIds = qualifying.map(q => q.order._id);
+    const works = orderIds.length
+      ? await Work.find({ order: { $in: orderIds }, isActive: true })
+          .select('workId order garment estimatedDelivery stageKeys workflowStages currentStage overallStatus workflowProgress assignments')
+          .populate({ path: 'garment', select: 'name stageKeys workflowStages priority' })
+          .lean()
+      : [];
+
+    const worksByOrder = new Map();
+    for (const work of works) {
+      const key = String(work.order);
+      if (!worksByOrder.has(key)) worksByOrder.set(key, []);
+      worksByOrder.get(key).push(work);
+    }
+
+    for (const { order, category, delayDays } of qualifying) {
+      const orderWorks = worksByOrder.get(String(order._id)) || [];
+
+      let isHighPriority = false;
+      for (const work of orderWorks) {
+        const priority = work.garment?.priority || work.priority || 'normal';
+        if (priority === 'high') isHighPriority = true;
+      }
+
+      // Reuse the existing order-level stage aggregator (already used by the
+      // Order Details page) instead of re-deriving per-stage state here.
+      const pipeline = buildOrderPipeline(order, orderWorks);
+
+      const garmentNames = [...new Set(
+        orderWorks.map(w => (typeof w.garment === 'object' ? w.garment?.name : null) || 'Garment')
+      )];
+
+      const assignments = orderWorks
+        .flatMap(w => Array.isArray(w.assignments) ? w.assignments : [])
+        .filter(a => a.status !== 'completed')
+        .map(a => ({
+          workerName: a.workerName,
+          role: a.role,
+          stage: a.stage,
+          assignedAt: a.assignedAt,
+          status: a.status,
+        }));
+
+      entries.push({
+        orderMongoId: String(order._id),
+        orderId: order.orderId || '—',
+        customerName: order.customer?.name || 'Customer',
+        garmentNames,
+        garmentCount: orderWorks.length || (Array.isArray(order.garments) ? order.garments.length : 0),
+        dueDate: order.deliveryDate,
+        category,
+        delayDays,
+        isHighPriority,
+        currentStageLabel: pipeline.currentStageLabel || 'No production started',
+        stages: pipeline.stages
+          .filter(s => s.status !== 'NOT_APPLICABLE')
+          .map(s => ({ key: s.key, label: s.label, status: s.status })),
+        assignments,
+      });
+    }
+
+    // Same priority-then-due-date ordering the existing per-garment pipeline
+    // uses (sortJobsForPipeline) — high priority first, then earliest due
+    // date, which naturally puts overdue orders ahead of upcoming ones.
+    entries.sort((a, b) => {
+      const aPri = a.isHighPriority ? 0 : 1;
+      const bPri = b.isHighPriority ? 0 : 1;
+      if (aPri !== bPri) return aPri - bPri;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
+
+    res.json({ success: true, data: entries });
+  } catch (error) {
+    console.error('Error fetching orders pipeline:', error);
     res.status(500).json({ success: false, message: 'Server Error', error: error.message });
   }
 };

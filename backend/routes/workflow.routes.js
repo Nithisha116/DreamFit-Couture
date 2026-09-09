@@ -1,6 +1,7 @@
 import express from 'express';
-import { 
+import {
   getWorkflowJobs,
+  getOrdersPipeline,
   assignWorkerToStage,
   processQrScan
 } from '../controllers/workflow.controller.js';
@@ -11,6 +12,7 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/jobs', getWorkflowJobs);
+router.get('/orders-pipeline', getOrdersPipeline);
 router.post('/works/:id/assign-worker', authorize('ADMIN', 'STORE_KEEPER'), assignWorkerToStage);
 router.post('/works/:id/scan', processQrScan);
 
